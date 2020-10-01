@@ -1,0 +1,45 @@
+.grid-container {
+    display: inline-grid;
+    border: 1px solid black;
+    grid-gap: 1px;
+    background-color: black;
+    font-family: Verdana, sans-serif;
+    color: #333;
+}
+
+.grid-square {
+    width: 25px;
+    height: 28px;
+    background-color: white;
+    font-size: 18px;
+    position: relative;
+    text-align: center;
+    overflow: hidden;
+    user-select: none;
+}
+
+.grid-square-black {
+    background-color: black;
+    width: 25px;
+    height: 28px;
+}
+.grid-square-selected {
+    background-color: lightskyblue;
+}
+.grid-square-black-selected {
+    background-color: lighten(black, 30%);
+}
+.grid-square-selected-word {
+    background-color: lighten(lightskyblue, 20%);
+}
+
+.grid-number {
+    font-size: 9px;
+    position: absolute;
+    left: 1px;
+    top: -1px;
+}
+
+.grid-content {
+    padding-top: 3px;
+}
