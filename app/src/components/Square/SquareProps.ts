@@ -1,3 +1,4 @@
+import { ConstraintErrorType } from "../../models/ConstraintErrorType";
 import { SquareType } from "../../models/SquareType";
 
 export interface SquareProps {
@@ -6,7 +7,9 @@ export interface SquareProps {
     col: number;
     number?: number;
     type: SquareType;
-    content?: string;
+    correctContent?: string;
+    fillContent?: string;
     isSelected: boolean;
     isInSelectedWord: boolean;
+    constraintError: ConstraintErrorType;
 }

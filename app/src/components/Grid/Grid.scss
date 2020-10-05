@@ -32,6 +32,12 @@
 .grid-square-selected-word {
     background-color: lighten(lightskyblue, 20%);
 }
+.grid-square-error-word {
+    background-color: lighten(indianred, 30%);
+}
+.grid-square-error-crossing {
+    background-color: lighten(indianred, 60%);
+}
 
 .grid-number {
     font-size: 9px;
@@ -42,4 +48,8 @@
 
 .grid-content {
     padding-top: 3px;
+    color: lighten(black, 30%);
+}
+.grid-content-correct {
+    color: black;
 }
