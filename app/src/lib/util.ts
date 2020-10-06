@@ -90,3 +90,12 @@ export function newWord(): GridWord {
         constraintError: ConstraintErrorType.None,
     }
 }
+
+export function doesWordContainSquare(word: GridWord, row: number, col: number): boolean {
+    if (word.direction === WordDirection.Across) {
+        return word.start[0] === row && word.start[1] <= col && word.end[1] >= col;
+    }
+    else {
+        return word.start[1] === col && word.start[0] <= row && word.end[0] >= row;
+    }
+}

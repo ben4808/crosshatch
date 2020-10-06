@@ -24,19 +24,38 @@
     height: 28px;
 }
 .grid-square-selected {
-    background-color: lightskyblue;
+    border: 2px solid darken(skyblue, 30%);
+    .grid-content { padding-top: 1px; }
+    .grid-number { left: -1px; top: -3px }
 }
 .grid-square-black-selected {
-    background-color: lighten(black, 30%);
+    border: 2px solid darken(skyblue, 30%);
 }
 .grid-square-selected-word {
-    background-color: lighten(lightskyblue, 20%);
+    border: 2px solid lighten(skyblue, 10%);
+    .grid-content { padding-top: 1px; }
+    .grid-number { left: -1px; top: -3px }
 }
 .grid-square-error-word {
-    background-color: lighten(indianred, 30%);
+    background-color: lighten(indianred, 20%);
 }
 .grid-square-error-crossing {
-    background-color: lighten(indianred, 60%);
+    background-color: lighten(indianred, 30%);
+}
+.grid-square-constrained-1 {
+    background-color: #eee;
+}
+.grid-square-constrained-2 {
+    background-color: #ddd;
+}
+.grid-square-constrained-3 {
+    background-color: #ccc;
+}
+.grid-square-constrained-4 {
+    background-color: #bbb;
+}
+.grid-square-constrained-5 {
+    background-color: #aaa;
 }
 
 .grid-number {

@@ -12,4 +12,5 @@ export interface SquareProps {
     isSelected: boolean;
     isInSelectedWord: boolean;
     constraintError: ConstraintErrorType;
+    constraintSum: number;
 }

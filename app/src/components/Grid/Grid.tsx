@@ -6,12 +6,11 @@ import "./Grid.scss";
 import Square from '../Square/Square';
 import { GridState } from '../../models/GridState';
 import { WordDirection } from '../../models/WordDirection';
-import { GridWord } from '../../models/GridWord';
 import { GridSquare } from '../../models/GridSquare';
 import { fillWord } from '../../lib/fill';
 import Globals from '../../lib/windowService';
-import { generateWordInfo } from '../../lib/grid';
-import { compareTuples, getWordAtSquare, otherDir } from '../../lib/util';
+import { generateWordInfo, updateWordInfo } from '../../lib/grid';
+import { compareTuples, doesWordContainSquare, getWordAtSquare, otherDir } from '../../lib/util';
 import { ConstraintErrorType } from '../../models/ConstraintErrorType';
 
 function Grid(props: GridProps) {
@@ -19,7 +18,11 @@ function Grid(props: GridProps) {
 
     useEffect(() => {
         Globals.fillHandler = handleFill;
-    });
+
+        let newGridState = {...gridState};
+        generateWordInfo(newGridState);
+        setGridState(newGridState);
+    }, []);
 
     function handleClick(event: any) {
         let target = event.target;
@@ -57,29 +60,36 @@ function Grid(props: GridProps) {
         let col = newGridState.selectedSquare[1];
 
         let key: string = event.key.toUpperCase();
-        let changed = true;
-        if (key.match(/^[A-Z]$/)) {
-            if (newGridState.squares[row][col].fillContent === key) changed = false;
+        let letterChanged = true;
+        let blackSquareChanged = false;
+        let sq = newGridState.squares[row][col];
 
-            newGridState.squares[row][col].correctContent = key;
-            newGridState.squares[row][col].fillContent = key;
+        if (key.match(/^[A-Z]$/)) {
+            if (sq.fillContent === key) letterChanged = false;
+
+            sq.correctContent = key;
+            sq.fillContent = key;
             advanceCursor(newGridState);
         }
         if (key === "BACKSPACE") {
-            if (newGridState.squares[row][col].fillContent === undefined) changed = false;
+            if (sq.fillContent === undefined) letterChanged = false;
 
-            newGridState.squares[row][col].correctContent = undefined;
-            newGridState.squares[row][col].fillContent = undefined;
+            sq.correctContent = undefined;
+            sq.fillContent = undefined;
             backupCursor(newGridState);
         }
         // toggle black square
         if (key === ".") {
-            let type = newGridState.squares[row][col].type;
-            newGridState.squares[row][col].type = type === SquareType.White ? SquareType.Black : SquareType.White;
+            sq.type = sq.type === SquareType.White ? SquareType.Black : SquareType.White;
+            blackSquareChanged = true;
+            letterChanged = false;
         }
 
-        if (changed) 
+        if (blackSquareChanged)
             generateWordInfo(newGridState);
+        else if (letterChanged) 
+            updateWordInfo(newGridState, row, col);
+        
         setGridState(newGridState);
     }
 
@@ -129,6 +139,7 @@ function getSquareProps(grid: GridState, row: number, col: number): SquareProps 
         isSelected: !!grid.selectedSquare && compareTuples(grid.selectedSquare, [row, col]),
         isInSelectedWord: !!grid.selectedWord && doesWordContainSquare(grid.selectedWord, row, col),
         constraintError: square.constraintError,
+        constraintSum: square.constraintSum,
     };
 }
 
@@ -156,8 +167,6 @@ function createNewGrid(height: number, width: number): GridState {
         words: [],
     };
 
-    generateWordInfo(grid);
-
     return grid;
 }
 
@@ -177,15 +186,6 @@ function backupCursor(grid: GridState) {
     let selSq = grid.selectedSquare;
     let dir = grid.selectedWord.direction;
     grid.selectedSquare = dir === WordDirection.Across ? [selSq[0], selSq[1] - 1] : [selSq[0] - 1, selSq[1]];
-}
-
-function doesWordContainSquare(word: GridWord, row: number, col: number): boolean {
-    if (word.direction === WordDirection.Across) {
-        return word.start[0] === row && word.start[1] <= col && word.end[1] >= col;
-    }
-    else {
-        return word.start[1] === col && word.start[0] <= row && word.end[0] >= row;
-    }
 }
 
 function getUncheckedSquareDir(grid: GridState, row: number, col: number): WordDirection | undefined {

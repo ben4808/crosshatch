@@ -4,7 +4,7 @@ import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { IndexedWordList } from "../models/IndexedWordList";
 import { WordDirection } from "../models/WordDirection";
-import { compareTuples, getWordAtSquare, getWordSquares, indexedWordListLookup, isBlackSquare, newWord, otherDir } from "./util";
+import { compareTuples, doesWordContainSquare, getWordAtSquare, getWordSquares, indexedWordListLookup, isBlackSquare, newWord, otherDir } from "./util";
 import Globals from './windowService';
 
 export function generateWordInfo(grid: GridState) {
@@ -41,6 +41,7 @@ export function generateWordInfo(grid: GridState) {
     }
 
     let wl: IndexedWordList = Globals.wordList;
+
     let oldDir = grid.selectedWord?.direction || WordDirection.Across;
     grid.words = [];
     grid.selectedWord = undefined;
@@ -64,6 +65,24 @@ export function generateWordInfo(grid: GridState) {
         }
     }
     resetCurrentWord();
+}
+
+export function updateWordInfo(grid: GridState, row: number, col: number) {
+    let wl: IndexedWordList = Globals.wordList;
+
+    [WordDirection.Across, WordDirection.Down].forEach(dir => {
+        let word = getWordAtSquare(grid, row, col, dir);
+
+        getWordSquares(grid, word).forEach(sq => {
+            if (dir === WordDirection.Down && sq.row === row) return;
+
+            sq.constraintError = ConstraintErrorType.None;
+            sq.constraintSum = 0;
+            sq.constraintMap = new Map<string, number>();
+        });
+
+        generateConstraintInfo(wl, grid, word);
+    });
 }
 
 function numberizeGrid(grid: GridState) {
@@ -101,12 +120,13 @@ function generateConstraintInfo(wl: IndexedWordList, grid: GridState, word: Grid
 
     let entryOptions = indexedWordListLookup(wl, grid, word);
 
-    var constraintSum = 0;
     let badCrossingFound = false;
     word.constraintError = entryOptions.length === 0 ? ConstraintErrorType.Word : ConstraintErrorType.None;
     for (let i = 0; i < squares.length; i++) {
         let sq = squares[i];
-        sq.constraintError = word.constraintError;
+        if (sq.constraintError === ConstraintErrorType.None || word.direction === WordDirection.Across)
+            sq.constraintError = word.constraintError;
+        let constraintSum = 0;
 
         if (sq.fillContent) {
             sq.constraintSum = 1;
@@ -133,6 +153,11 @@ function generateConstraintInfo(wl: IndexedWordList, grid: GridState, word: Grid
         }
         else {
             constraintSum = 0;
+
+            sq.constraintMap.forEach((v, k) => {
+                if (!newConstraintsMap.has(k))
+                    sq.constraintMap.delete(k);
+            });
             newConstraintsMap.forEach((v, k) => {
                 let oldVal = sq.constraintMap.get(k) || 0;
                 let newVal = Math.min(v, oldVal);
@@ -146,11 +171,17 @@ function generateConstraintInfo(wl: IndexedWordList, grid: GridState, word: Grid
                 badCrossingFound = true;
 
                 word.constraintError = ConstraintErrorType.Crossing;
-                squares.forEach(w => { w.constraintError = ConstraintErrorType.Crossing; });
+                squares.forEach(w => { 
+                    if (w.constraintError !== ConstraintErrorType.Word)
+                        w.constraintError = ConstraintErrorType.Crossing; 
+                });
 
                 let otherWord = getWordAtSquare(grid, sq.row, sq.col, otherDir(word.direction));
                 otherWord.constraintError = ConstraintErrorType.Crossing;
-                getWordSquares(grid, otherWord).forEach(w => { w.constraintError = ConstraintErrorType.Crossing; });
+                getWordSquares(grid, otherWord).forEach(w => { 
+                    if (w.constraintError !== ConstraintErrorType.Word)
+                        w.constraintError = ConstraintErrorType.Crossing; 
+                });
             }
         }
     }
