@@ -45,6 +45,7 @@ export function indexedWordListLookup(wl: IndexedWordList, grid: GridState, word
         let key = i === letters.length-1 ? `${length},${letters[i-1][0]},${letters[i-1][1]},${letters[i][0]},${letters[i][1]}` : 
             `${length},${letters[i][0]},${letters[i][1]},${letters[i+1][0]},${letters[i+1][1]}`;
         let newPossibles = wl.buckets.get(key) || [];
+        if (newPossibles.length === 0) return [];
         possibles = possibles.length === 0 ? newPossibles : intersectEntryLists(possibles, newPossibles);
     }
 

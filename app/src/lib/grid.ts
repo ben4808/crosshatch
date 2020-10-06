@@ -4,14 +4,13 @@ import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { IndexedWordList } from "../models/IndexedWordList";
 import { WordDirection } from "../models/WordDirection";
-import { compareTuples, doesWordContainSquare, getWordAtSquare, getWordSquares, indexedWordListLookup, isBlackSquare, newWord, otherDir } from "./util";
+import { compareTuples, getWordAtSquare, getWordSquares, indexedWordListLookup, isBlackSquare, newWord, otherDir } from "./util";
 import Globals from './windowService';
 
 export function generateWordInfo(grid: GridState) {
     function resetCurrentWord() {
         if (currentWord && currentWord.number) {
             grid.words.push(currentWord);
-            generateConstraintInfo(wl, grid, currentWord);
         }
 
         currentWord = newWord();
@@ -40,8 +39,6 @@ export function generateWordInfo(grid: GridState) {
         currentWord.end = [row, col];
     }
 
-    let wl: IndexedWordList = Globals.wordList;
-
     let oldDir = grid.selectedWord?.direction || WordDirection.Across;
     grid.words = [];
     grid.selectedWord = undefined;
@@ -65,22 +62,22 @@ export function generateWordInfo(grid: GridState) {
         }
     }
     resetCurrentWord();
+
+    updateWordInfo(grid);
 }
 
-export function updateWordInfo(grid: GridState, row: number, col: number) {
+export function updateWordInfo(grid: GridState) {
     let wl: IndexedWordList = Globals.wordList;
 
-    [WordDirection.Across, WordDirection.Down].forEach(dir => {
-        let word = getWordAtSquare(grid, row, col, dir);
-
-        getWordSquares(grid, word).forEach(sq => {
-            if (dir === WordDirection.Down && sq.row === row) return;
-
+    grid.squares.forEach(row => {
+        row.forEach(sq => {
             sq.constraintError = ConstraintErrorType.None;
             sq.constraintSum = 0;
             sq.constraintMap = new Map<string, number>();
         });
+    });
 
+    grid.words.forEach(word => {
         generateConstraintInfo(wl, grid, word);
     });
 }
@@ -124,7 +121,7 @@ function generateConstraintInfo(wl: IndexedWordList, grid: GridState, word: Grid
     word.constraintError = entryOptions.length === 0 ? ConstraintErrorType.Word : ConstraintErrorType.None;
     for (let i = 0; i < squares.length; i++) {
         let sq = squares[i];
-        if (sq.constraintError === ConstraintErrorType.None || word.direction === WordDirection.Across)
+        if (sq.constraintError === ConstraintErrorType.None)
             sq.constraintError = word.constraintError;
         let constraintSum = 0;
 

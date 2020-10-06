@@ -38,7 +38,7 @@ function Grid(props: GridProps) {
         let newDirection = newGridState.selectedWord?.direction || WordDirection.Across;
 
         let uncheckedSquareDir = getUncheckedSquareDir(newGridState, row, col);
-        if (uncheckedSquareDir) {
+        if (uncheckedSquareDir !== undefined) {
             newDirection = uncheckedSquareDir;
             newGridState.selectedSquare = [row, col];
         }
@@ -88,7 +88,7 @@ function Grid(props: GridProps) {
         if (blackSquareChanged)
             generateWordInfo(newGridState);
         else if (letterChanged) 
-            updateWordInfo(newGridState, row, col);
+            updateWordInfo(newGridState);
         
         setGridState(newGridState);
     }
@@ -172,7 +172,7 @@ function createNewGrid(height: number, width: number): GridState {
 
 function advanceCursor(grid: GridState) {
     if (!grid.selectedSquare || !grid.selectedWord) return grid;
-    if (compareTuples(grid.selectedSquare, grid.selectedWord!.end)) return grid;
+    if (compareTuples(grid.selectedSquare, grid.selectedWord.end)) return grid;
 
     let selSq = grid.selectedSquare;
     let dir = grid.selectedWord.direction;
