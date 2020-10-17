@@ -22,6 +22,7 @@ function Grid(props: GridProps) {
         let newGridState = {...gridState};
         generateWordInfo(newGridState);
         setGridState(newGridState);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
     function handleClick(event: any) {
@@ -95,7 +96,9 @@ function Grid(props: GridProps) {
 
     function handleFill() {
         let newGridState = {...gridState};
+        generateWordInfo(newGridState);
         fillWord(newGridState);
+        generateWordInfo(newGridState);
         setGridState(newGridState);
     }
 

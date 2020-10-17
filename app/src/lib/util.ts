@@ -11,6 +11,10 @@ export function average(arr: number[]): number {
     return arr.reduce((a,b) => a + b, 0) / arr.length;
 }
 
+export function sum(arr: number[]): number {
+    return arr.reduce((a,b) => a + b, 0);
+}
+
 export function compareTuples(first: [number, number], second: [number, number]): boolean {
     return first[0] === second[0] && first[1] === second[1];
 }
@@ -25,6 +29,10 @@ export function otherDir(dir: WordDirection): WordDirection {
 
 export function indexedWordListLookup(wl: IndexedWordList, grid: GridState, word: GridWord): Entry[] {
     let squares = getWordSquares(grid, word);
+    return indexedWordListLookupSquares(wl, grid, squares);
+}
+
+export function indexedWordListLookupSquares(wl: IndexedWordList, grid: GridState, squares: GridSquare[]): Entry[] {
     let length = squares.length;
 
     let letters = [];
@@ -99,4 +107,8 @@ export function doesWordContainSquare(word: GridWord, row: number, col: number):
     else {
         return word.start[1] === col && word.start[0] <= row && word.end[0] >= row;
     }
+}
+
+export function isWordEmptyOrFull(squares: GridSquare[]): boolean {
+    return !squares.find(x => x.fillContent) || !squares.find(x => !x.fillContent);
 }
