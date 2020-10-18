@@ -6,6 +6,7 @@ import { GridWord } from "../models/GridWord";
 import { IndexedWordList } from "../models/IndexedWordList";
 import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
+import { getIndexedWordListBucket } from "./wordList";
 
 export function average(arr: number[]): number {
     return arr.reduce((a,b) => a + b, 0) / arr.length;
@@ -13,6 +14,31 @@ export function average(arr: number[]): number {
 
 export function sum(arr: number[]): number {
     return arr.reduce((a,b) => a + b, 0);
+}
+
+export function deepClone(obj: any): any {
+    return JSON.parse(JSON.stringify(obj, replacer), reviver);
+}
+
+// https://stackoverflow.com/questions/29085197/how-do-you-json-stringify-an-es6-map
+function replacer(this: any, key: any, value: any) {
+    const originalObject = this[key];
+    if(originalObject instanceof Map) {
+        return {
+        dataType: 'Map',
+        value: Array.from(originalObject.entries()), // or with spread: value: [...originalObject]
+        };
+    } else {
+        return value;
+    }
+}
+function reviver(key: any, value: any) {
+    if(typeof value === 'object' && value !== null) {
+        if (value.dataType === 'Map') {
+        return new Map(value.value);
+        }
+    }
+    return value;
 }
 
 export function compareTuples(first: [number, number], second: [number, number]): boolean {
@@ -35,7 +61,7 @@ export function indexedWordListLookup(wl: IndexedWordList, grid: GridState, word
 export function indexedWordListLookupSquares(wl: IndexedWordList, grid: GridState, squares: GridSquare[]): Entry[] {
     let length = squares.length;
 
-    let letters = [];
+    let letters: [number, string][] = [];
     for(let pos = 1; pos <= length; pos++) {
         let ltr = squares[pos-1].fillContent;
         if (ltr) {
@@ -44,17 +70,16 @@ export function indexedWordListLookupSquares(wl: IndexedWordList, grid: GridStat
     }
 
     if (letters.length === 1) {
-        let key = `${length},${letters[0][0]},${letters[0][1]}`;
-        return wl.buckets.get(key) || [];
+        return getIndexedWordListBucket(wl, length, letters[0][0], letters[0][1]);
     }
 
     let possibles: Entry[] = [];
     for(let i = 0; i < letters.length; i+=2) {
-        let key = i === letters.length-1 ? `${length},${letters[i-1][0]},${letters[i-1][1]},${letters[i][0]},${letters[i][1]}` : 
-            `${length},${letters[i][0]},${letters[i][1]},${letters[i+1][0]},${letters[i+1][1]}`;
-        let newPossibles = wl.buckets.get(key) || [];
-        if (newPossibles.length === 0) return [];
-        possibles = possibles.length === 0 ? newPossibles : intersectEntryLists(possibles, newPossibles);
+        let entries = i === letters.length-1 ?
+            getIndexedWordListBucket(wl, length, letters[i-1][0], letters[i-1][1], letters[i][0], letters[i][1]) :
+            getIndexedWordListBucket(wl, length, letters[i][0], letters[i][1], letters[i+1][0], letters[i+1][1]);
+        if (entries.length === 0) return [];
+        possibles = i === 0 ? entries : intersectEntryLists(possibles, entries);
     }
 
     return possibles;
@@ -74,8 +99,8 @@ export function getWordSquares(grid: GridState, word: GridWord): GridSquare[] {
 }
 
 function intersectEntryLists(list1: Entry[], list2: Entry[]): Entry[] {
-    var hash2 = new Map(list2.map(i => [i.entry, true]));
-    return list1.filter(entry => hash2.has(entry.entry));
+    var hash2 = new Map(list2.map(i => [i.word, true]));
+    return list1.filter(entry => hash2.has(entry.word));
 }
 
 export function getWordAtSquare(grid: GridState, row: number, col: number, dir: WordDirection): GridWord {
@@ -111,4 +136,11 @@ export function doesWordContainSquare(word: GridWord, row: number, col: number):
 
 export function isWordEmptyOrFull(squares: GridSquare[]): boolean {
     return !squares.find(x => x.fillContent) || !squares.find(x => !x.fillContent);
+}
+
+export function shuffleArray(array: any[]) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
 }

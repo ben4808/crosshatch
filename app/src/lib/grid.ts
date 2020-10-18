@@ -136,7 +136,7 @@ function generateConstraintInfo(wl: IndexedWordList, grid: GridState, word: Grid
             continue;
         }
 
-        let letters = entryOptions.map(x => x.entry[i]);
+        let letters = entryOptions.map(x => x.word[i]);
         let newConstraintsMap = new Map<string, number>();
         letters.forEach(ltr => {
             newConstraintsMap.set(ltr, (newConstraintsMap.get(ltr) || 0) + 1);
@@ -147,6 +147,7 @@ function generateConstraintInfo(wl: IndexedWordList, grid: GridState, word: Grid
         if (!isExistingMap) {
             sq.constraintSum = constraintSum;
             sq.constraintMap = newConstraintsMap;
+            sq.constraintInitialized = newConstraintsMap.size > 0;
         }
         else {
             constraintSum = 0;

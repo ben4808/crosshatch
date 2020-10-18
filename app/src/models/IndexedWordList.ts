@@ -1,6 +1,7 @@
-import { Entry } from "./Entry";
+import { QualityClass } from "./QualityClass";
 
 export interface IndexedWordList {
     source: string;
-    buckets: Map<string, Entry[]>;
+    qualityClasses: Map<string, QualityClass>;
+    buckets: any;
 }

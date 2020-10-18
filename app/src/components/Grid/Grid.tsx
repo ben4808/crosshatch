@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useReducer, useState } from 'react';
 import { SquareType } from '../../models/SquareType';
 import { SquareProps } from '../Square/SquareProps';
 import { GridProps } from './GridProps';
@@ -10,16 +10,17 @@ import { GridSquare } from '../../models/GridSquare';
 import { fillWord } from '../../lib/fill';
 import Globals from '../../lib/windowService';
 import { generateWordInfo, updateWordInfo } from '../../lib/grid';
-import { compareTuples, doesWordContainSquare, getWordAtSquare, otherDir } from '../../lib/util';
+import { compareTuples, deepClone, doesWordContainSquare, getWordAtSquare, otherDir } from '../../lib/util';
 import { ConstraintErrorType } from '../../models/ConstraintErrorType';
 
 function Grid(props: GridProps) {
-    const [gridState, setGridState] = useState(createNewGrid(props.height, props.width));
+    const [ignored, forceUpdate] = useReducer(x => x + 1, 0);
 
     useEffect(() => {
+        Globals.gridState = createNewGrid(props.height, props.width);
         Globals.fillHandler = handleFill;
 
-        let newGridState = {...gridState};
+        let newGridState = deepClone(Globals.gridState);
         generateWordInfo(newGridState);
         setGridState(newGridState);
         // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -34,7 +35,7 @@ function Grid(props: GridProps) {
 
         let row = +target.attributes["data-row"].value;
         let col = +target.attributes["data-col"].value;
-        let newGridState = {...gridState};
+        let newGridState = deepClone(Globals.gridState);
         
         let newDirection = newGridState.selectedWord?.direction || WordDirection.Across;
 
@@ -55,7 +56,7 @@ function Grid(props: GridProps) {
     }
     
     function handleKeyDown(event: any) {
-        let newGridState = {...gridState};
+        let newGridState = deepClone(Globals.gridState);
         if (!newGridState.selectedSquare) return;
         let row = newGridState.selectedSquare[0];
         let col = newGridState.selectedSquare[1];
@@ -95,12 +96,18 @@ function Grid(props: GridProps) {
     }
 
     function handleFill() {
-        let newGridState = {...gridState};
-        generateWordInfo(newGridState);
-        fillWord(newGridState);
+        let newGridState = deepClone(Globals.gridState);
+        newGridState = fillWord(newGridState);
         generateWordInfo(newGridState);
         setGridState(newGridState);
     }
+
+    function setGridState(newState: GridState) {
+        Globals.gridState = newState;
+        forceUpdate();
+    }
+
+    let gridState = Globals.gridState || createNewGrid(props.height, props.width);
 
     let squareElements = [];
     for (let row = 0; row < props.height; row++) {
@@ -159,6 +166,7 @@ function createNewGrid(height: number, width: number): GridState {
                 constraintMap: new Map<string, number>(),
                 constraintSum: 0,
                 constraintError: ConstraintErrorType.None,
+                constraintInitialized: false,
             };
         }
     }
@@ -168,6 +176,7 @@ function createNewGrid(height: number, width: number): GridState {
         width: width,
         squares: squares,
         words: [],
+        fillNodeStack: [],
     };
 
     return grid;

@@ -1,6 +1,6 @@
 import { QualityClass } from "./QualityClass";
 
 export interface Entry {
-    entry: string;
+    word: string;
     qualityClass: QualityClass;
 }

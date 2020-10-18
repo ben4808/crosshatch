@@ -10,5 +10,6 @@ export interface GridSquare {
     fillContent?: string;
     constraintMap: Map<string, number>;
     constraintSum: number,
+    constraintInitialized: boolean;
     constraintError: ConstraintErrorType,
 }

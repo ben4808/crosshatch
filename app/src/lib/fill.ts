@@ -1,96 +1,179 @@
-import { Entry } from "../models/Entry";
-import { FillCandidate } from "../models/FillCandidate";
+import { EntryCandidate } from "../models/EntryCandidate";
+import { FillNode } from "../models/FillNode";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { IndexedWordList } from "../models/IndexedWordList";
 import { WordDirection } from "../models/WordDirection";
-import { average, compareTuples, getWordAtSquare, getWordSquares, 
-    indexedWordListLookup, indexedWordListLookupSquares, isBlackSquare, isWordEmptyOrFull, otherDir, sum } from "./util";
+import { average, deepClone, compareTuples, getWordAtSquare, getWordSquares, 
+    indexedWordListLookup, indexedWordListLookupSquares, isBlackSquare, 
+    isWordEmptyOrFull, otherDir, shuffleArray, sum } from "./util";
 import Globals from './windowService';
 
-export function fillWord(grid: GridState) {
+export function fillWord(grid: GridState, node?: FillNode): GridState {
     if (isGridFilled(grid)) {
-        return;
+        return grid;
     }
 
     let wl: IndexedWordList = Globals.wordList;
 
-    let wordToFillOrNull = getMostConstrainedWord(grid, wl);
-    if (!wordToFillOrNull) return;
-    let wordToFill = wordToFillOrNull!;
+    if (!node) {
+        let newNode = populateNewNode(wl, grid);
+        if (!newNode) return grid;
+        node = newNode;
+    }
+    
+    let viableCandidates = node.entryCandidates.filter(x => x.isViable);
+    if(viableCandidates.length === 0) {
+        if (grid.fillNodeStack.length === 0) return grid;
 
-    let fillOptions = indexedWordListLookup(wl, grid, wordToFill);
-    let candidate: FillCandidate = {
-        previousGrid: grid,
-        fillWord: wordToFill,
+        let previousNode = grid.fillNodeStack.pop()!;
+        let prevCandidate = previousNode.entryCandidates.find(x => x.entry.word === previousNode.chosenWord)!;
+        prevCandidate.score = 0;
+        prevCandidate.isViable = false;
+        previousNode.chosenWord = "";
+        return fillWord(node.previousGrid, previousNode);
+    }
+
+    node.chosenWord = chooseEntryFromCandidates(viableCandidates);
+    insertEntryIntoGrid(grid, node.fillWord, node.chosenWord);
+    grid.fillNodeStack.push(node);
+    return grid;
+}
+
+function populateNewNode(wl: IndexedWordList, grid: GridState): FillNode | undefined {
+    let node = {
+        previousGrid: deepClone(grid),
+        fillWord: grid.words[0],
         entryCandidates: [],
-    };
-    let wordSquares = getWordSquares(grid, wordToFill);
+        chosenWord: "",
+    } as FillNode;
+
+    let wordToFillOrNull = getMostConstrainedWord(grid, wl);
+    if (!wordToFillOrNull) return undefined;
+    node.fillWord = wordToFillOrNull!;
+    
+    let wordSquares = getWordSquares(grid, node.fillWord);
     let crosses = wordSquares
-        .map(sq => getWordAtSquare(grid, sq.row, sq.col, otherDir(wordToFill.direction)))
+        .map(sq => getWordAtSquare(grid, sq.row, sq.col, otherDir(node.fillWord.direction)))
         .filter(w => w.number && getWordSquares(grid, w).find(x => !x.fillContent));
     if (crosses.length === 0) return;
 
-    fillOptions.forEach(op => {
-        let sumOfChanges = 0;
-        let foundBadCross = false;
-        for (let i = 0; i < crosses.length; i++) {
-            let cross = crosses[i];
-            let squares = getWordSquares(grid, cross);
-            let oldSum = getWordConstraintSum(squares);
+    let highestLowConstraintSum = 0;
+    let maxSumOfPercentageLosses = 0;
+    while(highestLowConstraintSum === 0 && getOptionsToConsider(wl, grid, node)) {
+        node.entryCandidates.forEach(candidate => {
+            let foundBadCross = false;
+            let sumOfPercentageLosses = 0;
+            let lowConstraintSum = 1e8;
+            for (let i = 0; i < crosses.length; i++) {
+                let cross = crosses[i];
+                let squares = getWordSquares(grid, cross);
+                let oldSum = getWordConstraintSum(squares);
 
-            let newSquares = squares.map(x => Object.assign({}, x));
-            let sqToReplace: GridSquare;
-            let newVal: string;
-            if (wordToFill.direction === WordDirection.Across) {
-                sqToReplace = newSquares.find(nsq => nsq.row === wordSquares[0].row)!;
-                newVal = op.entry[sqToReplace.col - wordSquares[0].col];
-            }
-            else {
-                sqToReplace = newSquares.find(nsq => nsq.col === wordSquares[0].col)!;
-                newVal = op.entry[sqToReplace.row - wordSquares[0].row];
-            }
-            sqToReplace.fillContent = newVal;
-            
-            let newSum = getConstriantSumWithSquares(wl, grid, newSquares);
-            if (newSum === 0) {
-                foundBadCross = true;
-                break;
-            }
-            sumOfChanges += (oldSum - newSum);
-        }
+                let newSquares = squares.map(x => Object.assign({}, x));
+                let sqToReplace: GridSquare;
+                let newVal: string;
+                if (node.fillWord.direction === WordDirection.Across) {
+                    sqToReplace = newSquares.find(nsq => nsq.row === wordSquares[0].row)!;
+                    newVal = candidate.entry.word[sqToReplace.col - wordSquares[0].col];
+                }
+                else {
+                    sqToReplace = newSquares.find(nsq => nsq.col === wordSquares[0].col)!;
+                    newVal = candidate.entry.word[sqToReplace.row - wordSquares[0].row];
+                }
+                sqToReplace.fillContent = newVal;
+                
+                let newSum = getConstriantSumWithSquares(wl, grid, newSquares);
+                if (newSum === 0) {
+                    foundBadCross = true;
+                    break;
+                }
 
-        if (!foundBadCross)
-            candidate.entryCandidates.push([op.entry, calculateCandidateScore(op, sumOfChanges)]);
+                sumOfPercentageLosses += (oldSum - newSum) / oldSum;
+                if (newSum < lowConstraintSum) lowConstraintSum = newSum;
+            }
+
+            if (foundBadCross) {
+                candidate.score = 0;
+                candidate.isViable = false;
+                return;
+            }
+
+            candidate.sumOfPercentageLosses = sumOfPercentageLosses;
+            candidate.lowConstraintSum = lowConstraintSum;
+            if (sumOfPercentageLosses > maxSumOfPercentageLosses)
+                maxSumOfPercentageLosses = sumOfPercentageLosses;
+            if (lowConstraintSum > highestLowConstraintSum)
+                highestLowConstraintSum = lowConstraintSum;
+        });
+    }
+
+    let viableCandidates = node.entryCandidates.filter(x => x.isViable);
+    viableCandidates.forEach(candidate => {
+        candidate.score = calculateCandidateScore(candidate, maxSumOfPercentageLosses, highestLowConstraintSum);
     });
+    
+    viableCandidates = viableCandidates.sort((a, b) => b.score! - a.score!);
 
-    if(candidate.entryCandidates.length === 0) return;
-
-    candidate.entryCandidates = candidate.entryCandidates.sort((a, b) => b[1] - a[1]);
-    var chosenEntry = chooseEntryFromCandidates(candidate.entryCandidates);
-    insertEntryIntoGrid(grid, wordToFill, chosenEntry);
+    return node;
 }
 
-function calculateCandidateScore(op: Entry, sumOfChanges: number): number {
-    return 100 * op.qualityClass / sumOfChanges;
+function calculateCandidateScore(candidate: EntryCandidate, maxSumOfPercentageLosses: number, highestLowConstraintSum: number): number {
+    let score1 = (maxSumOfPercentageLosses - candidate.sumOfPercentageLosses!) / maxSumOfPercentageLosses;
+    let score2 = candidate.lowConstraintSum! / highestLowConstraintSum;
+
+    return (score1 * 1 + score2 * 2) * candidate.entry.qualityClass / 3;
 }
 
-function chooseEntryFromCandidates(candidates: [string, number][]): string {
-    let sumOfScores = sum(candidates.map(x => x[1]));
+function chooseEntryFromCandidates(candidates: EntryCandidate[]): string {
+    let sumOfScores = sum(candidates.map(x => x.score!));
     let roll = Math.random();
     let curTotal = 0;
     for (let i = 0; i < candidates.length; i++) {
-        curTotal += candidates[i][1];
+        curTotal += candidates[i].score!;
         if (roll <= (curTotal / sumOfScores))
-            return candidates[i][0];
+            return candidates[i].entry.word;
     }
 
-    return candidates[0][0];
+    return candidates[0].entry.word;
+}
+
+// returns whether any viable options were found
+function getOptionsToConsider(wl: IndexedWordList, grid: GridState, node: FillNode): boolean {
+    let viableEntries = node.entryCandidates.filter(x => x.isViable);
+    if (viableEntries.length >= 20) return true;
+
+    let entryMap = new Map<string, EntryCandidate>();
+    node.entryCandidates.forEach(e => {
+        entryMap.set(e.entry.word, e);
+    });
+
+    let fillOptions = indexedWordListLookup(wl, grid, node.fillWord)
+        .filter(x => !entryMap.has(x.word));
+    shuffleArray(fillOptions);
+    fillOptions.sort((a, b) => b.qualityClass - a.qualityClass);
+
+    if (fillOptions.length === 0) return false;
+
+    for (let i = 0; i < 50; i++) {
+        if (i >= fillOptions.length) break;
+        let op = fillOptions[i];
+        node.entryCandidates.push({
+            entry: op,
+            isViable: !hasGridUsedWord(grid, op.word),
+        });
+    }
+
+    return true;
 }
 
 function isGridFilled(grid: GridState): boolean {
     return !grid.squares.find(row => row.find(sq => !isBlackSquare(sq) && !sq.fillContent));
+}
+
+function hasGridUsedWord(grid: GridState, word: string): boolean {
+    return !!grid.fillNodeStack.find(x => x.chosenWord === word);
 }
 
 function getMostConstrainedWord(grid: GridState, wl: IndexedWordList): GridWord | undefined {
@@ -154,7 +237,11 @@ function getConstriantSumWithSquares(wl: IndexedWordList, grid: GridState, squar
             continue;
         }
 
-        let letters = entryOptions.map(x => x.entry[i]);
+        if (!newSq.constraintInitialized) {
+            continue;
+        }
+
+        let letters = entryOptions.map(x => x.word[i]);
         newSq.constraintMap = new Map<string, number>();
         letters.forEach(ltr => {
             newSq.constraintMap.set(ltr, (newSq.constraintMap.get(ltr) || 0) + 1);

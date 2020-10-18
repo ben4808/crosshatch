@@ -3,32 +3,17 @@ import { IndexedWordList } from "../models/IndexedWordList";
 import { QualityClass } from "../models/QualityClass";
 import Globals from './windowService';
 
-// function saveBucketsToFile(buckets: any, filename: string) {
-//     var json = JSON.stringify(Array.from(buckets.entries()));
-
-//     var blob = new Blob([json], {type: 'text/json'}),
-//         e    = document.createEvent('MouseEvents'),
-//         a    = document.createElement('a')
-
-//     a.download = filename
-//     a.href = window.URL.createObjectURL(blob)
-//     a.dataset.downloadurl =  ['text/json', a.download, a.href].join(':')
-//     e.initMouseEvent('click', true, false, window, 0, 0, 0, 0, 0, false, false, false, false, 0, null)
-//     a.dispatchEvent(e)
-// }
-
 export function loadPhilList() {
     loadWordList("Phil", "http://localhost/phil_wordlist.txt", parsePhilWordlist).then((wordList) => {
         Globals.wordList = wordList;
         console.log("Word List loaded");
-        //saveBucketsToFile(wordList.buckets, "phil_wordlist_indexed.txt");
     });
 }
 
 function parsePhilWordlist(lines: string[]): Entry[] {
     return lines.filter(x => x.match(/^[A-Z]/)).map(x => {
       return {
-        entry: x.trim(),
+        word: x.trim(),
         qualityClass: QualityClass.Normal,
       };
     });
@@ -38,78 +23,96 @@ export async function loadWordList(source: string, url: string, parserFunc: (lin
     var startTime = new Date().getTime();
     var response = await fetch(url);
     var t2 = new Date().getTime();
-    console.log(t2 - startTime);
+    console.log((t2 - startTime) + " File downloaded");
     const lines = (await response.text()).split('\n');
     var t3 = new Date().getTime();
-    console.log(t3 - startTime);
+    console.log((t3 - startTime) + " Read into memory");
     var entries = parserFunc(lines);
     var t4 = new Date().getTime();
-    console.log(t4 - startTime);
-    var ret = {
+    console.log((t4 - startTime) + " Parsed into entries");
+    var ret: IndexedWordList = {
         source: source,
+        qualityClasses: buildQualityClassMap(entries),
         buckets: indexWordList(entries),
     }
     var t5 = new Date().getTime();
-    console.log(t5 - startTime);
+    console.log((t5 - startTime) + " Finished indexing");
 
     return ret;
 }
 
-export async function loadIndexedWordList(url: string): Promise<IndexedWordList> {
-    var response = await fetch(url);
-    return await response.json();
+export function getIndexedWordListBucket(wl: IndexedWordList, 
+    length: number, pos1: number, val1: string, pos2?: number, val2?: string): Entry[] {
+    let words: string[];
+    if (pos2 && val2) {
+        words = wl.buckets.twoVal[length-2][pos1-1][pos2-(pos1+1)][val1.charCodeAt(0)-65][val2.charCodeAt(0)-65];
+    }
+    else {
+        words = wl.buckets.oneVal[length-2][pos1-1][val1.charCodeAt(0)-65];
+    }
+
+    return words.map(w => ({
+        word: w,
+        qualityClass: wl.qualityClasses.get(w),
+    }) as Entry);
 }
 
-export function wordListLookup(wordList: IndexedWordList, length: number, pos1: number, char1: string, pos2?: number, char2?: string): Entry[] {
-    return wordList.buckets.get(`${length},${pos1},${char1}` + pos2 ? `,${pos2},${char2}` : '') || [];
+function buildQualityClassMap(entries: Entry[]): Map<string, QualityClass> {
+    let map = new Map<string, number>();
+    entries.forEach(entry => {
+        map.set(entry.word, entry.qualityClass);
+    });
+    return map;
 }
 
-function indexWordList(list: Entry[]): Map<string, Entry[]> {
-    var dict = new Map<string, Entry[]>();
+function indexWordList(entries: Entry[]): any {
+    let ret = {
+        oneVal: [] as any[],
+        twoVal: [] as any[],
+    };
 
     for (let length = 2; length <= 15; length++) {
+        ret.oneVal.push([] as any[]);
         for (let pos1 = 1; pos1 <= length; pos1++) {
+            ret.oneVal[length-2].push([] as any[]);
             for (let ch1 = 65; ch1 <= 90; ch1++) {
-                dict.set(`${length},${pos1},${String.fromCharCode(ch1)}`, []);
+                ret.oneVal[length-2][pos1-1].push([] as string[]);
             }
         }
     }
 
     for (let length = 2; length <= 15; length++) {
+        ret.twoVal.push([] as any[]);
         for (let pos1 = 1; pos1 <= length-1; pos1++) {
+            ret.twoVal[length-2].push([] as any[]);
             for (let pos2 = pos1+1; pos2 <= length; pos2++) {
+                ret.twoVal[length-2][pos1-1].push([] as any[]);
                 for (let ch1 = 65; ch1 <= 90; ch1++) {
-                    let ch1s = String.fromCharCode(ch1);
+                    ret.twoVal[length-2][pos1-1][pos2-(pos1+1)].push([] as any[]);
                     for (let ch2 = 65; ch2 <= 90; ch2++) {
-                        dict.set(`${length},${pos1},${ch1s},${pos2},${String.fromCharCode(ch2)}`, []);
+                        ret.twoVal[length-2][pos1-1][pos2-(pos1+1)][ch1-65].push([] as string[]);
                     }
                 }
             }
         }
     }
 
-    list.forEach(entry => {
-        let word = entry.entry;
+    entries.forEach(entry => {
+        let word = entry.word;
 
         // 1-position entries
         for (let pos1 = 1; pos1 <= word.length; pos1++) {
-            let key = `${word.length},${pos1},${word[pos1-1]}`;
-            let newValue = dict.get(key) || [];
-            newValue.push(entry);
-            dict.set(key, newValue);
+            ret.oneVal[word.length-2][pos1-1][word[pos1-1].charCodeAt(0)-65].push(word);
         }
 
         // 2-position entries
         for (let pos1 = 1; pos1 < word.length; pos1++) {
             for (let pos2 = pos1 + 1; pos2 <= word.length; pos2++) {
-                let key = `${word.length},${pos1},${word[pos1-1]},${pos2},${word[pos2-1]}`;
-                let newValue = dict.get(key) || [];
-                newValue.push(entry);
-                dict.set(key, newValue);
+                ret.twoVal[word.length-2][pos1-1][pos2-(pos1+1)][word[pos1-1].charCodeAt(0)-65][word[pos2-1].charCodeAt(0)-65].push(word);
             }
         }
     });
 
-    return dict;
+    return ret;
 }
 
