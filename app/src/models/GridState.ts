@@ -1,4 +1,4 @@
-import { FillNode } from "./FillNode";
+import { FillStatus } from "./FillStatus";
 import { GridSquare } from "./GridSquare";
 import { GridWord } from "./GridWord";
 
@@ -10,6 +10,4 @@ export interface GridState {
     
     words: GridWord[];
     selectedWord?: GridWord;
-
-    fillNodeStack: FillNode[];
 }

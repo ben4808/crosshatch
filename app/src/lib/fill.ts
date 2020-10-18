@@ -1,5 +1,6 @@
 import { EntryCandidate } from "../models/EntryCandidate";
 import { FillNode } from "../models/FillNode";
+import { FillStatus } from "../models/FillStatus";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
@@ -11,39 +12,52 @@ import { average, deepClone, compareTuples, getWordAtSquare, getWordSquares,
 import Globals from './windowService';
 
 export function fillWord(grid: GridState, node?: FillNode): GridState {
-    if (isGridFilled(grid)) {
+    if ([FillStatus.Ready, FillStatus.Running, FillStatus.Paused].find(x => x === Globals.fillStatus) === undefined) {
         return grid;
     }
 
     let wl: IndexedWordList = Globals.wordList;
+    let fillStack: FillNode[] = Globals.fillStack;
+    Globals.fillStatus = FillStatus.Running;
 
     if (!node) {
         let newNode = populateNewNode(wl, grid);
         if (!newNode) return grid;
         node = newNode;
     }
+    else {
+        node.startGrid = deepClone(grid);
+    }
     
     let viableCandidates = node.entryCandidates.filter(x => x.isViable);
     if(viableCandidates.length === 0) {
-        if (grid.fillNodeStack.length === 0) return grid;
+        if (fillStack.length === 0) {
+            Globals.fillStatus = FillStatus.Failed;
+            return node.startGrid;
+        }
 
-        let previousNode = grid.fillNodeStack.pop()!;
+        let previousNode = fillStack.pop()!;
         let prevCandidate = previousNode.entryCandidates.find(x => x.entry.word === previousNode.chosenWord)!;
         prevCandidate.score = 0;
         prevCandidate.isViable = false;
         previousNode.chosenWord = "";
-        return fillWord(node.previousGrid, previousNode);
+        return fillWord(previousNode.startGrid, previousNode);
     }
 
     node.chosenWord = chooseEntryFromCandidates(viableCandidates);
     insertEntryIntoGrid(grid, node.fillWord, node.chosenWord);
-    grid.fillNodeStack.push(node);
+    fillStack.push(node);
+
+    if (isGridFilled(grid)) {
+        Globals.fillStatus = FillStatus.Success;
+    }
+
     return grid;
 }
 
 function populateNewNode(wl: IndexedWordList, grid: GridState): FillNode | undefined {
     let node = {
-        previousGrid: deepClone(grid),
+        startGrid: deepClone(grid),
         fillWord: grid.words[0],
         entryCandidates: [],
         chosenWord: "",
@@ -83,6 +97,11 @@ function populateNewNode(wl: IndexedWordList, grid: GridState): FillNode | undef
                     newVal = candidate.entry.word[sqToReplace.row - wordSquares[0].row];
                 }
                 sqToReplace.fillContent = newVal;
+
+                if (!sqToReplace.constraintMap.has(newVal)) {
+                    foundBadCross = true;
+                    break;
+                }
                 
                 let newSum = getConstriantSumWithSquares(wl, grid, newSquares);
                 if (newSum === 0) {
@@ -161,7 +180,7 @@ function getOptionsToConsider(wl: IndexedWordList, grid: GridState, node: FillNo
         let op = fillOptions[i];
         node.entryCandidates.push({
             entry: op,
-            isViable: !hasGridUsedWord(grid, op.word),
+            isViable: !hasStackUsedWord(Globals.fillStack, op.word),
         });
     }
 
@@ -172,8 +191,8 @@ function isGridFilled(grid: GridState): boolean {
     return !grid.squares.find(row => row.find(sq => !isBlackSquare(sq) && !sq.fillContent));
 }
 
-function hasGridUsedWord(grid: GridState, word: string): boolean {
-    return !!grid.fillNodeStack.find(x => x.chosenWord === word);
+function hasStackUsedWord(stack: FillNode[], word: string): boolean {
+    return !!stack.find(x => x.chosenWord === word);
 }
 
 function getMostConstrainedWord(grid: GridState, wl: IndexedWordList): GridWord | undefined {

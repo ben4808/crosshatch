@@ -1,4 +1,4 @@
-import React, { useEffect, useReducer, useState } from 'react';
+import React, { useEffect, useReducer } from 'react';
 import { SquareType } from '../../models/SquareType';
 import { SquareProps } from '../Square/SquareProps';
 import { GridProps } from './GridProps';
@@ -9,16 +9,21 @@ import { WordDirection } from '../../models/WordDirection';
 import { GridSquare } from '../../models/GridSquare';
 import { fillWord } from '../../lib/fill';
 import Globals from '../../lib/windowService';
-import { generateWordInfo, updateWordInfo } from '../../lib/grid';
+import { clearFill, generateWordInfo, updateWordInfo } from '../../lib/grid';
 import { compareTuples, deepClone, doesWordContainSquare, getWordAtSquare, otherDir } from '../../lib/util';
 import { ConstraintErrorType } from '../../models/ConstraintErrorType';
+import { FillStatus } from '../../models/FillStatus';
 
 function Grid(props: GridProps) {
     const [ignored, forceUpdate] = useReducer(x => x + 1, 0);
 
     useEffect(() => {
         Globals.gridState = createNewGrid(props.height, props.width);
-        Globals.fillHandler = handleFill;
+        Globals.fillStack = [];
+        Globals.fillWordHandler = handleFillWord;
+        Globals.fillGridHandler = handleFillGrid;
+        Globals.pauseFill = pauseFill;
+        Globals.fillStatus = FillStatus.Ready;
 
         let newGridState = deepClone(Globals.gridState);
         generateWordInfo(newGridState);
@@ -87,19 +92,45 @@ function Grid(props: GridProps) {
             letterChanged = false;
         }
 
-        if (blackSquareChanged)
+        if (blackSquareChanged) {
+            clearFill(newGridState);
             generateWordInfo(newGridState);
-        else if (letterChanged) 
+        }
+        else if (letterChanged)  {
+            clearFill(newGridState);
             updateWordInfo(newGridState);
-        
+        }
+            
         setGridState(newGridState);
     }
 
-    function handleFill() {
+    function handleFillWord() {
         let newGridState = deepClone(Globals.gridState);
         newGridState = fillWord(newGridState);
         generateWordInfo(newGridState);
         setGridState(newGridState);
+    }
+
+    function handleFillGrid() {
+        Globals.fillStatus = FillStatus.Ready;
+        doFillGrid();
+    }
+
+    function doFillGrid() {
+        if ([FillStatus.Success, FillStatus.Failed, FillStatus.Paused].find(x => x === Globals.fillStatus) !== undefined) {
+            return;
+        }
+
+        let newGridState: GridState = deepClone(Globals.gridState);
+        newGridState = fillWord(newGridState);
+        generateWordInfo(newGridState);
+        setGridState(newGridState);
+        setTimeout(() => doFillGrid(), 10);
+    }
+
+    function pauseFill() {
+        Globals.fillStatus = FillStatus.Paused;
+        forceUpdate();
     }
 
     function setGridState(newState: GridState) {
@@ -107,7 +138,7 @@ function Grid(props: GridProps) {
         forceUpdate();
     }
 
-    let gridState = Globals.gridState || createNewGrid(props.height, props.width);
+    let gridState: GridState = Globals.gridState || createNewGrid(props.height, props.width);
 
     let squareElements = [];
     for (let row = 0; row < props.height; row++) {
@@ -122,10 +153,15 @@ function Grid(props: GridProps) {
     } as React.CSSProperties;
 
     return (
-        <div id="Grid" className="grid-container" style={columnTemplateStyle} 
-            onClick={handleClick} onKeyDown={handleKeyDown} tabIndex={0}>
-            {squareElements}
-        </div>
+        <>
+            <div id="grid-status">
+                {getFillStatusString(Globals.fillStatus)}
+            </div>
+            <div id="Grid" className="grid-container" style={columnTemplateStyle} 
+                onClick={handleClick} onKeyDown={handleKeyDown} tabIndex={0}>
+                {squareElements}
+            </div>
+        </>
     );
 }
 
@@ -133,6 +169,17 @@ export default Grid;
 
 function getSquareElement(props: SquareProps) {
     return <Square {...props}></Square>
+}
+
+function getFillStatusString(status: FillStatus): string {
+    switch(status) {
+        case FillStatus.Ready: return "Ready to Fill";
+        case FillStatus.Running: return "Fill Running...";
+        case FillStatus.Success: return "Fill Succeeded";
+        case FillStatus.Failed: return "Fill Failed";
+        case FillStatus.Paused: return "Fill Paused";
+        default: return "";
+    }
 }
 
 function getSquareProps(grid: GridState, row: number, col: number): SquareProps {
@@ -176,7 +223,6 @@ function createNewGrid(height: number, width: number): GridState {
         width: width,
         squares: squares,
         words: [],
-        fillNodeStack: [],
     };
 
     return grid;

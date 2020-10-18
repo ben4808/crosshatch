@@ -3,7 +3,7 @@ import { GridState } from "./GridState";
 import { GridWord } from "./GridWord";
 
 export interface FillNode {
-    previousGrid: GridState;
+    startGrid: GridState;
     fillWord: GridWord;
     entryCandidates: EntryCandidate[];
     chosenWord: string,

@@ -1,4 +1,5 @@
 import { ConstraintErrorType } from "../models/ConstraintErrorType";
+import { FillStatus } from "../models/FillStatus";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
@@ -74,11 +75,24 @@ export function updateWordInfo(grid: GridState) {
             sq.constraintError = ConstraintErrorType.None;
             sq.constraintSum = 0;
             sq.constraintMap = new Map<string, number>();
+            sq.constraintInitialized = false;
         });
     });
 
     grid.words.forEach(word => {
         generateConstraintInfo(wl, grid, word);
+    });
+}
+
+export function clearFill(grid: GridState) {
+    Globals.fillStack = [];
+    Globals.fillStatus = FillStatus.Ready;
+
+    grid.squares.forEach(row => {
+        row.forEach(sq => {
+            if (!sq.correctContent)
+                sq.fillContent = undefined;
+        });
     });
 }
 
@@ -128,6 +142,7 @@ function generateConstraintInfo(wl: IndexedWordList, grid: GridState, word: Grid
         if (sq.fillContent) {
             sq.constraintSum = 1;
             sq.constraintMap = new Map<string, number>([[sq.fillContent, 1]]);
+            constraintSum++;
             continue;
         }
         else if (badCrossingFound || entryOptions.length === 0) {
