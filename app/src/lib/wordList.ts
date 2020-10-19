@@ -12,12 +12,46 @@ export function loadPhilList() {
 
 function parsePhilWordlist(lines: string[]): Entry[] {
     return lines.filter(x => x.match(/^[A-Z]/)).map(x => {
-      return {
-        word: x.trim(),
-        qualityClass: QualityClass.Normal,
-      };
+       return {
+          word: x.trim(),
+          qualityClass: QualityClass.Normal,
+       };
     });
-  }
+}
+
+export function loadPeterBrodaList() {
+    loadWordList("Phil", "http://localhost/peter-broda-wordlist__scored.txt", parsePeterBrodaWordlist).then((wordList) => {
+        Globals.wordList = wordList;
+        console.log("Word List loaded");
+    });
+}
+
+function parsePeterBrodaWordlist(lines: string[]): Entry[] {
+    let map = new Map<string, QualityClass>();
+
+    lines.forEach(line => {
+        let tokens = line.trim().split(";");
+        let score = +tokens[1];
+        let qualityClass = score >= 55 ? QualityClass.Lively :
+                           score >= 50 ? QualityClass.Normal :
+                           score >= 40 ? QualityClass.Iffy : QualityClass.NotAThing;
+        let word = tokens[0];
+        if (qualityClass !== QualityClass.NotAThing && qualityClass !== QualityClass.Iffy //&& qualityClass !== QualityClass.Normal
+                && word.length >= 2 && word.length <= 15 && word.match(/^[A-Z]+$/))
+            map.set(tokens[0], qualityClass);
+    });
+
+    let ret = [] as Entry[];
+    map.forEach((qualityClass: QualityClass, word: string) => {
+        ret.push({
+            word: word,
+            qualityClass: qualityClass,
+        });
+    });
+
+    //ret.sort((a, b) => a.word > b.word ? 1 : a.word < b.word ? -1 : 0);
+    return ret;
+}
 
 export async function loadWordList(source: string, url: string, parserFunc: (lines: string[]) => Entry[]): Promise<IndexedWordList> {
     var startTime = new Date().getTime();

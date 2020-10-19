@@ -2,9 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom';
 import App from './App';
 import 'bootstrap/dist/css/bootstrap.css';
-import { loadPhilList } from './lib/wordList';
+import { loadPhilList, loadPeterBrodaList } from './lib/wordList';
 
-loadPhilList();
+loadPeterBrodaList();
 
 ReactDOM.render(
   <React.StrictMode>
