@@ -1,4 +1,3 @@
-import { ConstraintErrorType } from "./ConstraintErrorType";
 import { SquareType } from "./SquareType";
 
 export interface GridSquare {
@@ -6,10 +5,12 @@ export interface GridSquare {
     col: number;
     number?: number;
     type: SquareType;
-    correctContent?: string;
+
+    userContent?: string;
+    chosenFillContent?: string;
     fillContent?: string;
+
     constraintMap: Map<string, number>;
     constraintSum: number,
     constraintInitialized: boolean;
-    constraintError: ConstraintErrorType,
 }

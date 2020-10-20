@@ -13,17 +13,20 @@ import { clearFill, generateWordInfo, updateWordInfo } from '../../lib/grid';
 import { compareTuples, deepClone, doesWordContainSquare, getWordAtSquare, otherDir } from '../../lib/util';
 import { ConstraintErrorType } from '../../models/ConstraintErrorType';
 import { FillStatus } from '../../models/FillStatus';
+import { priorityQueue } from '../../lib/priorityQueue';
+import { FillNode } from '../../models/FillNode';
 
 function Grid(props: GridProps) {
+    // eslint-disable-next-line
     const [ignored, forceUpdate] = useReducer(x => x + 1, 0);
 
     useEffect(() => {
         Globals.gridState = createNewGrid(props.height, props.width);
-        Globals.fillStack = [];
+        Globals.fillQueue = priorityQueue<FillNode>();
+        Globals.fillStatus = FillStatus.Ready;
         Globals.fillWordHandler = handleFillWord;
         Globals.fillGridHandler = handleFillGrid;
         Globals.pauseFill = pauseFill;
-        Globals.fillStatus = FillStatus.Ready;
 
         let newGridState = deepClone(Globals.gridState);
         generateWordInfo(newGridState);
@@ -256,4 +259,18 @@ function getUncheckedSquareDir(grid: GridState, row: number, col: number): WordD
         return WordDirection.Across;
 
     return undefined;
+}
+
+export function clearFill(grid: GridState) {
+    Globals.fillQueue = priorityQueue<FillNode>();
+    Globals.fillStatus = FillStatus.Ready;
+
+    grid.squares.forEach(row => {
+        row.forEach(sq => {
+            if (!sq.userContent) {
+                sq.fillContent = undefined;
+                sq.chosenFillContent = undefined;
+            }
+        });
+    });
 }

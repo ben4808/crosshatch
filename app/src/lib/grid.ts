@@ -1,6 +1,4 @@
-import { ConstraintErrorType } from "../models/ConstraintErrorType";
 import { FillStatus } from "../models/FillStatus";
-import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { IndexedWordList } from "../models/IndexedWordList";
@@ -8,24 +6,12 @@ import { WordDirection } from "../models/WordDirection";
 import { compareTuples, getWordAtSquare, getWordSquares, indexedWordListLookup, isBlackSquare, newWord, otherDir } from "./util";
 import Globals from './windowService';
 
-export function generateWordInfo(grid: GridState) {
-    function resetCurrentWord() {
-        if (currentWord && currentWord.number) {
-            grid.words.push(currentWord);
-        }
+export function populateWords(grid: GridState) {
+    function processSquare(grid: GridState, row: number, col: number, dir: WordDirection) {
+        let sq = grid.squares[row][col];
 
-        currentWord = newWord();
-    }
-
-    function processSquare(sq: GridSquare, row: number, col: number, dir: WordDirection) {
-        if (isBlackSquare(sq)) {
-            resetCurrentWord();
-            return;
-        }
-
-        if (!currentWord.number && !sq.number) {
-            return;
-        }
+        if (isBlackSquare(sq)) return;
+        if (!currentWord.number && !sq.number) return; // unchecked square
 
         if (!currentWord.number) {
             currentWord.number = sq.number;
@@ -38,6 +24,12 @@ export function generateWordInfo(grid: GridState) {
         }
 
         currentWord.end = [row, col];
+
+        let nextSq = dir === WordDirection.Across ? [row, col+1] : [row+1, col];
+        if (nextSq[0] === grid.height || nextSq[1] === grid.width || isBlackSquare(grid.squares[nextSq[0]][nextSq[1]])) {
+            grid.words.push(currentWord);
+            currentWord = newWord();
+        }
     }
 
     let oldDir = grid.selectedWord?.direction || WordDirection.Across;
@@ -46,33 +38,25 @@ export function generateWordInfo(grid: GridState) {
 
     numberizeGrid(grid);
 
-    let currentWord: GridWord;
+    let currentWord: GridWord = newWord();
     for (let row = 0; row < grid.height; row++) {
-        resetCurrentWord();
         for (let col = 0; col < grid.width; col++) {
-            let sq = grid.squares[row][col];
-            processSquare(sq, row, col, WordDirection.Across);
+            processSquare(grid, row, col, WordDirection.Across);
         }
     }
 
     for (let col = 0; col < grid.width; col++) {
-        resetCurrentWord();
         for (let row = 0; row < grid.height; row++) {
-            let sq = grid.squares[row][col];
-            processSquare(sq, row, col, WordDirection.Down);
+            processSquare(grid, row, col, WordDirection.Down);
         }
     }
-    resetCurrentWord();
-
-    updateWordInfo(grid);
 }
 
-export function updateWordInfo(grid: GridState) {
-    let wl: IndexedWordList = Globals.wordList;
+export function updateGridConstraintInfo(grid: GridState) {
+    let wl: IndexedWordList = Globals.wordList!;
 
     grid.squares.forEach(row => {
         row.forEach(sq => {
-            sq.constraintError = ConstraintErrorType.None;
             sq.constraintSum = 0;
             sq.constraintMap = new Map<string, number>();
             sq.constraintInitialized = false;
@@ -80,19 +64,8 @@ export function updateWordInfo(grid: GridState) {
     });
 
     grid.words.forEach(word => {
+        let squares = getWordSquares(grid, word);
         generateConstraintInfo(wl, grid, word);
-    });
-}
-
-export function clearFill(grid: GridState) {
-    Globals.fillStack = [];
-    Globals.fillStatus = FillStatus.Ready;
-
-    grid.squares.forEach(row => {
-        row.forEach(sq => {
-            if (!sq.correctContent)
-                sq.fillContent = undefined;
-        });
     });
 }
 
@@ -111,8 +84,8 @@ function numberizeGrid(grid: GridState) {
                 let isRightBlocked = (col === grid.width-1 || isBlackSquare(grid.squares[row][col+1]));
 
                 let isUnchecked = (isAboveBlocked && isBelowBlocked) || (isLeftBlocked && isRightBlocked);
-                let isUncheckedStart = (isAboveBlocked && isBelowBlocked && isLeftBlocked) || 
-                                       (isLeftBlocked && isRightBlocked && isAboveBlocked);
+                let isUncheckedStart = (isAboveBlocked && isBelowBlocked && isLeftBlocked && !isRightBlocked) || 
+                                       (isLeftBlocked && isRightBlocked && isAboveBlocked && !isBelowBlocked);
                 let isCheckedStart = isAboveBlocked || isLeftBlocked;
 
                 if ((isUnchecked && isUncheckedStart) || (!isUnchecked && isCheckedStart)) {

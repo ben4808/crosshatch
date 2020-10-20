@@ -1,4 +1,3 @@
-import { ConstraintErrorType } from "../models/ConstraintErrorType";
 import { Entry } from "../models/Entry";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
@@ -120,8 +119,6 @@ export function newWord(): GridWord {
         direction: WordDirection.Across,
         start: [-1, -1],
         end: [-1, -1],
-
-        constraintError: ConstraintErrorType.None,
     }
 }
 

@@ -10,24 +10,32 @@ export function loadPhilList() {
     });
 }
 
-function parsePhilWordlist(lines: string[]): Entry[] {
-    return lines.filter(x => x.match(/^[A-Z]/)).map(x => {
-       return {
-          word: x.trim(),
-          qualityClass: QualityClass.Normal,
-       };
+function parsePhilWordlist(lines: string[]): string[] {
+    let map = new Map<string, QualityClass>();
+    let words = [] as string[];
+
+    lines.forEach(line => {
+        if (!line.match(/^[A-Z]/)) return;
+
+        map.set(line, QualityClass.Normal);
+        words.push(line);
     });
+
+    Globals.qualityClasses = map;
+
+    return words;
 }
 
 export function loadPeterBrodaList() {
-    loadWordList("Phil", "http://localhost/peter-broda-wordlist__scored.txt", parsePeterBrodaWordlist).then((wordList) => {
+    loadWordList("Peter Broda", "http://localhost/peter-broda-wordlist__scored.txt", parsePeterBrodaWordlist).then((wordList) => {
         Globals.wordList = wordList;
         console.log("Word List loaded");
     });
 }
 
-function parsePeterBrodaWordlist(lines: string[]): Entry[] {
+function parsePeterBrodaWordlist(lines: string[]): string[] {
     let map = new Map<string, QualityClass>();
+    let words = [] as string[];
 
     lines.forEach(line => {
         let tokens = line.trim().split(";");
@@ -37,23 +45,18 @@ function parsePeterBrodaWordlist(lines: string[]): Entry[] {
                            score >= 40 ? QualityClass.Iffy : QualityClass.NotAThing;
         let word = tokens[0];
         if (qualityClass !== QualityClass.NotAThing && qualityClass !== QualityClass.Iffy //&& qualityClass !== QualityClass.Normal
-                && word.length >= 2 && word.length <= 15 && word.match(/^[A-Z]+$/))
-            map.set(tokens[0], qualityClass);
+                && word.length >= 2 && word.length <= 15 && word.match(/^[A-Z]+$/)) {
+                    map.set(tokens[0], qualityClass);
+                    words.push(tokens[0]);
+                }
     });
 
-    let ret = [] as Entry[];
-    map.forEach((qualityClass: QualityClass, word: string) => {
-        ret.push({
-            word: word,
-            qualityClass: qualityClass,
-        });
-    });
+    Globals.qualityClasses = map;
 
-    //ret.sort((a, b) => a.word > b.word ? 1 : a.word < b.word ? -1 : 0);
-    return ret;
+    return words;
 }
 
-export async function loadWordList(source: string, url: string, parserFunc: (lines: string[]) => Entry[]): Promise<IndexedWordList> {
+export async function loadWordList(source: string, url: string, parserFunc: (lines: string[]) => string[]): Promise<IndexedWordList> {
     var startTime = new Date().getTime();
     var response = await fetch(url);
     var t2 = new Date().getTime();
@@ -66,7 +69,6 @@ export async function loadWordList(source: string, url: string, parserFunc: (lin
     console.log((t4 - startTime) + " Parsed into entries");
     var ret: IndexedWordList = {
         source: source,
-        qualityClasses: buildQualityClassMap(entries),
         buckets: indexWordList(entries),
     }
     var t5 = new Date().getTime();
@@ -87,19 +89,11 @@ export function getIndexedWordListBucket(wl: IndexedWordList,
 
     return words.map(w => ({
         word: w,
-        qualityClass: wl.qualityClasses.get(w),
+        qualityClass: Globals.qualityClasses!.get(w),
     }) as Entry);
 }
 
-function buildQualityClassMap(entries: Entry[]): Map<string, QualityClass> {
-    let map = new Map<string, number>();
-    entries.forEach(entry => {
-        map.set(entry.word, entry.qualityClass);
-    });
-    return map;
-}
-
-function indexWordList(entries: Entry[]): any {
+function indexWordList(entries: string[]): any {
     let ret = {
         oneVal: [] as any[],
         twoVal: [] as any[],
@@ -131,9 +125,7 @@ function indexWordList(entries: Entry[]): any {
         }
     }
 
-    entries.forEach(entry => {
-        let word = entry.word;
-
+    entries.forEach(word => {
         // 1-position entries
         for (let pos1 = 1; pos1 <= word.length; pos1++) {
             ret.oneVal[word.length-2][pos1-1][word[pos1-1].charCodeAt(0)-65].push(word);
