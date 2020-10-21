@@ -6,28 +6,22 @@ import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { IndexedWordList } from "../models/IndexedWordList";
 import { WordDirection } from "../models/WordDirection";
-import { average, deepClone, compareTuples, getWordAtSquare, getWordSquares, 
+import { average, deepClone, compareTuples, getWordAtSquare, getSquaresForWord, 
     indexedWordListLookup, indexedWordListLookupSquares, isBlackSquare, 
     isWordEmptyOrFull, otherDir, shuffleArray, sum } from "./util";
 import Globals from './windowService';
 
-export function fillWord(grid: GridState, node?: FillNode): GridState {
+export function fillWord(): void {
     if ([FillStatus.Ready, FillStatus.Running, FillStatus.Paused].find(x => x === Globals.fillStatus) === undefined) {
-        return grid;
+        return;
     }
 
-    let wl: IndexedWordList = Globals.wordList;
-    let fillStack: FillNode[] = Globals.fillStack;
+    let fillQueue = Globals.fillQueue!;
+    let grid = deepClone(Globals.gridState!);
     Globals.fillStatus = FillStatus.Running;
 
-    if (!node) {
-        let newNode = populateNewNode(wl, grid);
-        if (!newNode) return grid;
-        node = newNode;
-    }
-    else {
-        node.startGrid = deepClone(grid);
-    }
+    let node = fillQueue.isEmpty() ? makeNewNode(grid) : fillQueue.pop();
+    let newNode = populateNewNode(grid);
     
     let viableCandidates = node.entryCandidates.filter(x => x.isViable);
     if(viableCandidates.length === 0) {
@@ -55,7 +49,16 @@ export function fillWord(grid: GridState, node?: FillNode): GridState {
     return grid;
 }
 
-function populateNewNode(wl: IndexedWordList, grid: GridState): FillNode | undefined {
+function makeNewNode(grid: GridState): FillNode {
+    return {
+        startGrid: grid,
+        fillWord: grid.words[0],
+        entryCandidates: [],
+        chosenWord: "",
+    } as FillNode;
+}
+
+function populateNewNode(grid: GridState): FillNode | undefined {
     let node = {
         startGrid: deepClone(grid),
         fillWord: grid.words[0],

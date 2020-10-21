@@ -1,11 +1,10 @@
-import { Entry } from "../models/Entry";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { IndexedWordList } from "../models/IndexedWordList";
 import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
-import { getIndexedWordListBucket } from "./wordList";
+import { queryIndexedWordList } from "./wordList";
 
 export function average(arr: number[]): number {
     return arr.reduce((a,b) => a + b, 0) / arr.length;
@@ -15,30 +14,59 @@ export function sum(arr: number[]): number {
     return arr.reduce((a,b) => a + b, 0);
 }
 
+// https://stackoverflow.com/questions/38416020/deep-copy-in-es6-using-the-spread-syntax
 export function deepClone(obj: any): any {
-    return JSON.parse(JSON.stringify(obj, replacer), reviver);
+    if(typeof obj !== 'object' || obj === null) {
+        return obj;
+    }
+
+    if(obj instanceof Date) {
+        return new Date(obj.getTime());
+    }
+
+    if(obj instanceof Map) {
+        return new Map(Array.from(obj.entries()));
+    }
+
+    if(obj instanceof Array) {
+        return obj.reduce((arr, item, i) => {
+            arr[i] = deepClone(item);
+            return arr;
+        }, []);
+    }
+
+    if(obj instanceof Object) {
+        return Object.keys(obj).reduce((newObj: any, key) => {
+            newObj[key] = deepClone(obj[key]);
+            return newObj;
+        }, {})
+    }
 }
 
-// https://stackoverflow.com/questions/29085197/how-do-you-json-stringify-an-es6-map
-function replacer(this: any, key: any, value: any) {
-    const originalObject = this[key];
-    if(originalObject instanceof Map) {
-        return {
-        dataType: 'Map',
-        value: Array.from(originalObject.entries()), // or with spread: value: [...originalObject]
-        };
-    } else {
-        return value;
-    }
-}
-function reviver(key: any, value: any) {
-    if(typeof value === 'object' && value !== null) {
-        if (value.dataType === 'Map') {
-        return new Map(value.value);
-        }
-    }
-    return value;
-}
+// export function deepClone(obj: any): any {
+//     return JSON.parse(JSON.stringify(obj, replacer), reviver);
+// }
+
+// // https://stackoverflow.com/questions/29085197/how-do-you-json-stringify-an-es6-map
+// function replacer(this: any, key: any, value: any) {
+//     const originalObject = this[key];
+//     if(originalObject instanceof Map) {
+//         return {
+//         dataType: 'Map',
+//         value: Array.from(originalObject.entries()), // or with spread: value: [...originalObject]
+//         };
+//     } else {
+//         return value;
+//     }
+// }
+// function reviver(key: any, value: any) {
+//     if(typeof value === 'object' && value !== null) {
+//         if (value.dataType === 'Map') {
+//         return new Map(value.value);
+//         }
+//     }
+//     return value;
+// }
 
 export function compareTuples(first: [number, number], second: [number, number]): boolean {
     return first[0] === second[0] && first[1] === second[1];
@@ -52,12 +80,12 @@ export function otherDir(dir: WordDirection): WordDirection {
     return dir === WordDirection.Across ? WordDirection.Down : WordDirection.Across;
 }
 
-export function indexedWordListLookup(wl: IndexedWordList, grid: GridState, word: GridWord): Entry[] {
-    let squares = getWordSquares(grid, word);
+export function indexedWordListLookup(wl: IndexedWordList, grid: GridState, word: GridWord): string[] {
+    let squares = getSquaresForWord(grid, word);
     return indexedWordListLookupSquares(wl, grid, squares);
 }
 
-export function indexedWordListLookupSquares(wl: IndexedWordList, grid: GridState, squares: GridSquare[]): Entry[] {
+export function indexedWordListLookupSquares(wl: IndexedWordList, grid: GridState, squares: GridSquare[]): string[] {
     let length = squares.length;
 
     let letters: [number, string][] = [];
@@ -69,14 +97,14 @@ export function indexedWordListLookupSquares(wl: IndexedWordList, grid: GridStat
     }
 
     if (letters.length === 1) {
-        return getIndexedWordListBucket(wl, length, letters[0][0], letters[0][1]);
+        return queryIndexedWordList(wl, length, letters[0][0], letters[0][1]);
     }
 
-    let possibles: Entry[] = [];
+    let possibles: string[] = [];
     for(let i = 0; i < letters.length; i+=2) {
         let entries = i === letters.length-1 ?
-            getIndexedWordListBucket(wl, length, letters[i-1][0], letters[i-1][1], letters[i][0], letters[i][1]) :
-            getIndexedWordListBucket(wl, length, letters[i][0], letters[i][1], letters[i+1][0], letters[i+1][1]);
+            queryIndexedWordList(wl, length, letters[i-1][0], letters[i-1][1], letters[i][0], letters[i][1]) :
+            queryIndexedWordList(wl, length, letters[i][0], letters[i][1], letters[i+1][0], letters[i+1][1]);
         if (entries.length === 0) return [];
         possibles = i === 0 ? entries : intersectEntryLists(possibles, entries);
     }
@@ -84,7 +112,7 @@ export function indexedWordListLookupSquares(wl: IndexedWordList, grid: GridStat
     return possibles;
 }
 
-export function getWordSquares(grid: GridState, word: GridWord): GridSquare[] {
+export function getSquaresForWord(grid: GridState, word: GridWord): GridSquare[] {
     let row = word.start[0];
     let col = word.start[1];
     let squares = [grid.squares[row][col]];
@@ -97,9 +125,9 @@ export function getWordSquares(grid: GridState, word: GridWord): GridSquare[] {
     return squares;
 }
 
-function intersectEntryLists(list1: Entry[], list2: Entry[]): Entry[] {
-    var hash2 = new Map(list2.map(i => [i.word, true]));
-    return list1.filter(entry => hash2.has(entry.word));
+function intersectEntryLists(list1: string[], list2: string[]): string[] {
+    var hash2 = new Map(list2.map(i => [i, true]));
+    return list1.filter(word => hash2.has(word));
 }
 
 export function getWordAtSquare(grid: GridState, row: number, col: number, dir: WordDirection): GridWord {
@@ -140,4 +168,12 @@ export function shuffleArray(array: any[]) {
         const j = Math.floor(Math.random() * (i + 1));
         [array[i], array[j]] = [array[j], array[i]];
     }
+}
+
+export function forAllGridSquares(grid: GridState, func: (sq: GridSquare) => void) {
+    grid.squares.forEach(row => {
+        row.forEach(sq => {
+            func(sq);
+        });
+    });
 }

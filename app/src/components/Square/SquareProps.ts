@@ -1,4 +1,4 @@
-import { ConstraintErrorType } from "../../models/ConstraintErrorType";
+import { QualityClass } from "../../models/QualityClass";
 import { SquareType } from "../../models/SquareType";
 
 export interface SquareProps {
@@ -7,10 +7,11 @@ export interface SquareProps {
     col: number;
     number?: number;
     type: SquareType;
-    correctContent?: string;
+    userContent?: string;
+    chosenFillContent?: string;
     fillContent?: string;
+    qualityClass?: QualityClass;
     isSelected: boolean;
     isInSelectedWord: boolean;
-    constraintError: ConstraintErrorType;
     constraintSum: number;
 }

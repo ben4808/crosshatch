@@ -67,8 +67,23 @@
 
 .grid-content {
     padding-top: 3px;
+    color: black;
+}
+.grid-content-chosen-fill {
+    color: steelblue;
+}
+.grid-content-lively {
+    color: seagreen;
+}
+.grid-content-normal {
     color: lighten(black, 50%);
 }
-.grid-content-correct {
-    color: black;
+.grid-content-crosswordese {
+    color: darkgoldenrod;
+}
+.grid-content-iffy {
+    color: sienna
+}
+.grid-content-crosswordese {
+    color: tomato;
 }

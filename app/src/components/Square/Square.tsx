@@ -1,5 +1,5 @@
 import React from 'react';
-import { ConstraintErrorType } from '../../models/ConstraintErrorType';
+import { QualityClass } from '../../models/QualityClass';
 import { SquareType } from '../../models/SquareType';
 import { SquareProps } from './SquareProps';
 
@@ -10,11 +10,9 @@ function Square(props: SquareProps) {
 function getSquareElement(props: SquareProps) {
     if (props.type === SquareType.White) {
         return <div 
-                    className={"grid-square" + (props.isSelected ? " grid-square-selected" : 
-                        props.isInSelectedWord ? " grid-square-selected-word" : "") +
-                        (props.constraintError === ConstraintErrorType.Word ? " grid-square-error-word" : 
-                        props.constraintError === ConstraintErrorType.Crossing ? " grid-square-error-crossing" : 
-                        props.fillContent ? "" :
+                    className={"grid-square" + 
+                        (props.isSelected ? " grid-square-selected" : props.isInSelectedWord ? " grid-square-selected-word" : "") +
+                        (props.fillContent ? "" :
                         between(props.constraintSum, 1, 1) ? " grid-square-constrained-5" : 
                         between(props.constraintSum, 1, 3) ? " grid-square-constrained-4" : 
                         between(props.constraintSum, 1, 10) ? " grid-square-constrained-3" : 
@@ -23,8 +21,15 @@ function getSquareElement(props: SquareProps) {
                         )} 
                     data-row={props.row} data-col={props.col}>
             <div className="grid-number">{props.number ?? ""}</div>
-            <div className={"grid-content" + (props.correctContent ? " grid-content-correct" : "")}>
-                    {props.correctContent ? props.correctContent : props.fillContent || ""}
+            <div className={"grid-content" + 
+                        (props.chosenFillContent ? " grid-content-chosen-fill" : 
+                         props.qualityClass === QualityClass.Lively ? " grid-content-lively" :
+                         props.qualityClass === QualityClass.Normal ? " grid-content-normal" :
+                         props.qualityClass === QualityClass.Crosswordese ? " grid-content-crosswordese" :
+                         props.qualityClass === QualityClass.Iffy ? " grid-content-iffy" :
+                         props.qualityClass === QualityClass.NotAThing ? " grid-content-notathing" : ""
+                        )}>
+                    {props.userContent ? props.userContent : props.chosenFillContent ? props.chosenFillContent : props.fillContent || ""}
             </div>
         </div>
     }

@@ -1,3 +1,5 @@
+import { ConstraintInfo } from "./ConstraintInfo";
+import { QualityClass } from "./QualityClass";
 import { SquareType } from "./SquareType";
 
 export interface GridSquare {
@@ -9,8 +11,7 @@ export interface GridSquare {
     userContent?: string;
     chosenFillContent?: string;
     fillContent?: string;
+    qualityClass?: QualityClass;
 
-    constraintMap: Map<string, number>;
-    constraintSum: number,
-    constraintInitialized: boolean;
+    constraintInfo?: ConstraintInfo;
 }

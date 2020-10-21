@@ -42,7 +42,7 @@
         let i = heap.length -1
         while(i > 0) {
           const p = parent(i)
-          if(heap[p].key < heap[i].key) break
+          if(heap[p].key > heap[i].key) break
           const tmp = heap[i]
           heap[i] = heap[p]
           heap[p] = tmp
@@ -58,14 +58,14 @@
   
         let current = 0
         while(hasLeft(current)) {
-          let smallerChild = left(current)
-          if(hasRight(current) && heap[right(current)].key < heap[left(current)].key) 
-            smallerChild = right(current)
+          let largerChild = left(current)
+          if(hasRight(current) && heap[right(current)].key > heap[left(current)].key) 
+            largerChild = right(current)
   
-          if(heap[smallerChild].key > heap[current].key) break
+          if(heap[largerChild].key < heap[current].key) break
   
-          swap(current, smallerChild)
-          current = smallerChild
+          swap(current, largerChild)
+          current = largerChild
         }
   
         return item!.value

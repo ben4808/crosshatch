@@ -9,12 +9,11 @@ import { WordDirection } from '../../models/WordDirection';
 import { GridSquare } from '../../models/GridSquare';
 import { fillWord } from '../../lib/fill';
 import Globals from '../../lib/windowService';
-import { clearFill, generateWordInfo, updateWordInfo } from '../../lib/grid';
 import { compareTuples, deepClone, doesWordContainSquare, getWordAtSquare, otherDir } from '../../lib/util';
-import { ConstraintErrorType } from '../../models/ConstraintErrorType';
 import { FillStatus } from '../../models/FillStatus';
 import { priorityQueue } from '../../lib/priorityQueue';
 import { FillNode } from '../../models/FillNode';
+import { populateWords, updateGridConstraintInfo } from '../../lib/grid';
 
 function Grid(props: GridProps) {
     // eslint-disable-next-line
@@ -29,7 +28,7 @@ function Grid(props: GridProps) {
         Globals.pauseFill = pauseFill;
 
         let newGridState = deepClone(Globals.gridState);
-        generateWordInfo(newGridState);
+        populateWords(newGridState);
         setGridState(newGridState);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -97,11 +96,12 @@ function Grid(props: GridProps) {
 
         if (blackSquareChanged) {
             clearFill(newGridState);
-            generateWordInfo(newGridState);
+            populateWords(newGridState);
+            updateGridConstraintInfo(newGridState);
         }
         else if (letterChanged)  {
             clearFill(newGridState);
-            updateWordInfo(newGridState);
+            updateGridConstraintInfo(newGridState);
         }
             
         setGridState(newGridState);
@@ -110,7 +110,6 @@ function Grid(props: GridProps) {
     function handleFillWord() {
         let newGridState = deepClone(Globals.gridState);
         newGridState = fillWord(newGridState);
-        generateWordInfo(newGridState);
         setGridState(newGridState);
     }
 
@@ -126,7 +125,6 @@ function Grid(props: GridProps) {
 
         let newGridState: GridState = deepClone(Globals.gridState);
         newGridState = fillWord(newGridState);
-        generateWordInfo(newGridState);
         setGridState(newGridState);
         setTimeout(() => doFillGrid(), 10);
     }
@@ -158,7 +156,7 @@ function Grid(props: GridProps) {
     return (
         <>
             <div id="grid-status">
-                {getFillStatusString(Globals.fillStatus)}
+                {getFillStatusString(Globals.fillStatus!)}
             </div>
             <div id="Grid" className="grid-container" style={columnTemplateStyle} 
                 onClick={handleClick} onKeyDown={handleKeyDown} tabIndex={0}>
@@ -194,12 +192,13 @@ function getSquareProps(grid: GridState, row: number, col: number): SquareProps 
         col: col,
         number: square.number,
         type: square.type,
-        correctContent: square.correctContent,
+        userContent: square.userContent,
+        chosenFillContent: square.chosenFillContent,
         fillContent: square.fillContent,
+        qualityClass: square.qualityClass,
         isSelected: !!grid.selectedSquare && compareTuples(grid.selectedSquare, [row, col]),
         isInSelectedWord: !!grid.selectedWord && doesWordContainSquare(grid.selectedWord, row, col),
-        constraintError: square.constraintError,
-        constraintSum: square.constraintSum,
+        constraintSum: square.constraintInfo?.sumTotal || 1000,
     };
 }
 
@@ -213,10 +212,6 @@ function createNewGrid(height: number, width: number): GridState {
                 row: row,
                 col: col,
                 type: SquareType.White,
-                constraintMap: new Map<string, number>(),
-                constraintSum: 0,
-                constraintError: ConstraintErrorType.None,
-                constraintInitialized: false,
             };
         }
     }
@@ -226,6 +221,7 @@ function createNewGrid(height: number, width: number): GridState {
         width: width,
         squares: squares,
         words: [],
+        usedWords: new Map<string, boolean>(),
     };
 
     return grid;

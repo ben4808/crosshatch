@@ -77,8 +77,8 @@ export async function loadWordList(source: string, url: string, parserFunc: (lin
     return ret;
 }
 
-export function getIndexedWordListBucket(wl: IndexedWordList, 
-    length: number, pos1: number, val1: string, pos2?: number, val2?: string): Entry[] {
+export function queryIndexedWordList(wl: IndexedWordList, 
+    length: number, pos1: number, val1: string, pos2?: number, val2?: string): string[] {
     let words: string[];
     if (pos2 && val2) {
         words = wl.buckets.twoVal[length-2][pos1-1][pos2-(pos1+1)][val1.charCodeAt(0)-65][val2.charCodeAt(0)-65];
@@ -87,10 +87,7 @@ export function getIndexedWordListBucket(wl: IndexedWordList,
         words = wl.buckets.oneVal[length-2][pos1-1][val1.charCodeAt(0)-65];
     }
 
-    return words.map(w => ({
-        word: w,
-        qualityClass: Globals.qualityClasses!.get(w),
-    }) as Entry);
+    return words;
 }
 
 function indexWordList(entries: string[]): any {
