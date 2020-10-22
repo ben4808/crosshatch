@@ -23,13 +23,14 @@ function Grid(props: GridProps) {
         Globals.gridState = createNewGrid(props.height, props.width);
         Globals.fillQueue = priorityQueue<FillNode>();
         Globals.fillStatus = FillStatus.Ready;
+        Globals.visitedGrids = new Map<string, boolean>();
+        Globals.completedGrids = [];
         Globals.fillWordHandler = handleFillWord;
         Globals.fillGridHandler = handleFillGrid;
         Globals.pauseFill = pauseFill;
 
-        let newGridState = deepClone(Globals.gridState);
-        populateWords(newGridState);
-        setGridState(newGridState);
+        populateWords(Globals.gridState!);
+        forceUpdate();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -59,7 +60,10 @@ function Grid(props: GridProps) {
         }
 
         newGridState.selectedWord = getWordAtSquare(newGridState, row, col, newDirection);
-        setGridState(newGridState);
+
+
+        Globals.gridState = newGridState;
+        forceUpdate();
     }
     
     function handleKeyDown(event: any) {
@@ -104,13 +108,13 @@ function Grid(props: GridProps) {
             updateGridConstraintInfo(newGridState);
         }
             
-        setGridState(newGridState);
+        Globals.gridState = newGridState;
+        forceUpdate();
     }
 
     function handleFillWord() {
-        let newGridState = deepClone(Globals.gridState);
-        newGridState = fillWord(newGridState);
-        setGridState(newGridState);
+        fillWord();
+        forceUpdate();
     }
 
     function handleFillGrid() {
@@ -123,19 +127,13 @@ function Grid(props: GridProps) {
             return;
         }
 
-        let newGridState: GridState = deepClone(Globals.gridState);
-        newGridState = fillWord(newGridState);
-        setGridState(newGridState);
+        fillWord();
+        forceUpdate();
         setTimeout(() => doFillGrid(), 10);
     }
 
     function pauseFill() {
         Globals.fillStatus = FillStatus.Paused;
-        forceUpdate();
-    }
-
-    function setGridState(newState: GridState) {
-        Globals.gridState = newState;
         forceUpdate();
     }
 

@@ -10,6 +10,8 @@ export interface GlobalsObj {
     gridState?: GridState;
     fillQueue?: PriorityQueue<FillNode>;
     fillStatus?: FillStatus;
+    visitedGrids?: Map<string, boolean>;
+    completedGrids?: GridState[];
     wordList?: IndexedWordList;
     qualityClasses?: Map<string, QualityClass>;
     lengthBuckets?: Map<number, string[]>;

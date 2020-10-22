@@ -30,9 +30,9 @@
   
     return {
       
-      isEmpty: () => heap.length == 0,
+      isEmpty: () => heap.length === 0,
   
-      peek: () => heap.length == 0 ? null : heap[0].value,
+      peek: () => heap.length === 0 ? null : heap[0].value,
       
       size: () => heap.length,
 
@@ -51,7 +51,7 @@
       },
 
       pop: () => {
-        if(heap.length == 0) return null
+        if(heap.length === 0) return null
         
         swap(0, heap.length - 1)
         const item = heap.pop()

@@ -1,4 +1,3 @@
-import { Entry } from "../models/Entry";
 import { IndexedWordList } from "../models/IndexedWordList";
 import { QualityClass } from "../models/QualityClass";
 import Globals from './windowService';

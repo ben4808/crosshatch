@@ -157,3 +157,11 @@ function getLettersFromSquares(squares: GridSquare[]): string {
     });
     return ret;
 }
+
+export function gridToString(grid: GridState): string {
+    let chs: string[] = [];
+    forAllGridSquares(grid, sq => {
+        chs.push(isBlackSquare(sq) ? "." : sq.fillContent ? sq.fillContent : "-");
+    });
+    return chs.join("");
+}

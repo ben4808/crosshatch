@@ -6,9 +6,9 @@ import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { QualityClass } from "../models/QualityClass";
 import { WordDirection } from "../models/WordDirection";
-import { generateConstraintInfoForSquares } from "./grid";
+import { generateConstraintInfoForSquares, gridToString } from "./grid";
 import { deepClone, compareTuples, getWordAtSquare, getSquaresForWord, indexedWordListLookup, isBlackSquare, 
-    otherDir, sum, getWordLength, getRandomWordsOfLength } from "./util";
+    otherDir, sum, getWordLength, getRandomWordsOfLength, sortedListInsert } from "./util";
 import Globals from './windowService';
 
 export function fillWord(): void {
@@ -18,43 +18,64 @@ export function fillWord(): void {
 
     let fillQueue = Globals.fillQueue!;
     let grid = Globals.gridState!;
+    let visited = Globals.visitedGrids!;
     Globals.fillStatus = FillStatus.Running;
 
-    let prevNode = fillQueue.isEmpty() ? makeNewNode(grid) : fillQueue.peek()!;
-    let newNode = populateNewNode(grid, prevNode);
-    if (!newNode) {
+    if (visited.size > 0 && fillQueue.isEmpty()) {
         Globals.fillStatus = FillStatus.Failed;
+        return;
+    }
+
+    let prevNode = fillQueue.isEmpty() ? makeNewNode(grid) : fillQueue.peek()!;
+
+    let gridString = gridToString(grid);
+    if (visited.has(gridString)) {
         invalidateNode(prevNode);
+        fillWord();
         return;
     }
     
+    let newNode = populateNewNode(grid, prevNode);
+    if (!newNode) {
+        invalidateNode(prevNode);
+        fillWord();
+        return;
+    }
+    Globals.gridState = newNode.startGrid;
+
     let viableCandidates = newNode.entryCandidates.filter(n => n.isViable);
     if(viableCandidates.length === 0) {
-        fillQueue.pop();
-        if (fillStack.length === 0) {
-            Globals.fillStatus = FillStatus.Failed;
-            return node.startGrid;
-        }
-
-        let previousNode = fillStack.pop()!;
-        let prevCandidate = previousNode.entryCandidates.find(x => x.entry.word === previousNode.chosenWord)!;
-        prevCandidate.score = 0;
-        prevCandidate.isViable = false;
-        previousNode.chosenWord = "";
-        return fillWord(previousNode.startGrid, previousNode);
+        invalidateNode(prevNode);
+        fillWord();
+        return;
     }
 
     newNode.chosenWord = chooseEntryFromCandidates(viableCandidates);
     insertEntryIntoGrid(grid, newNode.fillWord!, newNode.chosenWord);
-    fillQueue.insert(newNode, calculateGridPriority(grid));
 
     if (isGridFilled(grid)) {
-        Globals.fillStatus = FillStatus.Success;
+        let newGridString = gridToString(grid);
+        Globals.visitedGrids?.set(newGridString, true);
+        sortedListInsert(Globals.completedGrids!, grid, calculateGridPriority);
+
+        invalidateNode(prevNode);
+        return;
     }
+
+    fillQueue.insert(newNode, calculateGridPriority(grid));
 }
 
 function invalidateNode(node: FillNode) {
+    let fillQueue = Globals.fillQueue!;
+    let parent = node.parentNode;
 
+    fillQueue.pop();
+    if (parent) {
+        let prevCandidate = parent.entryCandidates.find(x => x.word === parent!.chosenWord)!;
+        prevCandidate.score = 0;
+        prevCandidate.isViable = false;
+        parent.chosenWord = "";
+    }
 }
 
 function calculateGridPriority(grid: GridState): number {
@@ -154,6 +175,7 @@ function populateNewNode(oldGrid: GridState, prevNode: FillNode): FillNode | und
         candidate.score = calculateCandidateScore(candidate, totalCrossScores / crosses.length, lowestCrossScore);
     });
 
+    // eslint-disable-next-line
     let viableCandidates = node.entryCandidates.filter(x => x.isViable);
     viableCandidates = viableCandidates.sort((a, b) => b.score! - a.score!);
 

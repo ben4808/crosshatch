@@ -6,7 +6,6 @@ import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
 import { queryIndexedWordList } from "./wordList";
 import Globals from './windowService';
-import { QualityClass } from "../models/QualityClass";
 
 export function average(arr: number[]): number {
     return arr.reduce((a,b) => a + b, 0) / arr.length;
@@ -201,4 +200,16 @@ export function getWordLength(word: GridWord): number {
         return word.end[1] - word.start[1];
     else
         return word.end[0] - word.start[0];
+}
+
+export function sortedListInsert<T>(arr: T[], val: T, scoreFunc: (val: T) => number): T[] {
+    arr.push(val);
+    let i = arr.length - 1;
+    let item = arr[i];
+    while (i > 0 && scoreFunc(item) > scoreFunc(arr[i-1])) {
+        arr[i] = arr[i-1];
+        i -= 1;
+    }
+    arr[i] = item;
+    return arr;
 }
