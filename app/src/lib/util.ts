@@ -5,6 +5,8 @@ import { IndexedWordList } from "../models/IndexedWordList";
 import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
 import { queryIndexedWordList } from "./wordList";
+import Globals from './windowService';
+import { QualityClass } from "../models/QualityClass";
 
 export function average(arr: number[]): number {
     return arr.reduce((a,b) => a + b, 0) / arr.length;
@@ -112,6 +114,22 @@ export function indexedWordListLookupSquares(wl: IndexedWordList, grid: GridStat
     return possibles;
 }
 
+export function getRandomWordsOfLength(wl: IndexedWordList, length: number): string[] {
+    let bucket = Globals.lengthBuckets!.get(length) || [];
+    let map = new Map<string, boolean>();
+    let ret = [];
+    for (let i = 0; i < 100; i++) {
+        let index = Math.floor(Math.random() * bucket.length);
+        let word = bucket[index];
+        if (!map.has(word)) {
+            map.set(word, true);
+            ret.push(word);
+        }
+    }
+
+    return ret;
+}
+
 export function getSquaresForWord(grid: GridState, word: GridWord): GridSquare[] {
     let row = word.start[0];
     let col = word.start[1];
@@ -130,14 +148,14 @@ function intersectEntryLists(list1: string[], list2: string[]): string[] {
     return list1.filter(word => hash2.has(word));
 }
 
-export function getWordAtSquare(grid: GridState, row: number, col: number, dir: WordDirection): GridWord {
+export function getWordAtSquare(grid: GridState, row: number, col: number, dir: WordDirection): GridWord | undefined {
     if (dir === WordDirection.Across) {
         return grid.words.find(x => x.direction === dir && x.start[0] === row && 
-            x.start[1] <= col && x.end[1] >= col) || newWord();
+            x.start[1] <= col && x.end[1] >= col);
     }
     else {
         return grid.words.find(x => x.direction === dir && x.start[1] === col && 
-            x.start[0] <= row && x.end[0] >= row) || newWord();
+            x.start[0] <= row && x.end[0] >= row);
     }
 }
 
@@ -176,4 +194,11 @@ export function forAllGridSquares(grid: GridState, func: (sq: GridSquare) => voi
             func(sq);
         });
     });
+}
+
+export function getWordLength(word: GridWord): number {
+    if (word.direction === WordDirection.Across)
+        return word.end[1] - word.start[1];
+    else
+        return word.end[0] - word.start[0];
 }

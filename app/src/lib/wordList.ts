@@ -71,6 +71,7 @@ export async function loadWordList(source: string, url: string, parserFunc: (lin
         source: source,
         buckets: indexWordList(entries),
     }
+    populateLengthBuckets(entries);
     var t5 = new Date().getTime();
     console.log((t5 - startTime) + " Finished indexing");
 
@@ -137,5 +138,16 @@ function indexWordList(entries: string[]): any {
     });
 
     return ret;
+}
+
+function populateLengthBuckets(entries: string[]) {
+    Globals.lengthBuckets = new Map<number, string[]>();
+    for (let length = 2; length <= 15; length++) {
+        Globals.lengthBuckets.set(length, []);
+    }
+
+    entries.forEach(word => {
+        Globals.lengthBuckets!.get(word.length)!.push(word);
+    });
 }
 

@@ -12,6 +12,7 @@ export interface GlobalsObj {
     fillStatus?: FillStatus;
     wordList?: IndexedWordList;
     qualityClasses?: Map<string, QualityClass>;
+    lengthBuckets?: Map<number, string[]>;
 
     fillWordHandler?: () => void;
     fillGridHandler?: () => void;
