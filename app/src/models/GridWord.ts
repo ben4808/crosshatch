@@ -1,4 +1,3 @@
-import { ConstraintErrorType } from "./ConstraintErrorType";
 import { WordDirection } from "./WordDirection";
 
 export interface GridWord {
@@ -6,6 +5,4 @@ export interface GridWord {
     direction: WordDirection;
     start: [number, number];
     end: [number, number];
-
-    constraintError: ConstraintErrorType;
 }

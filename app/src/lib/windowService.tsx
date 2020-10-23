@@ -1,3 +1,5 @@
+import { GlobalsObj } from "../models/GlobalsObj";
+
 declare const window: any;
-window.Globals = {};
-export default window.Globals;
+window.Globals = {} as GlobalsObj;
+export default window.Globals as GlobalsObj;

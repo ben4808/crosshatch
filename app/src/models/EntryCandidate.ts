@@ -1,10 +1,5 @@
-import { Entry } from "./Entry";
-
 export interface EntryCandidate {
-    entry: Entry;
+    word: string;
     score?: number;
     isViable: boolean;
-
-    sumOfPercentageLosses?: number;
-    lowConstraintSum?: number;
 }

@@ -1,31 +1,19 @@
-import { ConstraintErrorType } from "../models/ConstraintErrorType";
-import { FillStatus } from "../models/FillStatus";
+import { ConstraintInfo } from "../models/ConstraintInfo";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { IndexedWordList } from "../models/IndexedWordList";
 import { WordDirection } from "../models/WordDirection";
-import { compareTuples, getWordAtSquare, getWordSquares, indexedWordListLookup, isBlackSquare, newWord, otherDir } from "./util";
+import { compareTuples, getSquaresForWord,
+    isBlackSquare, newWord, forAllGridSquares, indexedWordListLookupSquares } from "./util";
 import Globals from './windowService';
 
-export function generateWordInfo(grid: GridState) {
-    function resetCurrentWord() {
-        if (currentWord && currentWord.number) {
-            grid.words.push(currentWord);
-        }
+export function populateWords(grid: GridState) {
+    function processSquare(grid: GridState, row: number, col: number, dir: WordDirection) {
+        let sq = grid.squares[row][col];
 
-        currentWord = newWord();
-    }
-
-    function processSquare(sq: GridSquare, row: number, col: number, dir: WordDirection) {
-        if (isBlackSquare(sq)) {
-            resetCurrentWord();
-            return;
-        }
-
-        if (!currentWord.number && !sq.number) {
-            return;
-        }
+        if (isBlackSquare(sq)) return;
+        if (!currentWord.number && !sq.number) return; // unchecked square
 
         if (!currentWord.number) {
             currentWord.number = sq.number;
@@ -38,6 +26,12 @@ export function generateWordInfo(grid: GridState) {
         }
 
         currentWord.end = [row, col];
+
+        let nextSq = dir === WordDirection.Across ? [row, col+1] : [row+1, col];
+        if (nextSq[0] === grid.height || nextSq[1] === grid.width || isBlackSquare(grid.squares[nextSq[0]][nextSq[1]])) {
+            grid.words.push(currentWord);
+            currentWord = newWord();
+        }
     }
 
     let oldDir = grid.selectedWord?.direction || WordDirection.Across;
@@ -46,53 +40,27 @@ export function generateWordInfo(grid: GridState) {
 
     numberizeGrid(grid);
 
-    let currentWord: GridWord;
+    let currentWord: GridWord = newWord();
     for (let row = 0; row < grid.height; row++) {
-        resetCurrentWord();
         for (let col = 0; col < grid.width; col++) {
-            let sq = grid.squares[row][col];
-            processSquare(sq, row, col, WordDirection.Across);
+            processSquare(grid, row, col, WordDirection.Across);
         }
     }
 
     for (let col = 0; col < grid.width; col++) {
-        resetCurrentWord();
         for (let row = 0; row < grid.height; row++) {
-            let sq = grid.squares[row][col];
-            processSquare(sq, row, col, WordDirection.Down);
+            processSquare(grid, row, col, WordDirection.Down);
         }
     }
-    resetCurrentWord();
-
-    updateWordInfo(grid);
 }
 
-export function updateWordInfo(grid: GridState) {
-    let wl: IndexedWordList = Globals.wordList;
-
-    grid.squares.forEach(row => {
-        row.forEach(sq => {
-            sq.constraintError = ConstraintErrorType.None;
-            sq.constraintSum = 0;
-            sq.constraintMap = new Map<string, number>();
-            sq.constraintInitialized = false;
-        });
-    });
+export function updateGridConstraintInfo(grid: GridState) {
+    grid.usedWords = new Map<string, boolean>();
+    forAllGridSquares(grid, sq => { sq.constraintInfo = undefined; });
 
     grid.words.forEach(word => {
-        generateConstraintInfo(wl, grid, word);
-    });
-}
-
-export function clearFill(grid: GridState) {
-    Globals.fillStack = [];
-    Globals.fillStatus = FillStatus.Ready;
-
-    grid.squares.forEach(row => {
-        row.forEach(sq => {
-            if (!sq.correctContent)
-                sq.fillContent = undefined;
-        });
+        let squares = getSquaresForWord(grid, word);
+        generateConstraintInfoForSquares(grid, squares);
     });
 }
 
@@ -111,8 +79,8 @@ function numberizeGrid(grid: GridState) {
                 let isRightBlocked = (col === grid.width-1 || isBlackSquare(grid.squares[row][col+1]));
 
                 let isUnchecked = (isAboveBlocked && isBelowBlocked) || (isLeftBlocked && isRightBlocked);
-                let isUncheckedStart = (isAboveBlocked && isBelowBlocked && isLeftBlocked) || 
-                                       (isLeftBlocked && isRightBlocked && isAboveBlocked);
+                let isUncheckedStart = (isAboveBlocked && isBelowBlocked && isLeftBlocked && !isRightBlocked) || 
+                                       (isLeftBlocked && isRightBlocked && isAboveBlocked && !isBelowBlocked);
                 let isCheckedStart = isAboveBlocked || isLeftBlocked;
 
                 if ((isUnchecked && isUncheckedStart) || (!isUnchecked && isCheckedStart)) {
@@ -123,79 +91,86 @@ function numberizeGrid(grid: GridState) {
     }
 }
 
-function generateConstraintInfo(wl: IndexedWordList, grid: GridState, word: GridWord) {
-    let squares = getWordSquares(grid, word);
-    if (!squares.find(x => x.fillContent) || !squares.find(x => !x.fillContent)) {
-        return;
+// returns sum of the squares' constraint sums, or 0 if the word isn't viable
+export function generateConstraintInfoForSquares(grid: GridState, squares: GridSquare[]): number {
+    if (!squares.find(x => x.fillContent)) return 1;
+    if (!squares.find(x => !x.fillContent)) {
+        grid.usedWords.set(getLettersFromSquares(squares), true);
+        return 1;
     }
 
-    let entryOptions = indexedWordListLookup(wl, grid, word);
+    let wl: IndexedWordList = Globals.wordList!;
+    let entryOptions = indexedWordListLookupSquares(wl, grid, squares);
 
-    let badCrossingFound = false;
-    word.constraintError = entryOptions.length === 0 ? ConstraintErrorType.Word : ConstraintErrorType.None;
+    let total = 0;
+    let foundZeroSquare = false;
     for (let i = 0; i < squares.length; i++) {
         let sq = squares[i];
-        if (sq.constraintError === ConstraintErrorType.None)
-            sq.constraintError = word.constraintError;
-        let constraintSum = 0;
+
+        let justInitialized = false;
+        if (!sq.constraintInfo) {
+            sq.constraintInfo = {
+                viableLetters: new Map<string, number>(),
+                sumTotal: 0,
+            } as ConstraintInfo;
+            justInitialized = true;
+        }
 
         if (sq.fillContent) {
-            sq.constraintSum = 1;
-            sq.constraintMap = new Map<string, number>([[sq.fillContent, 1]]);
-            constraintSum++;
-            continue;
-        }
-        else if (badCrossingFound || entryOptions.length === 0) {
-            sq.constraintSum = 0;
-            sq.constraintMap = new Map<string, number>();
+            sq.constraintInfo.sumTotal = 1;
+            sq.constraintInfo.viableLetters = new Map<string, number>([[sq.fillContent, 1]]);
+            total += 1;
             continue;
         }
 
-        let letters = entryOptions.map(x => x.word[i]);
-        let newConstraintsMap = new Map<string, number>();
+        let letters = entryOptions.map(x => x[i]);
+        let newViableLetters = new Map<string, number>();
         letters.forEach(ltr => {
-            newConstraintsMap.set(ltr, (newConstraintsMap.get(ltr) || 0) + 1);
-            constraintSum++;
+            newViableLetters.set(ltr, (newViableLetters.get(ltr) || 0) + 1);
         });
 
-        let isExistingMap = sq.constraintMap.size > 0;
-        if (!isExistingMap) {
-            sq.constraintSum = constraintSum;
-            sq.constraintMap = newConstraintsMap;
-            sq.constraintInitialized = newConstraintsMap.size > 0;
+        let newSumTotal = 0;
+        let existingViableLetters = sq.constraintInfo!.viableLetters;
+        if (!justInitialized) {
+            newViableLetters.forEach((v, k) => {
+                if (!existingViableLetters.has(k))
+                newViableLetters.delete(k);
+            });
+            newViableLetters.forEach((v, k) => {
+                let oldVal = existingViableLetters.get(k) || 0;
+                let newVal = Math.min(v, oldVal);
+                if (newVal > 0) newViableLetters.set(k, newVal);
+                else newViableLetters.delete(k);
+                newSumTotal += newVal;
+            });
         }
         else {
-            constraintSum = 0;
-
-            sq.constraintMap.forEach((v, k) => {
-                if (!newConstraintsMap.has(k))
-                    sq.constraintMap.delete(k);
+            newViableLetters.forEach((v, k) => {
+                newSumTotal += v;
             });
-            newConstraintsMap.forEach((v, k) => {
-                let oldVal = sq.constraintMap.get(k) || 0;
-                let newVal = Math.min(v, oldVal);
-                if (newVal > 0) sq.constraintMap.set(k, newVal);
-                else sq.constraintMap.delete(k);
-                constraintSum += newVal;
-            });
-
-            sq.constraintSum = constraintSum;
-            if (constraintSum === 0) {
-                badCrossingFound = true;
-
-                word.constraintError = ConstraintErrorType.Crossing;
-                squares.forEach(w => { 
-                    if (w.constraintError !== ConstraintErrorType.Word)
-                        w.constraintError = ConstraintErrorType.Crossing; 
-                });
-
-                let otherWord = getWordAtSquare(grid, sq.row, sq.col, otherDir(word.direction));
-                otherWord.constraintError = ConstraintErrorType.Crossing;
-                getWordSquares(grid, otherWord).forEach(w => { 
-                    if (w.constraintError !== ConstraintErrorType.Word)
-                        w.constraintError = ConstraintErrorType.Crossing; 
-                });
-            }
         }
+
+        if (newSumTotal === 0) foundZeroSquare = true;
+        sq.constraintInfo!.viableLetters = newViableLetters;
+        sq.constraintInfo.sumTotal = newSumTotal;
+        total += newSumTotal;
     }
+
+    return foundZeroSquare ? 0 : total;
+}
+
+function getLettersFromSquares(squares: GridSquare[]): string {
+    let ret = "";
+    squares.forEach(sq => {
+        ret += sq.fillContent || ".";
+    });
+    return ret;
+}
+
+export function gridToString(grid: GridState): string {
+    let chs: string[] = [];
+    forAllGridSquares(grid, sq => {
+        chs.push(isBlackSquare(sq) ? "." : sq.fillContent ? sq.fillContent : "-");
+    });
+    return chs.join("");
 }

@@ -10,4 +10,6 @@ export interface GridState {
     
     words: GridWord[];
     selectedWord?: GridWord;
+
+    usedWords: Map<string, boolean>;
 }
