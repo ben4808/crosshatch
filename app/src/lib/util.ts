@@ -176,8 +176,12 @@ export function doesWordContainSquare(word: GridWord, row: number, col: number):
     }
 }
 
-export function isWordEmptyOrFull(squares: GridSquare[]): boolean {
-    return !squares.find(x => x.fillContent) || !squares.find(x => !x.fillContent);
+export function isWordEmpty(squares: GridSquare[]): boolean {
+    return !squares.find(x => !isBlackSquare(x) && x.fillContent);
+}
+
+export function isWordFull(squares: GridSquare[]): boolean {
+    return !squares.find(x => !isBlackSquare(x) && !x.fillContent);
 }
 
 export function shuffleArray(array: any[]) {

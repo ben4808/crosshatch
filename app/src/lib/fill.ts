@@ -8,7 +8,7 @@ import { QualityClass } from "../models/QualityClass";
 import { WordDirection } from "../models/WordDirection";
 import { generateConstraintInfoForSquares, gridToString } from "./grid";
 import { deepClone, compareTuples, getWordAtSquare, getSquaresForWord, indexedWordListLookup, isBlackSquare, 
-    otherDir, sum, getWordLength, getRandomWordsOfLength, sortedListInsert } from "./util";
+    otherDir, sum, getWordLength, getRandomWordsOfLength, sortedListInsert, isWordEmpty, isWordFull } from "./util";
 import Globals from './windowService';
 
 export function fillWord(): GridState {
@@ -210,7 +210,7 @@ function populateEntryCandidates(node: FillNode): boolean {
     let grid = node.startGrid;
     let wordSquares = getSquaresForWord(grid, node.fillWord!);
     let fillOptions: string[];
-    if (wordSquares.find(sq => sq.fillContent))
+    if (!isWordEmpty(wordSquares))
         fillOptions = indexedWordListLookup(wl, grid, node.fillWord!).filter(x => !entryMap.has(x) && !grid.usedWords.has(x));
     else
         fillOptions = getRandomWordsOfLength(wl, wordSquares.length).filter(x => !grid.usedWords.has(x));
@@ -243,6 +243,11 @@ function scoreEntryCandidates(node: FillNode): boolean {
 
         node.entryCandidates.forEach(candidate => {
             if (!candidate.isViable) return;
+
+            if (crosses.length === 0) {
+                candidate.score = calculateCandidateScore(candidate, 1, 1);
+                return;
+            }
     
             let foundBadCross = false;
             let totalCrossScores = 0;
@@ -323,7 +328,7 @@ function getMostConstrainedWord(prevNode: FillNode): GridWord | undefined {
     let mostConstrainedScore = 1e8;
     for (let i = 0; i < words.length; i++) {
         let squares = getSquaresForWord(grid, words[i]);
-        if (!squares.find(sq => sq.fillContent) || !squares.find(sq => !sq.fillContent)) continue;
+        if (isWordEmpty(squares) || isWordFull(squares)) continue;
 
         var constraintScore = getWordConstraintScore(squares) / squares.length;
         if (constraintScore === 0) return undefined;
@@ -358,7 +363,7 @@ function getUnfilledCrosses(grid: GridState, prevWord: GridWord | undefined): Gr
     let squares = getSquaresForWord(grid, word);
     let crosses = squares
         .map(sq => getWordAtSquare(grid, sq.row, sq.col, otherDir(word.direction)))
-        .filter(w => w && getSquaresForWord(grid, w).find(x => !x.fillContent))
+        .filter(w => w && !isWordFull(getSquaresForWord(grid, w)))
         .map(w => w!);
     return crosses.length > 0 ? crosses : [];
 }

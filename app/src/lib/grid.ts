@@ -5,7 +5,7 @@ import { GridWord } from "../models/GridWord";
 import { IndexedWordList } from "../models/IndexedWordList";
 import { WordDirection } from "../models/WordDirection";
 import { compareTuples, getSquaresForWord,
-    isBlackSquare, newWord, forAllGridSquares, indexedWordListLookupSquares } from "./util";
+    isBlackSquare, newWord, forAllGridSquares, indexedWordListLookupSquares, isWordFull, isWordEmpty } from "./util";
 import Globals from './windowService';
 
 export function populateWords(grid: GridState) {
@@ -93,8 +93,8 @@ function numberizeGrid(grid: GridState) {
 
 // returns sum of the squares' constraint sums, or 0 if the word isn't viable
 export function generateConstraintInfoForSquares(grid: GridState, squares: GridSquare[]): number {
-    if (!squares.find(x => x.fillContent)) return 1;
-    if (!squares.find(x => !x.fillContent)) {
+    if (isWordEmpty(squares)) return 1;
+    if (isWordFull(squares)) {
         grid.usedWords.set(getLettersFromSquares(squares), true);
         return 1;
     }
