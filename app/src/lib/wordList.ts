@@ -43,7 +43,7 @@ function parsePeterBrodaWordlist(lines: string[]): string[] {
                            score >= 50 ? QualityClass.Normal :
                            score >= 40 ? QualityClass.Iffy : QualityClass.NotAThing;
         let word = tokens[0];
-        if (qualityClass !== QualityClass.NotAThing && qualityClass !== QualityClass.Iffy //&& qualityClass !== QualityClass.Normal
+        if (qualityClass !== QualityClass.NotAThing// && qualityClass !== QualityClass.Iffy && qualityClass !== QualityClass.Normal
                 && word.length >= 2 && word.length <= 15 && word.match(/^[A-Z]+$/)) {
                     map.set(tokens[0], qualityClass);
                     words.push(tokens[0]);

@@ -43,6 +43,7 @@ export function fillWord(): GridState {
     }
     else {
         node = prevNode!;
+        scoreEntryCandidates(node);
         newGrid = deepClone(node.startGrid);
     }
 
@@ -61,11 +62,11 @@ export function fillWord(): GridState {
             let candidate = node.entryCandidates.find(x => x.word === node!.chosenWord)!;
             candidate.score = 0;
             candidate.isViable = false;
-            node.chosenWord = "";
             newGrid = deepClone(node.startGrid);
         }
         else {
             Globals.visitedGrids?.set(newGridString, true);
+            newGrid.usedWords.set(node.chosenWord, true);
             break;
         }
     }
@@ -144,67 +145,12 @@ function makeNewNode(grid: GridState): FillNode {
 
 function populateNewNode(prevNode: FillNode | undefined): FillNode | undefined {
     let node = makeNewNode(prevNode?.endGrid || Globals.gridState!);
-    let grid = node.startGrid;
 
     let fillWord = getMostConstrainedWord(prevNode || node);
     if (!fillWord) return undefined;
     node.fillWord = fillWord;
     
-    let wordSquares = getSquaresForWord(grid, fillWord);
-    let crosses = getUnfilledCrosses(grid, fillWord);
-
-    if (!populateEntryCandidates(node)) return undefined;
-
-    node.entryCandidates.forEach(candidate => {
-        let foundBadCross = false;
-        let totalCrossScores = 0;
-        let lowestCrossScore = 1e8;
-        crosses.forEach(cross => {
-            if (foundBadCross) return;
-            let squares = getSquaresForWord(grid, cross);
-            let newSquares: GridSquare[] = deepClone(squares);
-
-            let sqToReplace: GridSquare;
-            let newVal: string;
-            if (fillWord!.direction === WordDirection.Across) {
-                sqToReplace = newSquares.find(nsq => nsq.row === wordSquares[0].row)!;
-                newVal = candidate.word[sqToReplace.col - wordSquares[0].col];
-            }
-            else {
-                sqToReplace = newSquares.find(nsq => nsq.col === wordSquares[0].col)!;
-                newVal = candidate.word[sqToReplace.row - wordSquares[0].row];
-            }
-            sqToReplace.fillContent = newVal;
-
-            if (sqToReplace.constraintInfo && !sqToReplace.constraintInfo.viableLetters.has(newVal)) {
-                foundBadCross = true;
-                return;
-            }
-            
-            let newSum = generateConstraintInfoForSquares(grid, newSquares);
-            if (newSum === 0) {
-                foundBadCross = true;
-                return;
-            }
-
-            let crossScore = getWordConstraintScore(newSquares);
-            totalCrossScores += crossScore;
-            if (crossScore < lowestCrossScore) lowestCrossScore = crossScore;
-        });
-
-        if (foundBadCross || totalCrossScores === 0) {
-            candidate.score = 0;
-            candidate.isViable = false;
-            return;
-        }
-
-        candidate.score = calculateCandidateScore(candidate, totalCrossScores / crosses.length, lowestCrossScore);
-    });
-
-    // eslint-disable-next-line
-    let viableCandidates = node.entryCandidates.filter(x => x.isViable);
-    viableCandidates = viableCandidates.sort((a, b) => b.score! - a.score!);
-
+    if (!scoreEntryCandidates(node)) return undefined;
     return node;
 }
 
@@ -282,6 +228,77 @@ function populateEntryCandidates(node: FillNode): boolean {
     }
 
     return true;
+}
+
+function scoreEntryCandidates(node: FillNode): boolean {
+    let grid = node.startGrid;
+    let wordSquares = getSquaresForWord(grid, node.fillWord!);
+    let crosses = getUnfilledCrosses(grid, node.fillWord!);
+
+    let oldLength = node.entryCandidates.length;
+    while (true) {
+        populateEntryCandidates(node);
+        if (node.entryCandidates.length === oldLength) break;
+        oldLength = node.entryCandidates.length;
+
+        node.entryCandidates.forEach(candidate => {
+            if (!candidate.isViable) return;
+    
+            let foundBadCross = false;
+            let totalCrossScores = 0;
+            let lowestCrossScore = 1e8;
+            crosses.forEach(cross => {
+                if (foundBadCross) return;
+                let squares = getSquaresForWord(grid, cross);
+                let newSquares: GridSquare[] = deepClone(squares);
+    
+                let sqToReplace: GridSquare;
+                let newVal: string;
+                if (node.fillWord!.direction === WordDirection.Across) {
+                    sqToReplace = newSquares.find(nsq => nsq.row === wordSquares[0].row)!;
+                    newVal = candidate.word[sqToReplace.col - wordSquares[0].col];
+                }
+                else {
+                    sqToReplace = newSquares.find(nsq => nsq.col === wordSquares[0].col)!;
+                    newVal = candidate.word[sqToReplace.row - wordSquares[0].row];
+                }
+                sqToReplace.fillContent = newVal;
+    
+                if (sqToReplace.constraintInfo && !sqToReplace.constraintInfo.viableLetters.has(newVal)) {
+                    foundBadCross = true;
+                    return;
+                }
+                
+                let newSum = generateConstraintInfoForSquares(grid, newSquares);
+                if (newSum === 0) {
+                    foundBadCross = true;
+                    return;
+                }
+    
+                let crossScore = getWordConstraintScore(newSquares);
+                totalCrossScores += crossScore;
+                if (crossScore < lowestCrossScore) lowestCrossScore = crossScore;
+            });
+    
+            if (foundBadCross || totalCrossScores === 0) {
+                candidate.score = 0;
+                candidate.isViable = false;
+                return;
+            }
+    
+            candidate.score = calculateCandidateScore(candidate, totalCrossScores / crosses.length, lowestCrossScore);
+        });
+
+        // eslint-disable-next-line
+        let viableCandidates = node.entryCandidates.filter(x => x.isViable);
+        if (viableCandidates.length >= 10) break;
+    }
+
+    // eslint-disable-next-line
+    let viableCandidates = node.entryCandidates.filter(x => x.isViable);
+    viableCandidates = viableCandidates.sort((a, b) => b.score! - a.score!);
+
+    return viableCandidates.length > 0;
 }
 
 function isGridEmpty(grid: GridState): boolean {

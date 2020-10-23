@@ -55,6 +55,7 @@ export function populateWords(grid: GridState) {
 }
 
 export function updateGridConstraintInfo(grid: GridState) {
+    grid.usedWords = new Map<string, boolean>();
     forAllGridSquares(grid, sq => { sq.constraintInfo = undefined; });
 
     grid.words.forEach(word => {

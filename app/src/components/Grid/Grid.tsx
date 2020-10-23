@@ -96,6 +96,7 @@ function Grid(props: GridProps) {
             sq.type = sq.type === SquareType.White ? SquareType.Black : SquareType.White;
             blackSquareChanged = true;
             letterChanged = false;
+            advanceCursor(grid);
         }
 
         if (blackSquareChanged) {
@@ -257,6 +258,8 @@ function getUncheckedSquareDir(grid: GridState, row: number, col: number): WordD
 export function clearFill(grid: GridState) {
     Globals.fillQueue = priorityQueue<FillNode>();
     Globals.fillStatus = FillStatus.Ready;
+    Globals.visitedGrids = new Map<string, boolean>();
+    Globals.completedGrids = [];
 
     grid.squares.forEach(row => {
         row.forEach(sq => {
