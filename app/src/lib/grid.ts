@@ -100,18 +100,19 @@ export function generateConstraintInfoForSquares(grid: GridState, squares: GridS
 
     let wl: IndexedWordList = Globals.wordList!;
     let entryOptions = indexedWordListLookupSquares(wl, grid, squares);
-    if (entryOptions.length === 0) return 0;
 
     let total = 0;
     let foundZeroSquare = false;
     for (let i = 0; i < squares.length; i++) {
         let sq = squares[i];
 
+        let justInitialized = false;
         if (!sq.constraintInfo) {
             sq.constraintInfo = {
                 viableLetters: new Map<string, number>(),
                 sumTotal: 0,
             } as ConstraintInfo;
+            justInitialized = true;
         }
 
         if (sq.fillContent) {
@@ -129,20 +130,27 @@ export function generateConstraintInfoForSquares(grid: GridState, squares: GridS
 
         let newSumTotal = 0;
         let existingViableLetters = sq.constraintInfo!.viableLetters;
-        newViableLetters.forEach((v, k) => {
-            if (!existingViableLetters.has(k))
-            newViableLetters.delete(k);
-        });
-        newViableLetters.forEach((v, k) => {
-            let oldVal = existingViableLetters.get(k) || 0;
-            let newVal = Math.min(v, oldVal);
-            if (newVal > 0) newViableLetters.set(k, newVal);
-            else newViableLetters.delete(k);
-            newSumTotal += newVal;
-        });
+        if (!justInitialized) {
+            newViableLetters.forEach((v, k) => {
+                if (!existingViableLetters.has(k))
+                newViableLetters.delete(k);
+            });
+            newViableLetters.forEach((v, k) => {
+                let oldVal = existingViableLetters.get(k) || 0;
+                let newVal = Math.min(v, oldVal);
+                if (newVal > 0) newViableLetters.set(k, newVal);
+                else newViableLetters.delete(k);
+                newSumTotal += newVal;
+            });
+        }
+        else {
+            newViableLetters.forEach((v, k) => {
+                newSumTotal += v;
+            });
+        }
 
         if (newSumTotal === 0) foundZeroSquare = true;
-        existingViableLetters = newViableLetters;
+        sq.constraintInfo!.viableLetters = newViableLetters;
         sq.constraintInfo.sumTotal = newSumTotal;
         total += newSumTotal;
     }
