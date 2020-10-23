@@ -25,6 +25,7 @@ function Grid(props: GridProps) {
         Globals.fillStatus = FillStatus.Ready;
         Globals.visitedGrids = new Map<string, boolean>();
         Globals.completedGrids = [];
+        Globals.isFirstFillCall = true;
         Globals.fillWordHandler = handleFillWord;
         Globals.fillGridHandler = handleFillGrid;
         Globals.pauseFill = pauseFill;
@@ -260,6 +261,7 @@ export function clearFill(grid: GridState) {
     Globals.fillStatus = FillStatus.Ready;
     Globals.visitedGrids = new Map<string, boolean>();
     Globals.completedGrids = [];
+    Globals.isFirstFillCall = true;
 
     grid.squares.forEach(row => {
         row.forEach(sq => {

@@ -14,7 +14,6 @@ import Globals from './windowService';
 export function fillWord(): GridState {
     let fillQueue = Globals.fillQueue!;
     let grid = Globals.gridState!;
-    let visited = Globals.visitedGrids!;
 
     if ([FillStatus.Ready, FillStatus.Running, FillStatus.Paused].find(x => x === Globals.fillStatus) === undefined) {
         return grid;
@@ -22,10 +21,11 @@ export function fillWord(): GridState {
 
     Globals.fillStatus = FillStatus.Running;
 
-    if (visited.size > 0 && fillQueue.isEmpty()) {
+    if (!Globals.isFirstFillCall && fillQueue.isEmpty()) {
         Globals.fillStatus = FillStatus.Failed;
         return grid;
     }
+    Globals.isFirstFillCall = false;
 
     let prevNode = fillQueue.isEmpty() ? undefined : fillQueue.peek()!;
     let shouldCreateNewNode = !prevNode || prevNode.chosenWord.length > 0;
@@ -323,7 +323,7 @@ function getMostConstrainedWord(prevNode: FillNode): GridWord | undefined {
     let mostConstrainedScore = 1e8;
     for (let i = 0; i < words.length; i++) {
         let squares = getSquaresForWord(grid, words[i]);
-        if (!squares.find(sq => sq.fillContent)) continue;
+        if (!squares.find(sq => sq.fillContent) || !squares.find(sq => !sq.fillContent)) continue;
 
         var constraintScore = getWordConstraintScore(squares) / squares.length;
         if (constraintScore === 0) return undefined;
@@ -374,7 +374,7 @@ function getWordConstraintScore(squares: GridSquare[]): number {
             foundZero = true;
             return;
         }
-        total += Math.log2(sum);
+        total += Math.log2(sum + 1);
         openSquareCount++;
     });
 
