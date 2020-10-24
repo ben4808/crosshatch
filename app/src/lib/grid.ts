@@ -60,6 +60,8 @@ export function updateGridConstraintInfo(grid: GridState) {
 
     grid.words.forEach(word => {
         let squares = getSquaresForWord(grid, word);
+        let letters = getLettersFromSquares(squares);
+        if (!grid.usedWords.has(letters)) grid.usedWords.set(letters, true);
         generateConstraintInfoForSquares(grid, squares);
     });
 }

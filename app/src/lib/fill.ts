@@ -54,6 +54,14 @@ export function fillWord(): GridState {
     }
     else {
         prevNode = fillQueue.peek()!;
+
+        if (prevNode.processStopsUpdated) {
+            prevNode.processStopsUpdated = false;
+            fillQueue.pop();
+            fillQueue.insert(prevNode, calculateNodePriority(prevNode));
+            return fillWord();
+        }
+
         node = prevNode;
         newGrid = node.endGrid;
     }
@@ -106,9 +114,36 @@ function endNodeChain(prevNode: FillNode) {
     // in case we just killed it
     if (curBaseNode.chosenEntry) {
         curBaseNode.chosenEntry.isProcessed = true;
-        curBaseNode.chosenEntry = undefined;
+        let chosenEntry = curBaseNode.chosenEntry!;
         curBaseNode.endGrid = deepClone(curBaseNode.startGrid);
+
+        checkForProcessStops(curBaseNode, chosenEntry);
     }
+}
+
+function checkForProcessStops(node: FillNode, chosenEntry: EntryCandidate) {
+    let qualityClasses = Globals.qualityClasses!;
+    let chosenQc = qualityClasses.get(chosenEntry.word);
+
+    let goodProcessed = 0, goodTotal = 0;
+    let badProcessed = 0, badTotal = 0;
+    let uglyProcessed = 0, uglyTotal = 0;
+    let processedBeforeStop = 20;
+    node.entryCandidates.forEach(ec => {
+    if ([QualityClass.Lively, QualityClass.Normal].find(x => qualityClasses.get(ec.word)!)) { goodTotal++; if(ec.isProcessed) goodProcessed++; }
+    if ([QualityClass.Crosswordese, QualityClass.Iffy].find(x => qualityClasses.get(ec.word)!)) { badTotal++; if(ec.isProcessed) badProcessed++; }
+    if ([QualityClass.NotAThing].find(x => qualityClasses.get(ec.word)!)) { uglyTotal++; if(ec.isProcessed) uglyProcessed++; }
+    });
+
+    if ([QualityClass.Lively, QualityClass.Normal].find(x => chosenQc) && goodProcessed > 0 &&
+        (goodProcessed % processedBeforeStop === 0 || goodProcessed === goodTotal))
+        { node.processStops++; node.processStopsUpdated = true; }
+    if ([QualityClass.Crosswordese, QualityClass.Iffy].find(x => chosenQc) && badProcessed > 0 &&
+        (badProcessed % processedBeforeStop === 0 || badProcessed === badTotal))
+        { node.processStops++; node.processStopsUpdated = true; }
+    if ([QualityClass.NotAThing].find(x => chosenQc) && uglyProcessed > 0 &&
+        (uglyProcessed % processedBeforeStop === 0 || uglyProcessed === uglyTotal))
+        { node.processStops++; node.processStopsUpdated = true; }
 }
 
 function calculateNodePriority(node: FillNode): number {
@@ -125,7 +160,7 @@ function calculateNodePriority(node: FillNode): number {
         }
     });
 
-    let depthScore = (10000 - node.depth) * 10000;
+    let depthScore = (10000 - node.depth - 5*node.processStops) * 10000;
 
     return wordScore + depthScore;
 }
@@ -137,6 +172,8 @@ function makeNewNode(grid: GridState, depth: number): FillNode {
         entryCandidates: [],
         depth: depth,
         processedCount: 0,
+        processStops: 0,
+        processStopsUpdated: false,
     } as FillNode;
 }
 

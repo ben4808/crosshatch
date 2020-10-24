@@ -116,6 +116,7 @@ function Grid(props: GridProps) {
 
     function handleFillWord() {
         Globals.gridState = fillWord();
+        updateGridConstraintInfo(Globals.gridState);
         forceUpdate();
     }
 
@@ -130,6 +131,7 @@ function Grid(props: GridProps) {
         }
 
         Globals.gridState = fillWord();
+        updateGridConstraintInfo(Globals.gridState);
         forceUpdate();
         setTimeout(() => doFillGrid(), 10);
     }

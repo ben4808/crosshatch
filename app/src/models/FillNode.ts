@@ -10,5 +10,6 @@ export interface FillNode {
     entryCandidates: EntryCandidate[];
     chosenEntry?: EntryCandidate;
     depth: number;
-    processedCount: number;
+    processStops: number;
+    processStopsUpdated: boolean;
 }
