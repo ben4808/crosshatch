@@ -1,3 +1,4 @@
+import { clearFill } from "../components/Grid/Grid";
 import { EntryCandidate } from "../models/EntryCandidate";
 import { FillNode } from "../models/FillNode";
 import { FillStatus } from "../models/FillStatus";
@@ -6,9 +7,9 @@ import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { QualityClass } from "../models/QualityClass";
 import { WordDirection } from "../models/WordDirection";
-import { generateConstraintInfoForSquares, gridToString } from "./grid";
+import { generateConstraintInfoForSquares } from "./grid";
 import { deepClone, compareTuples, getWordAtSquare, getSquaresForWord, indexedWordListLookup, isBlackSquare, 
-    otherDir, sum, getWordLength, getRandomWordsOfLength, sortedListInsert, isWordEmpty, isWordFull } from "./util";
+    otherDir, sum, getWordLength, getRandomWordsOfLength, isWordEmpty, isWordFull } from "./util";
 import Globals from './windowService';
 
 export function fillWord(): GridState {
@@ -21,137 +22,122 @@ export function fillWord(): GridState {
 
     Globals.fillStatus = FillStatus.Running;
 
+    if (Globals.isFirstFillCall) {
+        let firstNode = makeNewNode(grid, 0);
+
+        firstNode.fillWord = getMostConstrainedWord(firstNode);
+        // either an unfillable word or puzzle completed
+        if (!firstNode.fillWord) return grid;
+
+        fillQueue.insert(firstNode, calculateNodePriority(firstNode));
+    }
+
     if (!Globals.isFirstFillCall && fillQueue.isEmpty()) {
         Globals.fillStatus = FillStatus.Failed;
+        clearFill(grid);
         return grid;
     }
     Globals.isFirstFillCall = false;
 
-    let prevNode = fillQueue.isEmpty() ? undefined : fillQueue.peek()!;
-    let shouldCreateNewNode = !prevNode || prevNode.chosenWord.length > 0;
+    let prevNode: FillNode;
     let node: FillNode;
     let newGrid: GridState;
 
-    if (shouldCreateNewNode) {
-        let newNode = populateNewNode(prevNode);
-        if (!newNode) {
-            invalidateNode(prevNode);
-            return fillWord();
-        }
-        node = newNode;
-        newGrid = newNode.endGrid;
+    if (Globals.currentChainNode) {
+        prevNode = Globals.currentChainNode;
+        node = makeNewNode(prevNode.endGrid, prevNode.depth + 1);
+        newGrid = node.endGrid;
+
+        node.fillWord = getMostConstrainedWord(node);
+        // either an unfillable word or puzzle completed
+        if (!node.fillWord) return grid;
     }
     else {
-        node = prevNode!;
-        scoreEntryCandidates(node);
-        newGrid = deepClone(node.startGrid);
+        prevNode = fillQueue.peek()!;
+        node = prevNode;
+        newGrid = node.endGrid;
     }
 
-    while(true) {
-        let viableCandidates = node.entryCandidates.filter(n => n.isViable);
-        if(viableCandidates.length === 0) {
-            invalidateNode(prevNode);
-            return fillWord();
-        }
+    populateAndScoreEntryCandidates(node);
 
-        node.chosenWord = chooseEntryFromCandidates(viableCandidates);
-        insertEntryIntoGrid(newGrid, node.fillWord!, node.chosenWord);
-
-        let newGridString = gridToString(newGrid);
-        if (Globals.visitedGrids!.has(newGridString)) {
-            let candidate = node.entryCandidates.find(x => x.word === node!.chosenWord)!;
-            candidate.score = 0;
-            candidate.isViable = false;
-            newGrid = deepClone(node.startGrid);
+    let viableCandidates = node.entryCandidates.filter(n => n.isViable && !n.isProcessed);
+    if(viableCandidates.length === 0) {
+        if (Globals.currentChainNode) {
+            endNodeChain(prevNode);
         }
         else {
-            Globals.visitedGrids?.set(newGridString, true);
-            newGrid.usedWords.set(node.chosenWord, true);
-            break;
+            fillQueue.pop();
         }
+        
+        return fillWord();
     }
 
+    node.chosenEntry = chooseEntryFromCandidates(viableCandidates);
+    insertEntryIntoGrid(newGrid, node.fillWord!, node.chosenEntry.word);
+    newGrid.usedWords.set(node.chosenEntry.word, true);
+
     if (isGridFilled(newGrid)) {
-        sortedListInsert(Globals.completedGrids!, newGrid, calculateGridPriority);
-        invalidateNode(prevNode);
+        insertIntoCompletedGrids(node);
+        if (Globals.currentChainNode) {
+            endNodeChain(prevNode);
+        }
         Globals.fillStatus = FillStatus.Success;
         return newGrid;
     }
 
-    node.endGrid = newGrid;
-
-    if (shouldCreateNewNode)
-        fillQueue.insert(node, calculateGridPriority(newGrid));
+    if (Globals.currentChainNode) {
+        fillQueue.insert(node, calculateNodePriority(node));
+    }
     
+    Globals.currentChainNode = node;
     return newGrid;
 }
 
-function invalidateNode(node: FillNode | undefined) {
-    if (!node) return;
+function endNodeChain(prevNode: FillNode) {
+    Globals.currentChainNode = undefined;
 
-    let fillQueue = Globals.fillQueue!;
-
-    let prevCandidate = node.entryCandidates.find(x => x.word === node!.chosenWord)!;
+    let prevCandidate = prevNode.chosenEntry!;
     prevCandidate.score = 0;
     prevCandidate.isViable = false;
-    node.chosenWord = "";
-    node.endGrid = deepClone(node.startGrid);
+    prevNode.chosenEntry = undefined;
+    prevNode.endGrid = deepClone(prevNode.startGrid);
 
-    fillQueue.pop();
-
-    let viableCandidates = node.entryCandidates.filter(n => n.isViable);
-    if (viableCandidates.length > 0) {
-        fillQueue.insert(node, calculateGridPriority(node.startGrid));
+    let curBaseNode = Globals.fillQueue?.peek()!;
+    // in case we just killed it
+    if (curBaseNode.chosenEntry) {
+        curBaseNode.chosenEntry.isProcessed = true;
+        curBaseNode.chosenEntry = undefined;
+        curBaseNode.endGrid = deepClone(curBaseNode.startGrid);
     }
 }
 
-function calculateGridPriority(grid: GridState): number {
-    let isBad = false;
-    let isUgly = false;
+function calculateNodePriority(node: FillNode): number {
+    let grid = node.endGrid;
+    let wordScore = 0;
     grid.usedWords.forEach((_, word) => {
         let qualityClass = Globals.qualityClasses!.get(word)!;
         switch(qualityClass) {
-            case QualityClass.Lively: { break; }
-            case QualityClass.Normal: { break; }
-            case QualityClass.Crosswordese: { isBad = true; break; }
-            case QualityClass.Iffy: { isBad = true; break; }
-            case QualityClass.NotAThing: { isUgly = true; break; }
-        }
-    });
-
-    let score = 0;
-    grid.usedWords.forEach((_, word) => {
-        let qualityClass = Globals.qualityClasses!.get(word)!;
-        switch(qualityClass) {
-            case QualityClass.Lively: { score += isUgly ? 4 : isBad ? 1e3 + 4 : 1e6 + 2; break; }
-            case QualityClass.Normal: { score += isUgly ? 3 : isBad ? 1e3 + 3 : 1e6 + 1; break; }
-            case QualityClass.Crosswordese: { score += isUgly ? 2 : 1e3 + 2; break; }
-            case QualityClass.Iffy: { score += isUgly ? 1 : 1e3 + 1; break; }
+            case QualityClass.Lively: { wordScore += 10; break; }
+            case QualityClass.Normal: { wordScore += 7; break; }
+            case QualityClass.Crosswordese: { wordScore += 2; break; }
+            case QualityClass.Iffy: { wordScore += 1; break; }
             case QualityClass.NotAThing: { break; }
         }
     });
 
-    return score;
+    let depthScore = (10000 - node.depth) * 10000;
+
+    return wordScore + depthScore;
 }
 
-function makeNewNode(grid: GridState): FillNode {
+function makeNewNode(grid: GridState, depth: number): FillNode {
     return {
         startGrid: deepClone(grid),
         endGrid: deepClone(grid),
         entryCandidates: [],
-        chosenWord: "",
+        depth: depth,
+        processedCount: 0,
     } as FillNode;
-}
-
-function populateNewNode(prevNode: FillNode | undefined): FillNode | undefined {
-    let node = makeNewNode(prevNode?.endGrid || Globals.gridState!);
-
-    let fillWord = getMostConstrainedWord(prevNode || node);
-    if (!fillWord) return undefined;
-    node.fillWord = fillWord;
-    
-    if (!scoreEntryCandidates(node)) return undefined;
-    return node;
 }
 
 function calculateCandidateScore(candidate: EntryCandidate, averageCrossScore: number, lowestCrossScore: number): number {
@@ -168,7 +154,7 @@ function calculateCandidateScore(candidate: EntryCandidate, averageCrossScore: n
     return rawScore;
 }
 
-function chooseEntryFromCandidates(candidates: EntryCandidate[]): string {
+function chooseEntryFromCandidates(candidates: EntryCandidate[]): EntryCandidate {
     let topTier: EntryCandidate[];
     if (candidates.find(c => c.score! >= 1e6)) topTier = deepClone(candidates.filter(c => c.score! >= 1e6));
     else if (candidates.find(c => c.score! >= 1e3)) topTier = deepClone(candidates.filter(c => c.score! >= 1e3));
@@ -190,15 +176,15 @@ function chooseEntryFromCandidates(candidates: EntryCandidate[]): string {
     for (let i = 0; i < topTier.length; i++) {
         curTotal += topTier[i].score!;
         if (roll <= (curTotal / sumOfScores))
-            return topTier[i].word;
+            return candidates.find(c => c.word === topTier[i].word)!;
     }
 
-    return topTier[0].word;
+    return candidates.find(c => c.word === topTier[0].word)!;
 }
 
 // returns whether any viable options were found
 function populateEntryCandidates(node: FillNode): boolean {
-    let viableEntries = node.entryCandidates.filter(x => x.isViable);
+    let viableEntries = node.entryCandidates.filter(x => x.isViable && !x.isProcessed);
     if (viableEntries.length >= 20) return true;
 
     let entryMap = new Map<string, EntryCandidate>();
@@ -224,13 +210,14 @@ function populateEntryCandidates(node: FillNode): boolean {
         node.entryCandidates.push({
             word: op,
             isViable: true,
+            isProcessed: false,
         });
     }
 
     return true;
 }
 
-function scoreEntryCandidates(node: FillNode): boolean {
+function populateAndScoreEntryCandidates(node: FillNode): boolean {
     let grid = node.startGrid;
     let wordSquares = getSquaresForWord(grid, node.fillWord!);
     let crosses = getUnfilledCrosses(grid, node.fillWord!);
@@ -295,7 +282,7 @@ function scoreEntryCandidates(node: FillNode): boolean {
         });
 
         // eslint-disable-next-line
-        let viableCandidates = node.entryCandidates.filter(x => x.isViable);
+        let viableCandidates = node.entryCandidates.filter(x => x.isViable && !x.isProcessed);
         if (viableCandidates.length >= 10) break;
     }
 
@@ -406,4 +393,18 @@ function insertEntryIntoGrid(grid: GridState, word: GridWord, newEntry: string) 
             sq.fillContent = newEntry[curIndex];
             sq.qualityClass = qualityClass;
         }
+}
+
+export function insertIntoCompletedGrids(node: FillNode) {
+    let completedGrids = Globals.completedGrids!;
+    let score = calculateNodePriority(node);
+    let grid = node.endGrid;
+    completedGrids.push([score, grid]);
+    let i = completedGrids.length - 1;
+    let item = completedGrids[i];
+    while (i > 0 && completedGrids[i][0] > completedGrids[i-1][0]) {
+        completedGrids[i] = completedGrids[i-1];
+        i -= 1;
+    }
+    completedGrids[i] = item;
 }

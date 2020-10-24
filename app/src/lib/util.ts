@@ -44,31 +44,6 @@ export function deepClone(obj: any): any {
     }
 }
 
-// export function deepClone(obj: any): any {
-//     return JSON.parse(JSON.stringify(obj, replacer), reviver);
-// }
-
-// // https://stackoverflow.com/questions/29085197/how-do-you-json-stringify-an-es6-map
-// function replacer(this: any, key: any, value: any) {
-//     const originalObject = this[key];
-//     if(originalObject instanceof Map) {
-//         return {
-//         dataType: 'Map',
-//         value: Array.from(originalObject.entries()), // or with spread: value: [...originalObject]
-//         };
-//     } else {
-//         return value;
-//     }
-// }
-// function reviver(key: any, value: any) {
-//     if(typeof value === 'object' && value !== null) {
-//         if (value.dataType === 'Map') {
-//         return new Map(value.value);
-//         }
-//     }
-//     return value;
-// }
-
 export function compareTuples(first: [number, number], second: [number, number]): boolean {
     return first[0] === second[0] && first[1] === second[1];
 }
@@ -204,16 +179,4 @@ export function getWordLength(word: GridWord): number {
         return word.end[1] - word.start[1];
     else
         return word.end[0] - word.start[0];
-}
-
-export function sortedListInsert<T>(arr: T[], val: T, scoreFunc: (val: T) => number): T[] {
-    arr.push(val);
-    let i = arr.length - 1;
-    let item = arr[i];
-    while (i > 0 && scoreFunc(item) > scoreFunc(arr[i-1])) {
-        arr[i] = arr[i-1];
-        i -= 1;
-    }
-    arr[i] = item;
-    return arr;
 }

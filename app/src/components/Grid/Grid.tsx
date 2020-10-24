@@ -23,7 +23,8 @@ function Grid(props: GridProps) {
         Globals.gridState = createNewGrid(props.height, props.width);
         Globals.fillQueue = priorityQueue<FillNode>();
         Globals.fillStatus = FillStatus.Ready;
-        Globals.visitedGrids = new Map<string, boolean>();
+        Globals.currentDepth = 0;
+        //Globals.visitedGrids = new Map<string, boolean>();
         Globals.completedGrids = [];
         Globals.isFirstFillCall = true;
         Globals.fillWordHandler = handleFillWord;
@@ -259,9 +260,10 @@ function getUncheckedSquareDir(grid: GridState, row: number, col: number): WordD
 export function clearFill(grid: GridState) {
     Globals.fillQueue = priorityQueue<FillNode>();
     Globals.fillStatus = FillStatus.Ready;
-    Globals.visitedGrids = new Map<string, boolean>();
     Globals.completedGrids = [];
     Globals.isFirstFillCall = true;
+    Globals.currentChainNode = undefined;
+    Globals.currentDepth = 0;
 
     grid.squares.forEach(row => {
         row.forEach(sq => {

@@ -9,9 +9,11 @@ import { QualityClass } from "./QualityClass";
 export interface GlobalsObj {
     gridState?: GridState;
     fillQueue?: PriorityQueue<FillNode>;
+    currentChainNode?: FillNode;
+    currentDepth?: number;
     fillStatus?: FillStatus;
-    visitedGrids?: Map<string, boolean>;
-    completedGrids?: GridState[];
+    completedGrids?: [number, GridState][];
+
     wordList?: IndexedWordList;
     qualityClasses?: Map<string, QualityClass>;
     lengthBuckets?: Map<number, string[]>;
