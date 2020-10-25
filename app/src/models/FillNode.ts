@@ -12,4 +12,6 @@ export interface FillNode {
     depth: number;
     processStops: number;
     processStopsUpdated: boolean;
+    isChainNode: boolean;
+    backtracks: number;
 }

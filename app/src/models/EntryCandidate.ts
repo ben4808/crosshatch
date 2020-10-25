@@ -2,5 +2,6 @@ export interface EntryCandidate {
     word: string;
     score?: number;
     isViable: boolean;
-    isProcessed: boolean;
+    hasBeenChained: boolean;
+    wasChainFailure: boolean;
 }

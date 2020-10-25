@@ -23,7 +23,7 @@ export function fillWord(): GridState {
     Globals.fillStatus = FillStatus.Running;
 
     if (Globals.isFirstFillCall) {
-        let firstNode = makeNewNode(grid, 0);
+        let firstNode = makeNewNode(grid, 0, false);
 
         firstNode.fillWord = getMostConstrainedWord(firstNode);
         // either an unfillable word or puzzle completed
@@ -39,22 +39,35 @@ export function fillWord(): GridState {
     }
     Globals.isFirstFillCall = false;
 
-    let prevNode: FillNode;
+    let prevNode = fillQueue.peek()!;
     let node: FillNode;
     let newGrid: GridState;
+    let shouldMakeNewNode = !!prevNode.chosenEntry;
 
-    if (Globals.currentChainNode) {
-        prevNode = Globals.currentChainNode;
-        node = makeNewNode(prevNode.endGrid, prevNode.depth + 1);
-        newGrid = node.endGrid;
+    if (prevNode.isChainNode) {
+        if (shouldMakeNewNode) {
+            node = makeNewNode(prevNode.endGrid, prevNode.depth + 1, true);
+            newGrid = node.endGrid;
+            node.parent = prevNode;
 
-        node.fillWord = getMostConstrainedWord(node);
-        // either an unfillable word or puzzle completed
-        if (!node.fillWord) return grid;
+            node.fillWord = getMostConstrainedWord(node);
+            // either an unfillable word or puzzle completed
+            if (!node.fillWord) return grid;
+        }
+        else {
+            node = prevNode;
+            newGrid = node.endGrid;
+
+            if (node.backtracks > 2) {
+                chainNodeMaxBacktracks(node);
+                node.isChainNode = false;
+                fillQueue.pop();
+                fillQueue.insert(node, calculateNodePriority(node));
+                return fillWord();
+            }
+        }
     }
     else {
-        prevNode = fillQueue.peek()!;
-
         if (prevNode.processStopsUpdated) {
             prevNode.processStopsUpdated = false;
             fillQueue.pop();
@@ -62,16 +75,35 @@ export function fillWord(): GridState {
             return fillWord();
         }
 
-        node = prevNode;
-        newGrid = node.endGrid;
+        if (shouldMakeNewNode) {
+            node = makeNewNode(prevNode.endGrid, prevNode.depth + 1, true);
+            newGrid = node.endGrid;
+            node.parent = prevNode;
+
+            node.fillWord = getMostConstrainedWord(node);
+            // either an unfillable word or puzzle completed
+            if (!node.fillWord) return grid;
+        }
+        else {
+            node = prevNode;
+            newGrid = node.endGrid;
+        }
     }
 
     populateAndScoreEntryCandidates(node);
 
-    let viableCandidates = node.entryCandidates.filter(n => n.isViable && !n.isProcessed);
+    let viableCandidates = getViableCandidates(node);
     if(viableCandidates.length === 0) {
-        if (Globals.currentChainNode) {
-            endNodeChain(prevNode);
+        if (prevNode.isChainNode) {
+            if (shouldMakeNewNode) {
+                chainNewNodeNotViable(prevNode);
+                fillQueue.pop();
+                fillQueue.insert(prevNode, calculateNodePriority(prevNode));
+            }
+            else {
+                chainNodeMaxBacktracks(node);
+                fillQueue.pop();
+            }
         }
         else {
             fillQueue.pop();
@@ -86,38 +118,60 @@ export function fillWord(): GridState {
 
     if (isGridFilled(newGrid)) {
         insertIntoCompletedGrids(node);
-        if (Globals.currentChainNode) {
-            endNodeChain(prevNode);
-        }
+        chainNewNodeNotViable(prevNode);
         Globals.fillStatus = FillStatus.Success;
         return newGrid;
     }
 
-    if (Globals.currentChainNode) {
+    if (shouldMakeNewNode) {
         fillQueue.insert(node, calculateNodePriority(node));
     }
     
-    Globals.currentChainNode = node;
     return newGrid;
 }
 
-function endNodeChain(prevNode: FillNode) {
-    Globals.currentChainNode = undefined;
-
+function chainNewNodeNotViable(prevNode: FillNode) {
     let prevCandidate = prevNode.chosenEntry!;
     prevCandidate.score = 0;
     prevCandidate.isViable = false;
+
+    if (prevNode.isChainNode) {
+        prevCandidate.wasChainFailure = true;
+        prevNode.backtracks++;
+    }
+    else {
+        prevCandidate.hasBeenChained = true;
+        checkForProcessStops(prevNode, prevCandidate);
+    }
+
     prevNode.chosenEntry = undefined;
     prevNode.endGrid = deepClone(prevNode.startGrid);
+}
 
-    let curBaseNode = Globals.fillQueue?.peek()!;
-    // in case we just killed it
-    if (curBaseNode.chosenEntry) {
-        curBaseNode.chosenEntry.isProcessed = true;
-        let chosenEntry = curBaseNode.chosenEntry!;
-        curBaseNode.endGrid = deepClone(curBaseNode.startGrid);
+function chainNodeMaxBacktracks(node: FillNode) {
+    if (!node.parent) return;
 
-        checkForProcessStops(curBaseNode, chosenEntry);
+    let parent = node.parent;
+    let prevCandidate = parent.chosenEntry!;
+    if (parent.isChainNode) {
+        prevCandidate.wasChainFailure = true;
+        parent.backtracks++;
+    }
+    else {
+        prevCandidate.hasBeenChained = true;
+        checkForProcessStops(parent, prevCandidate);
+    }
+
+    parent.chosenEntry = undefined;
+    parent.endGrid = deepClone(parent.startGrid);
+}
+
+function getViableCandidates(node: FillNode): EntryCandidate[] {
+    if (node.isChainNode) {
+        return node.entryCandidates.filter(ec => ec.isViable && !ec.wasChainFailure);
+    }
+    else {
+        return node.entryCandidates.filter(ec => ec.isViable && !ec.hasBeenChained);
     }
 }
 
@@ -125,24 +179,24 @@ function checkForProcessStops(node: FillNode, chosenEntry: EntryCandidate) {
     let qualityClasses = Globals.qualityClasses!;
     let chosenQc = qualityClasses.get(chosenEntry.word);
 
-    let goodProcessed = 0, goodTotal = 0;
-    let badProcessed = 0, badTotal = 0;
-    let uglyProcessed = 0, uglyTotal = 0;
-    let processedBeforeStop = 20;
+    let goodChained = 0, goodTotal = 0;
+    let badChained = 0, badTotal = 0;
+    let uglyChained = 0, uglyTotal = 0;
+    let chainedBeforeStop = 20;
     node.entryCandidates.forEach(ec => {
-    if ([QualityClass.Lively, QualityClass.Normal].find(x => qualityClasses.get(ec.word)!)) { goodTotal++; if(ec.isProcessed) goodProcessed++; }
-    if ([QualityClass.Crosswordese, QualityClass.Iffy].find(x => qualityClasses.get(ec.word)!)) { badTotal++; if(ec.isProcessed) badProcessed++; }
-    if ([QualityClass.NotAThing].find(x => qualityClasses.get(ec.word)!)) { uglyTotal++; if(ec.isProcessed) uglyProcessed++; }
+    if ([QualityClass.Lively, QualityClass.Normal].find(x => qualityClasses.get(ec.word)!)) { goodTotal++; if(ec.hasBeenChained) goodChained++; }
+    if ([QualityClass.Crosswordese, QualityClass.Iffy].find(x => qualityClasses.get(ec.word)!)) { badTotal++; if(ec.hasBeenChained) badChained++; }
+    if ([QualityClass.NotAThing].find(x => qualityClasses.get(ec.word)!)) { uglyTotal++; if(ec.hasBeenChained) uglyChained++; }
     });
 
-    if ([QualityClass.Lively, QualityClass.Normal].find(x => chosenQc) && goodProcessed > 0 &&
-        (goodProcessed % processedBeforeStop === 0 || goodProcessed === goodTotal))
+    if ([QualityClass.Lively, QualityClass.Normal].find(x => x === chosenQc) && goodChained > 0 &&
+        (goodChained % chainedBeforeStop === 0 || goodChained === goodTotal))
         { node.processStops++; node.processStopsUpdated = true; }
-    if ([QualityClass.Crosswordese, QualityClass.Iffy].find(x => chosenQc) && badProcessed > 0 &&
-        (badProcessed % processedBeforeStop === 0 || badProcessed === badTotal))
+    if ([QualityClass.Crosswordese, QualityClass.Iffy].find(x => x === chosenQc) && badChained > 0 &&
+        (badChained % chainedBeforeStop === 0 || badChained === badTotal))
         { node.processStops++; node.processStopsUpdated = true; }
-    if ([QualityClass.NotAThing].find(x => chosenQc) && uglyProcessed > 0 &&
-        (uglyProcessed % processedBeforeStop === 0 || uglyProcessed === uglyTotal))
+    if ([QualityClass.NotAThing].find(x => x === chosenQc) && uglyChained > 0 &&
+        (uglyChained % chainedBeforeStop === 0 || uglyChained === uglyTotal))
         { node.processStops++; node.processStopsUpdated = true; }
 }
 
@@ -160,12 +214,18 @@ function calculateNodePriority(node: FillNode): number {
         }
     });
 
-    let depthScore = (10000 - node.depth - 5*node.processStops) * 10000;
+    let situationScore: number;
+    if (node.isChainNode) {
+        situationScore = 1e8 + 10000*node.depth;
+    }
+    else {
+        situationScore = (10000 - node.depth - 5*node.processStops) * 10000;
+    }
 
-    return wordScore + depthScore;
+    return wordScore + situationScore;
 }
 
-function makeNewNode(grid: GridState, depth: number): FillNode {
+function makeNewNode(grid: GridState, depth: number, isChainNode: boolean): FillNode {
     return {
         startGrid: deepClone(grid),
         endGrid: deepClone(grid),
@@ -174,6 +234,8 @@ function makeNewNode(grid: GridState, depth: number): FillNode {
         processedCount: 0,
         processStops: 0,
         processStopsUpdated: false,
+        isChainNode: isChainNode,
+        backtracks: 0,
     } as FillNode;
 }
 
@@ -221,7 +283,7 @@ function chooseEntryFromCandidates(candidates: EntryCandidate[]): EntryCandidate
 
 // returns whether any viable options were found
 function populateEntryCandidates(node: FillNode): boolean {
-    let viableEntries = node.entryCandidates.filter(x => x.isViable && !x.isProcessed);
+    let viableEntries = getViableCandidates(node);
     if (viableEntries.length >= 20) return true;
 
     let entryMap = new Map<string, EntryCandidate>();
@@ -247,7 +309,8 @@ function populateEntryCandidates(node: FillNode): boolean {
         node.entryCandidates.push({
             word: op,
             isViable: true,
-            isProcessed: false,
+            hasBeenChained: false,
+            wasChainFailure: false,
         });
     }
 
@@ -319,7 +382,7 @@ function populateAndScoreEntryCandidates(node: FillNode): boolean {
         });
 
         // eslint-disable-next-line
-        let viableCandidates = node.entryCandidates.filter(x => x.isViable && !x.isProcessed);
+        let viableCandidates = getViableCandidates(node);
         if (viableCandidates.length >= 10) break;
     }
 

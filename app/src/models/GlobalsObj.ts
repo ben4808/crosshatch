@@ -9,7 +9,6 @@ import { QualityClass } from "./QualityClass";
 export interface GlobalsObj {
     gridState?: GridState;
     fillQueue?: PriorityQueue<FillNode>;
-    currentChainNode?: FillNode;
     currentDepth?: number;
     fillStatus?: FillStatus;
     completedGrids?: [number, GridState][];

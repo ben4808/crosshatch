@@ -24,7 +24,6 @@ function Grid(props: GridProps) {
         Globals.fillQueue = priorityQueue<FillNode>();
         Globals.fillStatus = FillStatus.Ready;
         Globals.currentDepth = 0;
-        //Globals.visitedGrids = new Map<string, boolean>();
         Globals.completedGrids = [];
         Globals.isFirstFillCall = true;
         Globals.fillWordHandler = handleFillWord;
@@ -264,7 +263,6 @@ export function clearFill(grid: GridState) {
     Globals.fillStatus = FillStatus.Ready;
     Globals.completedGrids = [];
     Globals.isFirstFillCall = true;
-    Globals.currentChainNode = undefined;
     Globals.currentDepth = 0;
 
     grid.squares.forEach(row => {
