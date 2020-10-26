@@ -7,9 +7,9 @@ import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { QualityClass } from "../models/QualityClass";
 import { WordDirection } from "../models/WordDirection";
-import { generateConstraintInfoForSquares } from "./grid";
+import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
 import { deepClone, compareTuples, getWordAtSquare, getSquaresForWord, indexedWordListLookup, isBlackSquare, 
-    otherDir, sum, getWordLength, getRandomWordsOfLength, isWordEmpty, isWordFull } from "./util";
+    otherDir, sum, getWordLength, getRandomWordsOfLength, isWordEmpty, isWordFull, doesWordContainSquare } from "./util";
 import Globals from './windowService';
 
 export function fillWord(): GridState {
@@ -113,8 +113,7 @@ export function fillWord(): GridState {
     }
 
     node.chosenEntry = chooseEntryFromCandidates(viableCandidates);
-    insertEntryIntoGrid(newGrid, node.fillWord!, node.chosenEntry.word);
-    newGrid.usedWords.set(node.chosenEntry.word, true);
+    insertEntryIntoGrid(newGrid, node.fillWord!, node.chosenEntry);
 
     if (isGridFilled(newGrid)) {
         insertIntoCompletedGrids(node);
@@ -312,13 +311,14 @@ function populateEntryCandidates(node: FillNode): boolean {
             isViable: true,
             hasBeenChained: false,
             wasChainFailure: false,
+            constraintSquaresForCrosses: [],
         });
     }
 
     return true;
 }
 
-function populateAndScoreEntryCandidates(node: FillNode): boolean {
+function populateAndScoreEntryCandidates(node: FillNode) {
     let grid = node.startGrid;
     let wordSquares = getSquaresForWord(grid, node.fillWord!);
     let crosses = getUnfilledCrosses(grid, node.fillWord!);
@@ -356,17 +356,22 @@ function populateAndScoreEntryCandidates(node: FillNode): boolean {
                     newVal = candidate.word[sqToReplace.row - wordSquares[0].row];
                 }
                 sqToReplace.fillContent = newVal;
+                sqToReplace.constraintInfo = {
+                    sumTotal: 1,
+                    viableLetters: new Map<string, number>([[sqToReplace.fillContent, 1]]),
+                };
     
                 if (sqToReplace.constraintInfo && !sqToReplace.constraintInfo.viableLetters.has(newVal)) {
                     foundBadCross = true;
                     return;
                 }
                 
-                let newSum = generateConstraintInfoForSquares(grid, newSquares);
-                if (newSum === 0) {
+                let populatedSquares = generateConstraintInfoForSquares(grid, newSquares);
+                if (populatedSquares === undefined) {
                     foundBadCross = true;
                     return;
                 }
+                candidate.constraintSquaresForCrosses.push(populatedSquares);
     
                 let crossScore = getWordConstraintScore(newSquares);
                 totalCrossScores += crossScore;
@@ -390,8 +395,6 @@ function populateAndScoreEntryCandidates(node: FillNode): boolean {
     // eslint-disable-next-line
     let viableCandidates = node.entryCandidates.filter(x => x.isViable);
     viableCandidates = viableCandidates.sort((a, b) => b.score! - a.score!);
-
-    return viableCandidates.length > 0;
 }
 
 function isGridEmpty(grid: GridState): boolean {
@@ -477,29 +480,53 @@ function getWordConstraintScore(squares: GridSquare[]): number {
     return foundZero ? 0 : total / openSquareCount;
 }
 
-function insertEntryIntoGrid(grid: GridState, word: GridWord, newEntry: string) {
-    let curPos = word.start;
-    let curIndex = 0;
-    let qualityClass = Globals.qualityClasses!.get(newEntry)!;
-    while (!compareTuples(curPos, word.end)) {
-        let sq = grid.squares[curPos[0]][curPos[1]];
-        if (!sq.fillContent) {
-            sq.fillContent = newEntry[curIndex];
-            sq.qualityClass = qualityClass;
+function insertEntryIntoGrid(grid: GridState, word: GridWord, newEntry: EntryCandidate) {
+    function processSquare() {
+        if (crossIndex < crosses.length) {
+            let cross = crosses[crossIndex];
+            if (doesWordContainSquare(cross, curPos[0], curPos[1])) {
+                let crossSquares = getSquaresForWord(grid, cross);
+                let newCrossSquares = newEntry.constraintSquaresForCrosses[crossIndex];
+                if (newCrossSquares.length > 0) {
+                    crossSquares.forEach((sq, i) => {
+                        grid.squares[sq.row][sq.col] = newEntry.constraintSquaresForCrosses[crossIndex][i];
+                    });
+                }
+
+                let letters = getLettersFromSquares(newCrossSquares);
+                if (!letters.includes(".")) grid.usedWords.set(letters, true);
+
+                crossIndex++;
+            }
         }
+        
+        let sq = grid.squares[curPos[0]][curPos[1]];
+        sq.fillContent = newEntry.word[wordIndex];
+        sq.qualityClass = qualityClass;
+        sq.constraintInfo = {
+            sumTotal: 1,
+            viableLetters: new Map<string, number>([[sq.fillContent, 1]]),
+        }
+        wordIndex++;
+    }
+
+    let curPos = word.start;
+    let wordIndex = 0;
+    let crossIndex = 0;
+    let qualityClass = Globals.qualityClasses!.get(newEntry.word)!;
+    let crosses = getUnfilledCrosses(grid, word);
+    while (!compareTuples(curPos, word.end)) {
+        processSquare();
 
         curPos = word.direction === WordDirection.Across ?
             [curPos[0], curPos[1]+1] : [curPos[0]+1, curPos[1]];
-        curIndex++;
     }
-    let sq = grid.squares[curPos[0]][curPos[1]];
-        if (!sq.fillContent) {
-            sq.fillContent = newEntry[curIndex];
-            sq.qualityClass = qualityClass;
-        }
+    processSquare();
+
+    grid.usedWords.set(newEntry.word, true);
 }
 
-export function insertIntoCompletedGrids(node: FillNode) {
+function insertIntoCompletedGrids(node: FillNode) {
     let completedGrids = Globals.completedGrids!;
     let score = calculateNodePriority(node);
     let grid = node.endGrid;

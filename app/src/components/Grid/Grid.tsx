@@ -139,7 +139,6 @@ function Grid(props: GridProps) {
 
     function handleFillWord() {
         Globals.gridState = fillWord();
-        updateGridConstraintInfo(Globals.gridState);
         forceUpdate();
     }
 
@@ -154,7 +153,6 @@ function Grid(props: GridProps) {
         }
 
         Globals.gridState = fillWord();
-        updateGridConstraintInfo(Globals.gridState);
         forceUpdate();
         setTimeout(() => doFillGrid(), 10);
     }
@@ -256,7 +254,10 @@ function advanceCursor() {
     if (!Globals.selectedSquare) return;
 
     let selSq = Globals.selectedSquare;
+    let grid = Globals.gridState!;
     let dir = Globals.selectedWord?.direction || WordDirection.Across;
+    if ((dir === WordDirection.Across && selSq[1] === grid.width-1) || (dir === WordDirection.Down && selSq[0] === grid.height-1))
+        return;
     Globals.selectedSquare = dir === WordDirection.Across ? [selSq[0], selSq[1] + 1] : [selSq[0] + 1, selSq[1]];
 }
 
@@ -265,6 +266,8 @@ function backupCursor() {
 
     let selSq = Globals.selectedSquare;
     let dir = Globals.selectedWord?.direction || WordDirection.Across;
+    if ((dir === WordDirection.Across && selSq[1] === 0) || (dir === WordDirection.Down && selSq[0] === 0))
+        return;
     Globals.selectedSquare = dir === WordDirection.Across ? [selSq[0], selSq[1] - 1] : [selSq[0] - 1, selSq[1]];
 }
 
