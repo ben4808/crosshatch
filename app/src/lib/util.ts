@@ -92,7 +92,7 @@ export function getRandomWordsOfLength(wl: IndexedWordList, length: number): str
     let bucket = Globals.lengthBuckets!.get(length) || [];
     let map = new Map<string, boolean>();
     let ret = [];
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 50; i++) {
         let index = Math.floor(Math.random() * bucket.length);
         let word = bucket[index];
         if (!map.has(word)) {

@@ -2,12 +2,16 @@ import { PriorityQueue } from "../lib/priorityQueue";
 import { FillNode } from "./FillNode";
 import { FillStatus } from "./FillStatus";
 import { GridState } from "./GridState";
+import { GridWord } from "./GridWord";
 import { IndexedWordList } from "./IndexedWordList";
 import { QualityClass } from "./QualityClass";
 
 // if only I could get useContext to work
 export interface GlobalsObj {
     gridState?: GridState;
+    selectedSquare?: [number, number];
+    selectedWord?: GridWord;
+
     fillQueue?: PriorityQueue<FillNode>;
     currentDepth?: number;
     fillStatus?: FillStatus;

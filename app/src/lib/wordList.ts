@@ -70,7 +70,6 @@ export async function loadWordList(source: string, url: string, parserFunc: (lin
         source: source,
         buckets: indexWordList(entries),
     }
-    populateLengthBuckets(entries);
     var t5 = new Date().getTime();
     console.log((t5 - startTime) + " Finished indexing");
 
@@ -95,6 +94,11 @@ function indexWordList(entries: string[]): any {
         oneVal: [] as any[],
         twoVal: [] as any[],
     };
+
+    Globals.lengthBuckets = new Map<number, string[]>();
+    for (let length = 2; length <= 15; length++) {
+        Globals.lengthBuckets.set(length, []);
+    }
 
     for (let length = 2; length <= 15; length++) {
         ret.oneVal.push([] as any[]);
@@ -123,6 +127,9 @@ function indexWordList(entries: string[]): any {
     }
 
     entries.forEach(word => {
+        if (Math.random() < 0.01)
+            Globals.lengthBuckets!.get(word.length)!.push(word);
+
         // 1-position entries
         for (let pos1 = 1; pos1 <= word.length; pos1++) {
             ret.oneVal[word.length-2][pos1-1][word[pos1-1].charCodeAt(0)-65].push(word);
@@ -138,15 +145,3 @@ function indexWordList(entries: string[]): any {
 
     return ret;
 }
-
-function populateLengthBuckets(entries: string[]) {
-    Globals.lengthBuckets = new Map<number, string[]>();
-    for (let length = 2; length <= 15; length++) {
-        Globals.lengthBuckets.set(length, []);
-    }
-
-    entries.forEach(word => {
-        Globals.lengthBuckets!.get(word.length)!.push(word);
-    });
-}
-

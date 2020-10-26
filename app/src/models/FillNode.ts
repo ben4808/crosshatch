@@ -14,4 +14,5 @@ export interface FillNode {
     processStopsUpdated: boolean;
     isChainNode: boolean;
     backtracks: number;
+    isStartOfSection: boolean;
 }

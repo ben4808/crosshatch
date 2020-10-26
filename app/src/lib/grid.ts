@@ -21,8 +21,8 @@ export function populateWords(grid: GridState) {
             currentWord.start = [row, col]; 
         }
 
-        if (grid.selectedSquare && dir === oldDir && compareTuples([row, col], grid.selectedSquare)) {
-            grid.selectedWord = currentWord;
+        if (Globals.selectedSquare && dir === oldDir && compareTuples([row, col], Globals.selectedSquare)) {
+            Globals.selectedWord = currentWord;
         }
 
         currentWord.end = [row, col];
@@ -34,9 +34,9 @@ export function populateWords(grid: GridState) {
         }
     }
 
-    let oldDir = grid.selectedWord?.direction || WordDirection.Across;
+    let oldDir = Globals.selectedWord?.direction || WordDirection.Across;
     grid.words = [];
-    grid.selectedWord = undefined;
+    Globals.selectedWord = undefined;
 
     numberizeGrid(grid);
 
@@ -103,6 +103,8 @@ export function generateConstraintInfoForSquares(grid: GridState, squares: GridS
 
     let wl: IndexedWordList = Globals.wordList!;
     let entryOptions = indexedWordListLookupSquares(wl, grid, squares);
+
+    if (entryOptions.length > 200) return 1;
 
     let total = 0;
     let foundZeroSquare = false;

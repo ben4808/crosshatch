@@ -58,7 +58,7 @@ export function fillWord(): GridState {
             node = prevNode;
             newGrid = node.endGrid;
 
-            if (node.backtracks > 2) {
+            if (node.backtracks >= (node.isStartOfSection ? 20 : 3)) {
                 chainNodeMaxBacktracks(node);
                 node.isChainNode = false;
                 fillQueue.pop();
@@ -236,6 +236,7 @@ function makeNewNode(grid: GridState, depth: number, isChainNode: boolean): Fill
         processStopsUpdated: false,
         isChainNode: isChainNode,
         backtracks: 0,
+        isStartOfSection: false,
     } as FillNode;
 }
 
@@ -401,21 +402,24 @@ function isGridFilled(grid: GridState): boolean {
     return !grid.squares.find(row => row.find(sq => !isBlackSquare(sq) && !sq.fillContent));
 }
 
-function getMostConstrainedWord(prevNode: FillNode): GridWord | undefined {
-    let grid = prevNode.endGrid;
+function getMostConstrainedWord(node: FillNode): GridWord | undefined {
+    let grid = node.startGrid;
 
-    if (isGridEmpty(grid)) {
+    if (Globals.isFirstFillCall && isGridEmpty(grid)) {
         return getLongestWord(grid);
     }
 
-    let crosses = getUnfilledCrosses(grid, prevNode.fillWord);
+    let crosses = node.parent ? getUnfilledCrosses(grid, node.parent.fillWord) : [];
     let words = crosses.length > 0 ? crosses : grid.words;
+
+    if (crosses.length === 0 && node.parent && node.isChainNode)
+        node.isStartOfSection = true;
     
     let mostConstrainedKey = -1;
     let mostConstrainedScore = 1e8;
     for (let i = 0; i < words.length; i++) {
         let squares = getSquaresForWord(grid, words[i]);
-        if (isWordEmpty(squares) || isWordFull(squares)) continue;
+        if ((crosses.length > 0 && isWordEmpty(squares)) || isWordFull(squares)) continue;
 
         var constraintScore = getWordConstraintScore(squares) / squares.length;
         if (constraintScore === 0) return undefined;
