@@ -32,6 +32,38 @@ export function loadPeterBrodaList() {
     });
 }
 
+export function load5sMainList() {
+    loadWordList("Peter Broda", "http://localhost/classifier/5s_main.txt", parse5sMainList).then((wordList) => {
+        Globals.wordList = wordList;
+        console.log("Word List loaded");
+    });
+}
+
+function parse5sMainList(lines: string[]): string[] {
+    let map = new Map<string, QualityClass>();
+    let words = [] as string[];
+
+    lines.forEach(line => {
+        let tokens = line.trim().split(";");
+        if (tokens.length > 2) return;
+
+        let score = +tokens[1];
+        let qualityClass = score >= 55 ? QualityClass.Lively :
+                           score >= 50 ? QualityClass.Normal :
+                           score >= 40 ? QualityClass.Crosswordese : QualityClass.Iffy;
+        let word = tokens[0];
+        if (qualityClass !== QualityClass.Iffy && qualityClass !== QualityClass.Crosswordese // && qualityClass !== QualityClass.Iffy && qualityClass !== QualityClass.Normal
+                && word.length >= 2 && word.length <= 15 && word.match(/^[A-Z]+$/)) {
+                    map.set(tokens[0], qualityClass);
+                    words.push(tokens[0]);
+                }
+    });
+
+    Globals.qualityClasses = map;
+
+    return words;
+}
+
 function parsePeterBrodaWordlist(lines: string[]): string[] {
     let map = new Map<string, QualityClass>();
     let words = [] as string[];

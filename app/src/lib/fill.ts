@@ -356,10 +356,6 @@ function populateAndScoreEntryCandidates(node: FillNode) {
                     newVal = candidate.word[sqToReplace.row - wordSquares[0].row];
                 }
                 sqToReplace.fillContent = newVal;
-                sqToReplace.constraintInfo = {
-                    sumTotal: 1,
-                    viableLetters: new Map<string, number>([[sqToReplace.fillContent, 1]]),
-                };
     
                 if (sqToReplace.constraintInfo && !sqToReplace.constraintInfo.viableLetters.has(newVal)) {
                     foundBadCross = true;
