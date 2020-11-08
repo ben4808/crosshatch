@@ -6,7 +6,7 @@ import { RightPanelProps } from './RightPanelProps';
 function RightPanel(props: RightPanelProps) {
     return (
         <div id="RightPanel">
-            <Grid height={5} width={5}></Grid>
+            <Grid height={15} width={15}></Grid>
         </div>
     );
 }

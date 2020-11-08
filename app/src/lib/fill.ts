@@ -408,7 +408,15 @@ function getMostConstrainedWord(node: FillNode): GridWord | undefined {
         return getLongestWord(grid);
     }
 
-    let crosses = node.parent ? getUnfilledCrosses(grid, node.parent.fillWord) : [];
+    let crosses: GridWord[];
+    let gridEmpty = false;
+    if (node.parent) {
+        crosses = getUnfilledCrosses(grid, node.parent.fillWord);
+    } 
+    else {
+        crosses = [];
+        gridEmpty = isGridEmpty(grid);
+    }
     let words = crosses.length > 0 ? crosses : grid.words;
 
     if (crosses.length === 0 && node.parent && node.isChainNode)
@@ -418,7 +426,7 @@ function getMostConstrainedWord(node: FillNode): GridWord | undefined {
     let mostConstrainedScore = 1e8;
     for (let i = 0; i < words.length; i++) {
         let squares = getSquaresForWord(grid, words[i]);
-        if ((crosses.length > 0 && isWordEmpty(squares)) || isWordFull(squares)) continue;
+        if ((!gridEmpty && isWordEmpty(squares)) || isWordFull(squares)) continue;
 
         var constraintScore = getWordConstraintScore(squares) / squares.length;
         if (constraintScore === 0) return undefined;

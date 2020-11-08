@@ -33,7 +33,14 @@ export function loadPeterBrodaList() {
 }
 
 export function load5sMainList() {
-    loadWordList("Peter Broda", "http://localhost/classifier/5s_main.txt", parse5sMainList).then((wordList) => {
+    loadWordList("5s Main", "http://localhost/classifier/5s_main.txt", parse5sMainList).then((wordList) => {
+        Globals.wordList = wordList;
+        console.log("Word List loaded");
+    });
+}
+
+export function loadMainPlusBroda() {
+    loadWordList("Main Plus Broda", "http://localhost/classifier/mainPlusBroda.txt", parse5sMainList).then((wordList) => {
         Globals.wordList = wordList;
         console.log("Word List loaded");
     });
@@ -48,11 +55,11 @@ function parse5sMainList(lines: string[]): string[] {
         if (tokens.length > 2) return;
 
         let score = +tokens[1];
-        let qualityClass = score >= 55 ? QualityClass.Lively :
+        let qualityClass = score >= 60 ? QualityClass.Lively :
                            score >= 50 ? QualityClass.Normal :
                            score >= 40 ? QualityClass.Crosswordese : QualityClass.Iffy;
         let word = tokens[0];
-        if (qualityClass !== QualityClass.Iffy && qualityClass !== QualityClass.Crosswordese // && qualityClass !== QualityClass.Iffy && qualityClass !== QualityClass.Normal
+        if (qualityClass !== QualityClass.Iffy //&& qualityClass !== QualityClass.Crosswordese // && qualityClass !== QualityClass.Iffy && qualityClass !== QualityClass.Normal
                 && word.length >= 2 && word.length <= 15 && word.match(/^[A-Z]+$/)) {
                     map.set(tokens[0], qualityClass);
                     words.push(tokens[0]);

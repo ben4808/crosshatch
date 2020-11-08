@@ -285,7 +285,7 @@ function getUncheckedSquareDir(grid: GridState, row: number, col: number): WordD
 
 export function clearFill(grid: GridState) {
     Globals.fillQueue = priorityQueue<FillNode>();
-    Globals.fillStatus = FillStatus.Ready;
+    //Globals.fillStatus = FillStatus.Ready;
     Globals.completedGrids = [];
     Globals.isFirstFillCall = true;
     Globals.currentDepth = 0;
