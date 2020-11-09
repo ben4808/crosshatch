@@ -20,7 +20,6 @@ function Grid(props: GridProps) {
     const [ignored, forceUpdate] = useReducer(x => x + 1, 0);
 
     useEffect(() => {
-        Globals.gridState = createNewGrid(props.height, props.width);
         Globals.fillQueue = priorityQueue<FillNode>();
         Globals.fillStatus = FillStatus.Ready;
         Globals.currentDepth = 0;
@@ -30,7 +29,11 @@ function Grid(props: GridProps) {
         Globals.fillGridHandler = handleFillGrid;
         Globals.pauseFill = pauseFill;
 
-        populateWords(Globals.gridState!);
+        if (!Globals.gridState) {
+            Globals.gridState = createNewGrid(props.height, props.width);
+            populateWords(Globals.gridState!);
+        }
+        
         forceUpdate();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
@@ -225,7 +228,7 @@ function getSquareProps(grid: GridState, row: number, col: number): SquareProps 
     };
 }
 
-function createNewGrid(height: number, width: number): GridState {
+export function createNewGrid(height: number, width: number): GridState {
     let squares: GridSquare[][] = [];
 
     for (let row = 0; row < height; row++) {

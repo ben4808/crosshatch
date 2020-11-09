@@ -1,7 +1,9 @@
+import { GridState } from "./GridState";
+
 export interface Puzzle {
     title: string;
     author: string;
-    date: Date;
-    grid: string;
+    copyright: string;
+    grid?: GridState;
     clues: string[];
 }
