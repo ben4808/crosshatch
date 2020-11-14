@@ -25,4 +25,8 @@ export interface GlobalsObj {
     fillWordHandler?: () => void;
     fillGridHandler?: () => void;
     pauseFill?: () => void;
+    changeView?: () => void;
+    makeNewGrid?: () => void;
+    loadPuz?: () => void;
+    exportPuz?: () => void;
 }
