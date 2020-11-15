@@ -21,11 +21,11 @@ import { loadPhilList, loadPeterBrodaList, load5sMainList, loadMainPlusBroda } f
 //   }
 // });
 
-loadMainPlusBroda();
+//loadMainPlusBroda();
 
 ReactDOM.render(
   <React.StrictMode>
-    <App />
+    <App gridHeight={15} gridWidth={15} activeView="Clues" />
   </React.StrictMode>,
   document.getElementById('root')
 );

@@ -1,30 +1,26 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { FillViewProps } from './FillViewProps';
-import Globals from '../../lib/windowService';
+import { AppContext } from '../../AppContext';
 
 function FillView(props: FillViewProps) {
+    const appContext = useContext(AppContext);
+
     function handleFillWordClick() {
-        if (Globals.fillWordHandler) {
-            Globals.fillWordHandler();
-        }
+        appContext.fillWord();
     }
 
     function handleFillGridClick() {
-        if (Globals.fillGridHandler) {
-            Globals.fillGridHandler();
-        }
+        appContext.fillGrid();
     }
 
     function handlePauseFill() {
-        if (Globals.pauseFill) {
-            Globals.pauseFill();
-        }
+        appContext.pauseFill();
     }
 
     return (
         <div id="FillView" className="fill-container">
             <button className="btn btn-primary" onClick={handleFillWordClick}>Fill Word</button>
-            <br />
+            <br /><br />
             <button className="btn btn-primary" onClick={handleFillGridClick}>Fill Grid</button>
             <button className="btn btn-secondary" onClick={handlePauseFill}>Pause</button>
         </div>

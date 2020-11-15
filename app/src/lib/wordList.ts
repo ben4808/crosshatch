@@ -134,9 +134,9 @@ function indexWordList(entries: string[]): any {
         twoVal: [] as any[],
     };
 
-    Globals.lengthBuckets = new Map<number, string[]>();
+    Globals.starterLengthBuckets = new Map<number, string[]>();
     for (let length = 2; length <= 15; length++) {
-        Globals.lengthBuckets.set(length, []);
+        Globals.starterLengthBuckets.set(length, []);
     }
 
     for (let length = 2; length <= 15; length++) {
@@ -167,7 +167,7 @@ function indexWordList(entries: string[]): any {
 
     entries.forEach(word => {
         if (Math.random() < 0.01)
-            Globals.lengthBuckets!.get(word.length)!.push(word);
+            Globals.starterLengthBuckets!.get(word.length)!.push(word);
 
         // 1-position entries
         for (let pos1 = 1; pos1 <= word.length; pos1++) {

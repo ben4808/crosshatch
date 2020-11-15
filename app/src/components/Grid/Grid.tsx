@@ -1,4 +1,4 @@
-import React, { useEffect, useReducer } from 'react';
+import React, { useContext, useState } from 'react';
 import { SquareType } from '../../models/SquareType';
 import { SquareProps } from '../Square/SquareProps';
 import { GridProps } from './GridProps';
@@ -7,36 +7,18 @@ import Square from '../Square/Square';
 import { GridState } from '../../models/GridState';
 import { WordDirection } from '../../models/WordDirection';
 import { GridSquare } from '../../models/GridSquare';
-import { fillWord } from '../../lib/fill';
 import Globals from '../../lib/windowService';
-import { compareTuples, doesWordContainSquare, getWordAtSquare, otherDir } from '../../lib/util';
+import { compareTuples, doesWordContainSquare, getWordAtSquare, newWord, otherDir } from '../../lib/util';
 import { FillStatus } from '../../models/FillStatus';
-import { priorityQueue } from '../../lib/priorityQueue';
-import { FillNode } from '../../models/FillNode';
 import { populateWords, updateGridConstraintInfo } from '../../lib/grid';
+import { AppContext } from '../../AppContext';
+import { GridWord } from '../../models/GridWord';
 
 function Grid(props: GridProps) {
-    // eslint-disable-next-line
-    const [ignored, forceUpdate] = useReducer(x => x + 1, 0);
+    const appContext = useContext(AppContext);
 
-    useEffect(() => {
-        Globals.fillQueue = priorityQueue<FillNode>();
-        Globals.fillStatus = FillStatus.Ready;
-        Globals.currentDepth = 0;
-        Globals.completedGrids = [];
-        Globals.isFirstFillCall = true;
-        Globals.fillWordHandler = handleFillWord;
-        Globals.fillGridHandler = handleFillGrid;
-        Globals.pauseFill = pauseFill;
-
-        if (!Globals.gridState) {
-            Globals.gridState = createNewGrid(props.height, props.width);
-            populateWords(Globals.gridState!);
-        }
-        
-        forceUpdate();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    const [selectedSquare, setSelectedSquare] = useState([-1, -1] as [number, number]);
+    const [selectedWord, setSelectedWord] = useState(newWord());
 
     function handleClick(event: any) {
         let target = event.target;
@@ -49,30 +31,28 @@ function Grid(props: GridProps) {
         let col = +target.attributes["data-col"].value;
         let grid = Globals.gridState!;
         
-        let newDirection = Globals.selectedWord?.direction || WordDirection.Across;
+        let newDirection = selectedWord.direction;
 
         let uncheckedSquareDir = getUncheckedSquareDir(grid, row, col);
         if (uncheckedSquareDir !== undefined) {
             newDirection = uncheckedSquareDir;
-            Globals.selectedSquare = [row, col];
+            setSelectedSquare([row, col]);
         }
-        else if (compareTuples([row, col], Globals.selectedSquare || [-1, -1])) {
+        else if (compareTuples([row, col], selectedSquare)) {
             newDirection = otherDir(newDirection);
         }
         else {
-            Globals.selectedSquare = [row, col];
+            setSelectedSquare([row, col]);
         }
 
-        Globals.selectedWord = getWordAtSquare(grid, row, col, newDirection);
-
-        forceUpdate();
+        setSelectedWord(getWordAtSquare(grid, row, col, newDirection) || newWord());
     }
     
     function handleKeyDown(event: any) {
         let grid = Globals.gridState!;
-        if (!Globals.selectedSquare) return;
-        let row = Globals.selectedSquare[0];
-        let col = Globals.selectedSquare[1];
+        if (!isSquareSelected()) return;
+        let row = selectedSquare[0];
+        let col = selectedSquare[1];
 
         let key: string = event.key.toUpperCase();
         let letterChanged = true;
@@ -110,28 +90,24 @@ function Grid(props: GridProps) {
 
         if (blackSquareChanged) {
             clearFillWhenMaybeRunning(() => {
-                clearFill(grid);
+                //clearFill(grid);
                 populateWords(grid);
                 updateGridConstraintInfo(grid);
-                forceUpdate();
             });
         }
         else if (letterChanged)  {
             clearFillWhenMaybeRunning(() => {
-                clearFill(grid);
+                //clearFill(grid);
                 updateGridConstraintInfo(grid);
-                forceUpdate();
             });
         }
-            
-        forceUpdate();
     }
 
     function clearFillWhenMaybeRunning(func: () => void) {
-        if (Globals.fillStatus === FillStatus.Running) {
-            Globals.fillStatus = FillStatus.Paused;
+        if (appContext.fillStatus === FillStatus.Running) {
+            appContext.setFillStatus(FillStatus.Paused);
             setTimeout(() => {
-                Globals.fillStatus = FillStatus.Ready;
+                appContext.setFillStatus(FillStatus.Ready);
                 func();
             }, 100);
         }
@@ -140,29 +116,53 @@ function Grid(props: GridProps) {
         }
     }
 
-    function handleFillWord() {
-        Globals.gridState = fillWord();
-        forceUpdate();
-    }
-
-    function handleFillGrid() {
-        Globals.fillStatus = FillStatus.Ready;
-        doFillGrid();
-    }
-
-    function doFillGrid() {
-        if ([FillStatus.Success, FillStatus.Failed, FillStatus.Paused].find(x => x === Globals.fillStatus) !== undefined) {
+    function advanceCursor() {
+        if (!isSquareSelected()) return;
+    
+        let selSq = selectedSquare;
+        let grid = Globals.gridState!;
+        let dir = selectedWord.direction;
+        if ((dir === WordDirection.Across && selSq[1] === grid.width-1) || (dir === WordDirection.Down && selSq[0] === grid.height-1))
             return;
-        }
-
-        Globals.gridState = fillWord();
-        forceUpdate();
-        setTimeout(() => doFillGrid(), 10);
+        setSelectedSquare(dir === WordDirection.Across ? [selSq[0], selSq[1] + 1] : [selSq[0] + 1, selSq[1]]);
+    }
+    
+    function backupCursor() {
+        if (!isSquareSelected()) return;
+    
+        let selSq = selectedSquare;
+        let dir = selectedWord.direction;
+        if ((dir === WordDirection.Across && selSq[1] === 0) || (dir === WordDirection.Down && selSq[0] === 0))
+            return;
+        setSelectedSquare(dir === WordDirection.Across ? [selSq[0], selSq[1] - 1] : [selSq[0] - 1, selSq[1]]);
     }
 
-    function pauseFill() {
-        Globals.fillStatus = FillStatus.Paused;
-        forceUpdate();
+    function isSquareSelected(): boolean {
+        return selectedSquare[0] > -1;
+    }
+    
+    function isWordSelected(): boolean {
+        return !!selectedWord.number;
+    }
+
+    function getSquareProps(grid: GridState, row: number, col: number, 
+        selectedSquare: [number, number], selectedWord: GridWord): SquareProps {
+        let square = grid.squares[row][col];
+    
+        return {
+            key: `${row},${col}`,
+            row: row,
+            col: col,
+            number: square.number,
+            type: square.type,
+            userContent: square.userContent,
+            chosenFillContent: square.chosenFillContent,
+            fillContent: square.fillContent,
+            qualityClass: square.qualityClass,
+            isSelected: isSquareSelected() && compareTuples(selectedSquare, [row, col]),
+            isInSelectedWord: isWordSelected() && doesWordContainSquare(selectedWord, row, col),
+            constraintSum: square.constraintInfo ? square.constraintInfo.sumTotal : 1000,
+        };
     }
 
     let gridState: GridState = Globals.gridState || createNewGrid(props.height, props.width);
@@ -170,7 +170,7 @@ function Grid(props: GridProps) {
     let squareElements = [];
     for (let row = 0; row < props.height; row++) {
         for (let col = 0; col < props.width; col++) {
-            let sqProps = getSquareProps(gridState, row, col);
+            let sqProps = getSquareProps(gridState, row, col, selectedSquare, selectedWord);
             squareElements.push(getSquareElement(sqProps));
         }
     }
@@ -182,7 +182,7 @@ function Grid(props: GridProps) {
     return (
         <>
             <div id="grid-status">
-                {getFillStatusString(Globals.fillStatus!)}
+                {getFillStatusString(appContext.fillStatus)}
             </div>
             <div id="Grid" className="grid-container" style={columnTemplateStyle} 
                 onClick={handleClick} onKeyDown={handleKeyDown} tabIndex={0}>
@@ -207,25 +207,6 @@ function getFillStatusString(status: FillStatus): string {
         case FillStatus.Paused: return "Fill Paused";
         default: return "";
     }
-}
-
-function getSquareProps(grid: GridState, row: number, col: number): SquareProps {
-    let square = grid.squares[row][col];
-
-    return {
-        key: `${row},${col}`,
-        row: row,
-        col: col,
-        number: square.number,
-        type: square.type,
-        userContent: square.userContent,
-        chosenFillContent: square.chosenFillContent,
-        fillContent: square.fillContent,
-        qualityClass: square.qualityClass,
-        isSelected: !!Globals.selectedSquare && compareTuples(Globals.selectedSquare, [row, col]),
-        isInSelectedWord: !!Globals.selectedWord && doesWordContainSquare(Globals.selectedWord, row, col),
-        constraintSum: square.constraintInfo ? square.constraintInfo.sumTotal : 1000,
-    };
 }
 
 export function createNewGrid(height: number, width: number): GridState {
@@ -253,27 +234,6 @@ export function createNewGrid(height: number, width: number): GridState {
     return grid;
 }
 
-function advanceCursor() {
-    if (!Globals.selectedSquare) return;
-
-    let selSq = Globals.selectedSquare;
-    let grid = Globals.gridState!;
-    let dir = Globals.selectedWord?.direction || WordDirection.Across;
-    if ((dir === WordDirection.Across && selSq[1] === grid.width-1) || (dir === WordDirection.Down && selSq[0] === grid.height-1))
-        return;
-    Globals.selectedSquare = dir === WordDirection.Across ? [selSq[0], selSq[1] + 1] : [selSq[0] + 1, selSq[1]];
-}
-
-function backupCursor() {
-    if (!Globals.selectedSquare) return;
-
-    let selSq = Globals.selectedSquare;
-    let dir = Globals.selectedWord?.direction || WordDirection.Across;
-    if ((dir === WordDirection.Across && selSq[1] === 0) || (dir === WordDirection.Down && selSq[0] === 0))
-        return;
-    Globals.selectedSquare = dir === WordDirection.Across ? [selSq[0], selSq[1] - 1] : [selSq[0] - 1, selSq[1]];
-}
-
 function getUncheckedSquareDir(grid: GridState, row: number, col: number): WordDirection | undefined {
     if (grid.squares[row][col].type === SquareType.Black) return undefined;
     if ((col === 0 || grid.squares[row][col-1].type === SquareType.Black) &&
@@ -284,20 +244,4 @@ function getUncheckedSquareDir(grid: GridState, row: number, col: number): WordD
         return WordDirection.Across;
 
     return undefined;
-}
-
-export function clearFill(grid: GridState) {
-    Globals.fillQueue = priorityQueue<FillNode>();
-    Globals.completedGrids = [];
-    Globals.isFirstFillCall = true;
-    Globals.currentDepth = 0;
-
-    grid.squares.forEach(row => {
-        row.forEach(sq => {
-            if (!sq.userContent) {
-                sq.fillContent = undefined;
-                sq.chosenFillContent = undefined;
-            }
-        });
-    });
 }

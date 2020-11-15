@@ -89,7 +89,7 @@ export function indexedWordListLookupSquares(wl: IndexedWordList, grid: GridStat
 }
 
 export function getRandomWordsOfLength(wl: IndexedWordList, length: number): string[] {
-    let bucket = Globals.lengthBuckets!.get(length) || [];
+    let bucket = Globals.starterLengthBuckets!.get(length) || [];
     let map = new Map<string, boolean>();
     let ret = [];
     for (let i = 0; i < 50; i++) {

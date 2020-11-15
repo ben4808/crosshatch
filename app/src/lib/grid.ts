@@ -4,7 +4,7 @@ import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { IndexedWordList } from "../models/IndexedWordList";
 import { WordDirection } from "../models/WordDirection";
-import { compareTuples, getSquaresForWord,
+import { getSquaresForWord,
     isBlackSquare, newWord, forAllGridSquares, indexedWordListLookupSquares, isWordFull, isWordEmpty } from "./util";
 import Globals from './windowService';
 
@@ -21,9 +21,9 @@ export function populateWords(grid: GridState) {
             currentWord.start = [row, col]; 
         }
 
-        if (Globals.selectedSquare && dir === oldDir && compareTuples([row, col], Globals.selectedSquare)) {
-            Globals.selectedWord = currentWord;
-        }
+        // if (Globals.selectedSquare && dir === oldDir && compareTuples([row, col], Globals.selectedSquare)) {
+        //     Globals.selectedWord = currentWord;
+        // }
 
         currentWord.end = [row, col];
 
@@ -34,9 +34,9 @@ export function populateWords(grid: GridState) {
         }
     }
 
-    let oldDir = Globals.selectedWord?.direction || WordDirection.Across;
+    //let oldDir = Globals.selectedWord?.direction || WordDirection.Across;
     grid.words = [];
-    Globals.selectedWord = undefined;
+    //Globals.selectedWord = undefined;
 
     numberizeGrid(grid);
 

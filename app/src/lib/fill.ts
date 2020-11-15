@@ -1,4 +1,4 @@
-import { clearFill } from "../components/Grid/Grid";
+//import { clearFill } from "../components/Grid/Grid";
 import { EntryCandidate } from "../models/EntryCandidate";
 import { FillNode } from "../models/FillNode";
 import { FillStatus } from "../models/FillStatus";
@@ -16,11 +16,11 @@ export function fillWord(): GridState {
     let fillQueue = Globals.fillQueue!;
     let grid = Globals.gridState!;
 
-    if ([FillStatus.Ready, FillStatus.Running, FillStatus.Paused].find(x => x === Globals.fillStatus) === undefined) {
-        return grid;
-    }
+    // if ([FillStatus.Ready, FillStatus.Running, FillStatus.Paused].find(x => x === Globals.fillStatus) === undefined) {
+    //     return grid;
+    // }
 
-    Globals.fillStatus = FillStatus.Running;
+    //Globals.fillStatus = FillStatus.Running;
 
     if (Globals.isFirstFillCall) {
         let firstNode = makeNewNode(grid, 0, false);
@@ -33,8 +33,8 @@ export function fillWord(): GridState {
     }
 
     if (!Globals.isFirstFillCall && fillQueue.isEmpty()) {
-        Globals.fillStatus = FillStatus.Failed;
-        clearFill(grid);
+        //Globals.fillStatus = FillStatus.Failed;
+        //clearFill(grid);
         return grid;
     }
     Globals.isFirstFillCall = false;
@@ -118,7 +118,7 @@ export function fillWord(): GridState {
     if (isGridFilled(newGrid)) {
         insertIntoCompletedGrids(node);
         chainNewNodeNotViable(prevNode);
-        Globals.fillStatus = FillStatus.Success;
+        //Globals.fillStatus = FillStatus.Success;
         return newGrid;
     }
 
@@ -404,7 +404,7 @@ function isGridFilled(grid: GridState): boolean {
 function getMostConstrainedWord(node: FillNode): GridWord | undefined {
     let grid = node.startGrid;
 
-    if (Globals.isFirstFillCall && isGridEmpty(grid)) {
+    if (isGridEmpty(grid)) {//Globals.isFirstFillCall && isGridEmpty(grid)) {
         return getLongestWord(grid);
     }
 
@@ -531,15 +531,15 @@ function insertEntryIntoGrid(grid: GridState, word: GridWord, newEntry: EntryCan
 }
 
 function insertIntoCompletedGrids(node: FillNode) {
-    let completedGrids = Globals.completedGrids!;
-    let score = calculateNodePriority(node);
-    let grid = node.endGrid;
-    completedGrids.push([score, grid]);
-    let i = completedGrids.length - 1;
-    let item = completedGrids[i];
-    while (i > 0 && completedGrids[i][0] > completedGrids[i-1][0]) {
-        completedGrids[i] = completedGrids[i-1];
-        i -= 1;
-    }
-    completedGrids[i] = item;
+    // let completedGrids = Globals.completedGrids!;
+    // let score = calculateNodePriority(node);
+    // let grid = node.endGrid;
+    // completedGrids.push([score, grid]);
+    // let i = completedGrids.length - 1;
+    // let item = completedGrids[i];
+    // while (i > 0 && completedGrids[i][0] > completedGrids[i-1][0]) {
+    //     completedGrids[i] = completedGrids[i-1];
+    //     i -= 1;
+    // }
+    // completedGrids[i] = item;
 }
