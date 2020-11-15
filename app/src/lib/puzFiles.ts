@@ -10,7 +10,7 @@ export async function loadPuzFile(url: string): Promise<Puzzle | undefined> {
     return processPuzData(data);
 }
 
-async function processPuzData(data: Blob): Promise<Puzzle | undefined> {
+export async function processPuzData(data: Blob): Promise<Puzzle | undefined> {
     let magicString = await data.slice(0x02, 0x0e).text();
     if (magicString !== "ACROSS&DOWN\0") return undefined;
 

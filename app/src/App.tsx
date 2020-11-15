@@ -113,7 +113,6 @@ function App(props: AppProps) {
   return (
     <AppContext.Provider value={appState}>
       <a id="download-puzzle-link" href="http://www.example.com" style={{display: "none"}}>stuff</a>
-      <input id="open-puzzle-input" style={{display: "none"}} type="file" accept=".puz" />
 
       <Menu gridHeight={gridHeight} gridWidth={gridWidth} openView={activeView}></Menu>
 

@@ -2,6 +2,8 @@ import React, { useContext } from 'react';
 import "./Menu.scss";
 import { MenuProps } from './MenuProps';
 import { AppContext } from '../../AppContext';
+import { Puzzle } from '../../models/Puzzle';
+import { processPuzData } from '../../lib/puzFiles';
 
 function Menu(props: MenuProps) {
     const appContext = useContext(AppContext);
@@ -27,8 +29,22 @@ function Menu(props: MenuProps) {
         event.target.select();
     }
 
+    function onFileUpload(event: any) {
+        let file = event.target.files[0];
+        event.target.value = null;
+
+        let puzzle: Puzzle;
+        processPuzData(file).then(puz => {
+            if (puz) {
+                puzzle = puz;
+            }
+        });
+    }
+
     return (
         <div id="Menu">
+            <input id="open-puzzle-input" hidden type="file" accept=".puz" onChange={onFileUpload} />
+
             <div className="site-title">CrossHatch</div>
 
             <div className="menu-label">View: </div>
