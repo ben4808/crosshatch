@@ -1,5 +1,6 @@
 import React from "react";
 import { FillStatus } from "./models/FillStatus";
+import { Puzzle } from "./models/Puzzle";
 
 export const AppContext = React.createContext({
     triggerUpdate: () => {},
@@ -9,5 +10,6 @@ export const AppContext = React.createContext({
     fillGrid: () => {},
     pauseFill: () => {},
     fillStatus: FillStatus.Ready,
-    setFillStatus: (_: FillStatus) => {}
+    setFillStatus: (_: FillStatus) => {},
+    setPuzzle: (_: Puzzle) => {},
   });

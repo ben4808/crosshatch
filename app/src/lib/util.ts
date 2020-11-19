@@ -6,6 +6,8 @@ import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
 import { queryIndexedWordList } from "./wordList";
 import Globals from './windowService';
+import { Puzzle } from "../models/Puzzle";
+import { createNewGrid } from "./grid";
 
 export function average(arr: number[]): number {
     return arr.reduce((a,b) => a + b, 0) / arr.length;
@@ -56,12 +58,12 @@ export function otherDir(dir: WordDirection): WordDirection {
     return dir === WordDirection.Across ? WordDirection.Down : WordDirection.Across;
 }
 
-export function indexedWordListLookup(wl: IndexedWordList, grid: GridState, word: GridWord): string[] {
+export function indexedWordListLookup(grid: GridState, word: GridWord): string[] {
     let squares = getSquaresForWord(grid, word);
-    return indexedWordListLookupSquares(wl, grid, squares);
+    return indexedWordListLookupSquares(grid, squares);
 }
 
-export function indexedWordListLookupSquares(wl: IndexedWordList, grid: GridState, squares: GridSquare[]): string[] {
+export function indexedWordListLookupSquares(grid: GridState, squares: GridSquare[]): string[] {
     let length = squares.length;
 
     let letters: [number, string][] = [];
@@ -73,14 +75,14 @@ export function indexedWordListLookupSquares(wl: IndexedWordList, grid: GridStat
     }
 
     if (letters.length === 1) {
-        return queryIndexedWordList(wl, length, letters[0][0], letters[0][1]);
+        return queryIndexedWordList(length, letters[0][0], letters[0][1]);
     }
 
     let possibles: string[] = [];
     for(let i = 0; i < letters.length; i+=2) {
         let entries = i === letters.length-1 ?
-            queryIndexedWordList(wl, length, letters[i-1][0], letters[i-1][1], letters[i][0], letters[i][1]) :
-            queryIndexedWordList(wl, length, letters[i][0], letters[i][1], letters[i+1][0], letters[i+1][1]);
+            queryIndexedWordList(length, letters[i-1][0], letters[i-1][1], letters[i][0], letters[i][1]) :
+            queryIndexedWordList(length, letters[i][0], letters[i][1], letters[i+1][0], letters[i+1][1]);
         if (entries.length === 0) return [];
         possibles = i === 0 ? entries : intersectEntryLists(possibles, entries);
     }
@@ -88,7 +90,7 @@ export function indexedWordListLookupSquares(wl: IndexedWordList, grid: GridStat
     return possibles;
 }
 
-export function getRandomWordsOfLength(wl: IndexedWordList, length: number): string[] {
+export function getRandomWordsOfLength(length: number): string[] {
     let bucket = Globals.starterLengthBuckets!.get(length) || [];
     let map = new Map<string, boolean>();
     let ret = [];
@@ -179,4 +181,22 @@ export function getWordLength(word: GridWord): number {
         return word.end[1] - word.start[1];
     else
         return word.end[0] - word.start[0];
+}
+
+export function newPuzzle(gridWidth: number, gridHeight: number): Puzzle {
+    return {
+        title: "Untitled",
+        author: "",
+        copyright: "",
+        grid: createNewGrid(gridWidth, gridHeight),
+        clues: new Map<string, string>(),
+    } as Puzzle;
+}
+
+export function clueKey(word: GridWord): string {
+    return `${word.start[0]},${word.start[1]},${word.direction === WordDirection.Across ? "A" : "D"}`;
+}
+
+export function getGrid(): GridState {
+    return Globals.puzzle!.grid!;
 }

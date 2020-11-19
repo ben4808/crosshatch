@@ -1,17 +1,16 @@
 import { PriorityQueue } from "../lib/priorityQueue";
 import { FillNode } from "./FillNode";
-import { FillStatus } from "./FillStatus";
-import { GridState } from "./GridState";
-import { GridWord } from "./GridWord";
 import { IndexedWordList } from "./IndexedWordList";
+import { Puzzle } from "./Puzzle";
 import { QualityClass } from "./QualityClass";
 
 export interface GlobalsObj {
-    gridState?: GridState;
+    puzzle?: Puzzle;
     //selectedSquare?: [number, number];
     //selectedWord?: GridWord;
 
     fillQueue?: PriorityQueue<FillNode>;
+    isVisualFillRunning: boolean;
     //currentDepth?: number;
     //fillStatus?: FillStatus;
     //completedGrids?: [number, GridState][];

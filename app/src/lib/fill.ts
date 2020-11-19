@@ -1,7 +1,5 @@
-//import { clearFill } from "../components/Grid/Grid";
 import { EntryCandidate } from "../models/EntryCandidate";
 import { FillNode } from "../models/FillNode";
-import { FillStatus } from "../models/FillStatus";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
@@ -9,12 +7,12 @@ import { QualityClass } from "../models/QualityClass";
 import { WordDirection } from "../models/WordDirection";
 import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
 import { deepClone, compareTuples, getWordAtSquare, getSquaresForWord, indexedWordListLookup, isBlackSquare, 
-    otherDir, sum, getWordLength, getRandomWordsOfLength, isWordEmpty, isWordFull, doesWordContainSquare } from "./util";
+    otherDir, sum, getWordLength, getRandomWordsOfLength, isWordEmpty, isWordFull, doesWordContainSquare, getGrid } from "./util";
 import Globals from './windowService';
 
 export function fillWord(): GridState {
     let fillQueue = Globals.fillQueue!;
-    let grid = Globals.gridState!;
+    let grid = getGrid();
 
     // if ([FillStatus.Ready, FillStatus.Running, FillStatus.Paused].find(x => x === Globals.fillStatus) === undefined) {
     //     return grid;
@@ -291,14 +289,13 @@ function populateEntryCandidates(node: FillNode): boolean {
         entryMap.set(candidate.word, candidate);
     });
 
-    let wl = Globals.wordList!;
     let grid = node.startGrid;
     let wordSquares = getSquaresForWord(grid, node.fillWord!);
     let fillOptions: string[];
     if (!isWordEmpty(wordSquares))
-        fillOptions = indexedWordListLookup(wl, grid, node.fillWord!).filter(x => !entryMap.has(x) && !grid.usedWords.has(x));
+        fillOptions = indexedWordListLookup(grid, node.fillWord!).filter(x => !entryMap.has(x) && !grid.usedWords.has(x));
     else
-        fillOptions = getRandomWordsOfLength(wl, wordSquares.length).filter(x => !grid.usedWords.has(x));
+        fillOptions = getRandomWordsOfLength(wordSquares.length).filter(x => !grid.usedWords.has(x));
     if (fillOptions.length === 0) return viableEntries.length > 0;
 
     fillOptions.sort((a, b) => Globals.qualityClasses!.get(b)! - Globals.qualityClasses!.get(a)!);

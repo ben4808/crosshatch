@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useState } from 'react';
 import { SquareType } from '../../models/SquareType';
 import { SquareProps } from '../Square/SquareProps';
 import { GridProps } from './GridProps';
@@ -6,17 +6,12 @@ import "./Grid.scss";
 import Square from '../Square/Square';
 import { GridState } from '../../models/GridState';
 import { WordDirection } from '../../models/WordDirection';
-import { GridSquare } from '../../models/GridSquare';
 import Globals from '../../lib/windowService';
-import { compareTuples, doesWordContainSquare, getWordAtSquare, newWord, otherDir } from '../../lib/util';
-import { FillStatus } from '../../models/FillStatus';
-import { populateWords, updateGridConstraintInfo } from '../../lib/grid';
-import { AppContext } from '../../AppContext';
+import { compareTuples, doesWordContainSquare, getGrid, getWordAtSquare, newWord, otherDir } from '../../lib/util';
+import { clearFill, createNewGrid, getUncheckedSquareDir, populateWords, updateGridConstraintInfo } from '../../lib/grid';
 import { GridWord } from '../../models/GridWord';
 
 function Grid(props: GridProps) {
-    const appContext = useContext(AppContext);
-
     const [selectedSquare, setSelectedSquare] = useState([-1, -1] as [number, number]);
     const [selectedWord, setSelectedWord] = useState(newWord());
 
@@ -29,7 +24,7 @@ function Grid(props: GridProps) {
 
         let row = +target.attributes["data-row"].value;
         let col = +target.attributes["data-col"].value;
-        let grid = Globals.gridState!;
+        let grid = getGrid();
         
         let newDirection = selectedWord.direction;
 
@@ -49,8 +44,10 @@ function Grid(props: GridProps) {
     }
     
     function handleKeyDown(event: any) {
-        let grid = Globals.gridState!;
+        if (Globals.isVisualFillRunning) return;
         if (!isSquareSelected()) return;
+
+        let grid = getGrid();
         let row = selectedSquare[0];
         let col = selectedSquare[1];
 
@@ -89,30 +86,13 @@ function Grid(props: GridProps) {
         }
 
         if (blackSquareChanged) {
-            clearFillWhenMaybeRunning(() => {
-                //clearFill(grid);
-                populateWords(grid);
-                updateGridConstraintInfo(grid);
-            });
+            clearFill(grid);
+            populateWords(grid);
+            updateGridConstraintInfo(grid);
         }
         else if (letterChanged)  {
-            clearFillWhenMaybeRunning(() => {
-                //clearFill(grid);
-                updateGridConstraintInfo(grid);
-            });
-        }
-    }
-
-    function clearFillWhenMaybeRunning(func: () => void) {
-        if (appContext.fillStatus === FillStatus.Running) {
-            appContext.setFillStatus(FillStatus.Paused);
-            setTimeout(() => {
-                appContext.setFillStatus(FillStatus.Ready);
-                func();
-            }, 100);
-        }
-        else {
-            func();
+            clearFill(grid);
+            updateGridConstraintInfo(grid);
         }
     }
 
@@ -120,7 +100,7 @@ function Grid(props: GridProps) {
         if (!isSquareSelected()) return;
     
         let selSq = selectedSquare;
-        let grid = Globals.gridState!;
+        let grid = getGrid();
         let dir = selectedWord.direction;
         if ((dir === WordDirection.Across && selSq[1] === grid.width-1) || (dir === WordDirection.Down && selSq[0] === grid.height-1))
             return;
@@ -165,7 +145,11 @@ function Grid(props: GridProps) {
         };
     }
 
-    let gridState: GridState = Globals.gridState || createNewGrid(props.height, props.width);
+    function getSquareElement(props: SquareProps) {
+        return <Square {...props}></Square>
+    }
+
+    let gridState: GridState = Globals.puzzle!.grid!;
 
     let squareElements = [];
     for (let row = 0; row < props.height; row++) {
@@ -180,68 +164,11 @@ function Grid(props: GridProps) {
     } as React.CSSProperties;
 
     return (
-        <>
-            <div id="grid-status">
-                {getFillStatusString(appContext.fillStatus)}
-            </div>
-            <div id="Grid" className="grid-container" style={columnTemplateStyle} 
-                onClick={handleClick} onKeyDown={handleKeyDown} tabIndex={0}>
-                {squareElements}
-            </div>
-        </>
+        <div id="Grid" className="grid-container" style={columnTemplateStyle} 
+            onClick={handleClick} onKeyDown={handleKeyDown} tabIndex={0}>
+            {squareElements}
+        </div>
     );
 }
 
 export default Grid;
-
-function getSquareElement(props: SquareProps) {
-    return <Square {...props}></Square>
-}
-
-function getFillStatusString(status: FillStatus): string {
-    switch(status) {
-        case FillStatus.Ready: return "Ready to Fill";
-        case FillStatus.Running: return "Fill Running...";
-        case FillStatus.Success: return "Fill Succeeded";
-        case FillStatus.Failed: return "Fill Failed";
-        case FillStatus.Paused: return "Fill Paused";
-        default: return "";
-    }
-}
-
-export function createNewGrid(height: number, width: number): GridState {
-    let squares: GridSquare[][] = [];
-
-    for (let row = 0; row < height; row++) {
-        squares.push([]);
-        for (let col = 0; col < width; col++) {
-            squares[row][col] = {
-                row: row,
-                col: col,
-                type: SquareType.White,
-            };
-        }
-    }
-
-    let grid: GridState = {
-        height: height,
-        width: width,
-        squares: squares,
-        words: [],
-        usedWords: new Map<string, boolean>(),
-    };
-
-    return grid;
-}
-
-function getUncheckedSquareDir(grid: GridState, row: number, col: number): WordDirection | undefined {
-    if (grid.squares[row][col].type === SquareType.Black) return undefined;
-    if ((col === 0 || grid.squares[row][col-1].type === SquareType.Black) &&
-        (col === grid.width-1 || grid.squares[row][col+1].type === SquareType.Black))
-        return WordDirection.Down;
-    if ((row === 0 || grid.squares[row-1][col].type === SquareType.Black) &&
-        (row === grid.height-1 || grid.squares[row+1][col].type === SquareType.Black))
-        return WordDirection.Across;
-
-    return undefined;
-}

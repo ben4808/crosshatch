@@ -115,8 +115,8 @@ export async function loadWordList(source: string, url: string, parserFunc: (lin
     return ret;
 }
 
-export function queryIndexedWordList(wl: IndexedWordList, 
-    length: number, pos1: number, val1: string, pos2?: number, val2?: string): string[] {
+export function queryIndexedWordList(length: number, pos1: number, val1: string, pos2?: number, val2?: string): string[] {
+    let wl = Globals.wordList!;
     let words: string[];
     if (pos2 && val2) {
         words = wl.buckets.twoVal[length-2][pos1-1][pos2-(pos1+1)][val1.charCodeAt(0)-65][val2.charCodeAt(0)-65];

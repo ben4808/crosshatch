@@ -1,7 +1,7 @@
-import { createNewGrid } from "../components/Grid/Grid";
 import { Puzzle } from "../models/Puzzle";
 import { SquareType } from "../models/SquareType";
-import { populateWords } from "./grid";
+import { createNewGrid } from "./grid";
+import { newPuzzle } from "./util";
 
 export async function loadPuzFile(url: string): Promise<Puzzle | undefined> {
     let response = await fetch(url);
@@ -14,17 +14,9 @@ export async function processPuzData(data: Blob): Promise<Puzzle | undefined> {
     let magicString = await data.slice(0x02, 0x0e).text();
     if (magicString !== "ACROSS&DOWN\0") return undefined;
 
-    //let overallChecksum = new Uint16Array(await data.slice(0x00, 0x02).arrayBuffer())[0];
-    //let cibchecksum = new Uint16Array(await data.slice(0x0e, 0x10).arrayBuffer())[0];
-    //let maskedLowChecksum = new Uint32Array(await data.slice(0x10, 0x14).arrayBuffer())[0];
-    //let maskedHighChecksum = new Uint32Array(await data.slice(0x14, 0x18).arrayBuffer())[0];
-
-    //let version = await data.slice(0x18, 0x1c).text();
-    //let scrambledChecksum = new Uint16Array(await data.slice(0x1e, 0x20).arrayBuffer())[0];;
     let width = new Uint8Array(await data.slice(0x2c, 0x2d).arrayBuffer())[0];
     let height = new Uint8Array(await data.slice(0x2d, 0x2e).arrayBuffer())[0];
     let clueCount = new Uint16Array(await data.slice(0x2e, 0x30).arrayBuffer())[0];;
-    //let scrambledTag = new Uint16Array(await data.slice(0x32, 0x34).arrayBuffer())[0];;
 
     let grid = createNewGrid(height, width);
     let restOfFile = await blobToText(await data.slice(0x34, data.size));
@@ -40,15 +32,12 @@ export async function processPuzData(data: Blob): Promise<Puzzle | undefined> {
             if (curChar.match(/[A-Z]/)) {
                 square.userContent = square.chosenFillContent = square.fillContent = curChar;
             }
-
             i++;
         }
     }
     i *= 2; // skip over user progress
 
-    populateWords(grid);
-
-    let puzzle = newPuzzle();
+    let puzzle = newPuzzle(width, height);
     puzzle.grid = grid;
     [puzzle.title, i] = getNextString(restOfFile, i);
     [puzzle.author, i] = getNextString(restOfFile, i);
@@ -76,16 +65,6 @@ function getNextString(data: string, i: number): [string, number] {
     }
     i++;
     return [ret, i];
-}
-
-function newPuzzle(): Puzzle {
-    return {
-        title: "",
-        author: "",
-        copyright: "",
-        grid: undefined,
-        clues: [],
-    } as Puzzle;
 }
 
 export function generatePuzFile(puzzle: Puzzle): Blob {

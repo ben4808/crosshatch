@@ -2,7 +2,6 @@ import React, { useContext } from 'react';
 import "./Menu.scss";
 import { MenuProps } from './MenuProps';
 import { AppContext } from '../../AppContext';
-import { Puzzle } from '../../models/Puzzle';
 import { processPuzData } from '../../lib/puzFiles';
 
 function Menu(props: MenuProps) {
@@ -33,10 +32,9 @@ function Menu(props: MenuProps) {
         let file = event.target.files[0];
         event.target.value = null;
 
-        let puzzle: Puzzle;
-        processPuzData(file).then(puz => {
-            if (puz) {
-                puzzle = puz;
+        processPuzData(file).then(puzzle => {
+            if (puzzle) {
+                appContext.setPuzzle(puzzle);
             }
         });
     }

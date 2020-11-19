@@ -1,15 +1,16 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState } from 'react';
 import { AppContext } from './AppContext';
 import { AppProps } from './AppProps';
 import CluesView from './components/CluesView/CluesView';
 import FillView from './components/FillView/FillView';
-import Grid, { createNewGrid } from './components/Grid/Grid';
+import Grid from './components/Grid/Grid';
 import Menu from './components/Menu/Menu';
 import { FillStatus } from './models/FillStatus';
-import { GridState } from './models/GridState';
 import Globals from './lib/windowService';
 import "./App.scss";
-import { CluesViewProp, CluesViewProps } from './components/CluesView/CluesViewProps';
+import { CluesViewProp } from './components/CluesView/CluesViewProps';
+import { Puzzle } from './models/Puzzle';
+import { newPuzzle } from './lib/util';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
@@ -26,6 +27,7 @@ function App(props: AppProps) {
     pauseFill: pauseFill,
     fillStatus: fillStatus,
     setFillStatus: setFillStatus,
+    setPuzzle: setPuzzle,
   });
 
   // useEffect(() => {
@@ -79,23 +81,12 @@ function App(props: AppProps) {
       // forceUpdate();
   }
 
-  function clearFill(grid: GridState) {
-    // Globals.fillQueue = priorityQueue<FillNode>();
-    // Globals.completedGrids = [];
-    // Globals.isFirstFillCall = true;
-    // Globals.currentDepth = 0;
-
-    // grid.squares.forEach(row => {
-    //     row.forEach(sq => {
-    //         if (!sq.userContent) {
-    //             sq.fillContent = undefined;
-    //             sq.chosenFillContent = undefined;
-    //         }
-    //     });
-    // });
+  function setPuzzle(puzzle: Puzzle) {
+    Globals.puzzle = puzzle;
+    triggerUpdate();
   }
 
-  Globals.gridState = createNewGrid(gridHeight, gridWidth);
+  setPuzzle(newPuzzle(gridWidth, gridHeight));
 
   let testAcrossClues: CluesViewProp[] = [
     {
