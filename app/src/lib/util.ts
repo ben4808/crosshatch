@@ -1,7 +1,6 @@
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
-import { IndexedWordList } from "../models/IndexedWordList";
 import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
 import { queryIndexedWordList } from "./wordList";

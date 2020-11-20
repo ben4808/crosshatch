@@ -1,9 +1,8 @@
 import React, { useContext } from 'react';
-import { FillViewProps } from './FillViewProps';
 import { AppContext } from '../../AppContext';
-import { FillStatus } from '../../models/FillStatus';
+//import { FillStatus } from '../../models/FillStatus';
 
-function FillView(props: FillViewProps) {
+function FillView(props: any) {
     const appContext = useContext(AppContext);
 
     function handleFillWordClick() {
@@ -30,13 +29,13 @@ function FillView(props: FillViewProps) {
 
 export default FillView;
 
-function getFillStatusString(status: FillStatus): string {
-    switch(status) {
-        case FillStatus.Ready: return "Ready to Fill";
-        case FillStatus.Running: return "Fill Running...";
-        case FillStatus.Success: return "Fill Succeeded";
-        case FillStatus.Failed: return "Fill Failed";
-        case FillStatus.Paused: return "Fill Paused";
-        default: return "";
-    }
-}
+// function getFillStatusString(status: FillStatus): string {
+//     switch(status) {
+//         case FillStatus.Ready: return "Ready to Fill";
+//         case FillStatus.Running: return "Fill Running...";
+//         case FillStatus.Success: return "Fill Succeeded";
+//         case FillStatus.Failed: return "Fill Failed";
+//         case FillStatus.Paused: return "Fill Paused";
+//         default: return "";
+//     }
+// }

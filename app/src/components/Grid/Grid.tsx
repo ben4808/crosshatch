@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { SquareType } from '../../models/SquareType';
 import { SquareProps } from '../Square/SquareProps';
 import { GridProps } from './GridProps';
@@ -8,12 +8,17 @@ import { GridState } from '../../models/GridState';
 import { WordDirection } from '../../models/WordDirection';
 import Globals from '../../lib/windowService';
 import { compareTuples, doesWordContainSquare, getGrid, getWordAtSquare, newWord, otherDir } from '../../lib/util';
-import { clearFill, createNewGrid, getUncheckedSquareDir, populateWords, updateGridConstraintInfo } from '../../lib/grid';
+import { clearFill, getUncheckedSquareDir, populateWords, updateGridConstraintInfo } from '../../lib/grid';
 import { GridWord } from '../../models/GridWord';
 
 function Grid(props: GridProps) {
     const [selectedSquare, setSelectedSquare] = useState([-1, -1] as [number, number]);
     const [selectedWord, setSelectedWord] = useState(newWord());
+    const [updateSemaphore, setUpdateSemaphore] = useState(0);
+
+    useEffect(() => {
+        forceUpdate();
+    }, [props.updateSemaphore]);
 
     function handleClick(event: any) {
         let target = event.target;
@@ -88,12 +93,14 @@ function Grid(props: GridProps) {
         if (blackSquareChanged) {
             clearFill(grid);
             populateWords(grid);
-            updateGridConstraintInfo(grid);
+            //updateGridConstraintInfo(grid);
         }
         else if (letterChanged)  {
             clearFill(grid);
-            updateGridConstraintInfo(grid);
+            //updateGridConstraintInfo(grid);
         }
+
+        forceUpdate();
     }
 
     function advanceCursor() {
@@ -115,6 +122,10 @@ function Grid(props: GridProps) {
         if ((dir === WordDirection.Across && selSq[1] === 0) || (dir === WordDirection.Down && selSq[0] === 0))
             return;
         setSelectedSquare(dir === WordDirection.Across ? [selSq[0], selSq[1] - 1] : [selSq[0] - 1, selSq[1]]);
+    }
+
+    function forceUpdate() {
+        setUpdateSemaphore(updateSemaphore + 1);
     }
 
     function isSquareSelected(): boolean {
@@ -164,7 +175,7 @@ function Grid(props: GridProps) {
     } as React.CSSProperties;
 
     return (
-        <div id="Grid" className="grid-container" style={columnTemplateStyle} 
+        <div id="Grid" className="grid-container" style={columnTemplateStyle} key={props.updateSemaphore}
             onClick={handleClick} onKeyDown={handleKeyDown} tabIndex={0}>
             {squareElements}
         </div>

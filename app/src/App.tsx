@@ -8,16 +8,15 @@ import Menu from './components/Menu/Menu';
 import { FillStatus } from './models/FillStatus';
 import Globals from './lib/windowService';
 import "./App.scss";
-import { CluesViewProp } from './components/CluesView/CluesViewProps';
 import { Puzzle } from './models/Puzzle';
-import { newPuzzle } from './lib/util';
+import { deepClone, newPuzzle } from './lib/util';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
   const [gridWidth, setGridWidth] = useState(props.gridWidth);
   const [gridHeight, setGridHeight] = useState(props.gridHeight);
-  const [updateSemaphore, setUpdateSemaphore] = useState(0);
   const [fillStatus, setFillStatus] = useState(FillStatus.Ready);
+  const [updateSemaphore, setUpdateSemaphore] = useState(0);
 
   const [appState, setAppState] = useState({ 
     triggerUpdate: triggerUpdate,
@@ -86,20 +85,9 @@ function App(props: AppProps) {
     triggerUpdate();
   }
 
-  setPuzzle(newPuzzle(gridWidth, gridHeight));
-
-  let testAcrossClues: CluesViewProp[] = [
-    {
-      number: 1,
-      clue: "Test clue",
-      entry: "TEST",
-    },
-    {
-      number: 50,
-      clue: "Greatest guy ever and definitely worthy of a somewhat lengthy clue.",
-      entry: "E---M--K",
-    },
-  ];
+  if (!Globals.puzzle) {
+    setPuzzle(newPuzzle(gridWidth, gridHeight));
+  }
 
   return (
     <AppContext.Provider value={appState}>
@@ -109,15 +97,15 @@ function App(props: AppProps) {
 
       <div className="main-panel">
         {activeView === "Clues" && 
-            <CluesView acrossClues={testAcrossClues} downClues={testAcrossClues}></CluesView>
+            <CluesView updateSemaphore={updateSemaphore}></CluesView>
         }
         {activeView === "Fill" && 
-            <FillView></FillView>
+            <FillView updateSemaphore={updateSemaphore}></FillView>
         }
       </div>
       
       <div className="main-panel">
-        <Grid height={gridHeight} width={gridWidth}></Grid>
+        <Grid updateSemaphore={updateSemaphore} height={gridHeight} width={gridWidth}></Grid>
       </div>
     </AppContext.Provider>
   );

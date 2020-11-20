@@ -1,7 +1,9 @@
+import { GridWord } from "../models/GridWord";
 import { Puzzle } from "../models/Puzzle";
 import { SquareType } from "../models/SquareType";
-import { createNewGrid } from "./grid";
-import { newPuzzle } from "./util";
+import { WordDirection } from "../models/WordDirection";
+import { populateWords } from "./grid";
+import { clueKey, deepClone, newPuzzle } from "./util";
 
 export async function loadPuzFile(url: string): Promise<Puzzle | undefined> {
     let response = await fetch(url);
@@ -16,38 +18,39 @@ export async function processPuzData(data: Blob): Promise<Puzzle | undefined> {
 
     let width = new Uint8Array(await data.slice(0x2c, 0x2d).arrayBuffer())[0];
     let height = new Uint8Array(await data.slice(0x2d, 0x2e).arrayBuffer())[0];
-    let clueCount = new Uint16Array(await data.slice(0x2e, 0x30).arrayBuffer())[0];;
 
-    let grid = createNewGrid(height, width);
+    let puzzle = newPuzzle(width, height);
     let restOfFile = await blobToText(await data.slice(0x34, data.size));
 
     let i = 0;
     for (let row = 0; row < height; row++) {
         for (let col = 0; col < width; col++) {
             let curChar = restOfFile[i];
-            let square = grid.squares[row][col];
+            let square = puzzle.grid.squares[row][col];
             if (curChar === ".")
                 square.type = SquareType.Black;
             if (curChar === "-") {} // no data entered
             if (curChar.match(/[A-Z]/)) {
-                square.userContent = square.chosenFillContent = square.fillContent = curChar;
+                //square.userContent = square.chosenFillContent = square.fillContent = curChar;
             }
             i++;
         }
     }
     i *= 2; // skip over user progress
 
-    let puzzle = newPuzzle(width, height);
-    puzzle.grid = grid;
+    populateWords(puzzle.grid);
+    
     [puzzle.title, i] = getNextString(restOfFile, i);
     [puzzle.author, i] = getNextString(restOfFile, i);
     [puzzle.copyright, i] = getNextString(restOfFile, i);
 
-    for (let clueI = 0; clueI < clueCount; clueI++) {
+    let sortedWords = sortWordsForPuz(puzzle.grid.words);
+    sortedWords.forEach(word => {
         let clue = "";
         [clue, i] = getNextString(restOfFile, i);
-        puzzle.clues.push(clue);
-    }
+        let key = clueKey(word);
+        puzzle.clues.set(key, clue);
+    });
 
     return puzzle;
 }
@@ -109,6 +112,13 @@ export function generatePuzFile(puzzle: Puzzle): Blob {
     insertString(bytes, puzzle.copyright + "\0", pos);
     pos += puzzle.copyright.length + 1;
 
+    let orderedClues = [] as string[];
+    let sortedWords = sortWordsForPuz(puzzle.grid.words);
+    sortedWords.forEach(word => {
+        let key = clueKey(word);
+        orderedClues.push(puzzle.clues.get(key)!);
+    });
+
     let cluesPos = pos;
     puzzle.clues.forEach(clue => {
         insertString(bytes, clue + "\0", pos);
@@ -127,8 +137,8 @@ export function generatePuzFile(puzzle: Puzzle): Blob {
     if (puzzle.author.length > 0) cksum = cksum_region(bytes, authorPos, puzzle.author.length+1, cksum);
     if (puzzle.copyright.length > 0) cksum = cksum_region(bytes, copyrightPos, puzzle.copyright.length+1, cksum);
     let cluePos = cluesPos;
-    for(let i = 0; i < puzzle.clues.length; i++) {
-        let clue = puzzle.clues[i];
+    for(let i = 0; i < orderedClues.length; i++) {
+        let clue = orderedClues[i];
         cksum = cksum_region(bytes, cluePos, clue.length, cksum);
         cluePos += clue.length+1;
     }
@@ -142,8 +152,8 @@ export function generatePuzFile(puzzle: Puzzle): Blob {
     if (puzzle.author.length > 0) c_part= cksum_region(bytes, authorPos, puzzle.author.length+1, c_part);
     if (puzzle.copyright.length > 0) c_part = cksum_region(bytes, copyrightPos, puzzle.copyright.length+1, c_part);
     cluePos = cluesPos;
-    for(let i = 0; i < puzzle.clues.length; i++) {
-        let clue = puzzle.clues[i];
+    for(let i = 0; i < orderedClues.length; i++) {
+        let clue = orderedClues[i];
         c_part = cksum_region(bytes, cluePos, clue.length, c_part);
         cluePos += clue.length+1;
     }
@@ -184,4 +194,13 @@ function insertNumber(bytes: Uint8Array, n: number, pos: number, size: number) {
       n = n >> 8;
       pos++;
     }
+}
+
+function sortWordsForPuz(words: GridWord[]): GridWord[] {
+    let sortedWords = (deepClone(words) as GridWord[]).sort((a, b) => {
+        if (a.start[0] !== b.start[0]) return a.start[0] - b.start[0];
+        if (a.start[1] !== b.start[1]) return a.start[1] - b.start[1];
+        return a.direction === WordDirection.Across ? -1 : 1;
+    });
+    return sortedWords;
 }

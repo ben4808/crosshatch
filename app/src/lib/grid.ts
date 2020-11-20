@@ -45,6 +45,11 @@ export function populateWords(grid: GridState) {
             processSquare(grid, row, col, WordDirection.Down);
         }
     }
+
+    grid.words.sort((a, b) => {
+        if (a.direction !== b.direction) return a.direction === WordDirection.Across ? -1 : 1;
+        return a.number! - b.number!;
+    });
 }
 
 export function updateGridConstraintInfo(grid: GridState) {
@@ -174,7 +179,7 @@ export function getConstraintSquareSum(squares: GridSquare[]): number {
 export function getLettersFromSquares(squares: GridSquare[]): string {
     let ret = "";
     squares.forEach(sq => {
-        ret += sq.fillContent || ".";
+        ret += sq.fillContent || "-";
     });
     return ret;
 }

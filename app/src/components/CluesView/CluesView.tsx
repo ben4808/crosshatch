@@ -1,29 +1,52 @@
-import { CluesViewProp, CluesViewProps } from "./CluesViewProps";
-import React, { useState } from 'react';
+import { CluesViewProp } from "./CluesViewProp";
+import React, { useEffect, useState } from 'react';
 import "./CluesView.scss";
-import { deepClone } from "../../lib/util";
+import { clueKey, deepClone, getSquaresForWord } from "../../lib/util";
+import Globals from '../../lib/windowService';
+import { getLettersFromSquares } from "../../lib/grid";
+import { WordDirection } from "../../models/WordDirection";
 
-function CluesView(props: CluesViewProps) {
-    const [toggleStates, setToggleStates] = useState(initToggleStates());
+function CluesView(props: any) {
+    const [clueProps, setClueProps] = useState(initClueProps());
 
-    function initToggleStates(): Map<string, boolean> {
-        let map = new Map<string, boolean>();
-        props.acrossClues?.forEach(clue => {
-            map.set(getClueKey(clue, true), false);
+    useEffect(() => {
+        setClueProps(initClueProps());
+    }, [props.updateSemaphore]);
+
+    function initClueProps(): CluesViewProp[] {
+        let props = [] as CluesViewProp[];
+        if (!Globals.puzzle) return props;
+
+        let grid = Globals.puzzle.grid;
+        let words = Globals.puzzle.grid.words;
+        let clues = Globals.puzzle.clues;
+        words.forEach(word => {
+            let key = clueKey(word);
+            let squares = getSquaresForWord(grid, word);
+            let prop = {
+                number: word.number!,
+                key: key,
+                direction: word.direction,
+                clue: clues.get(key)! || "",
+                entry: getLettersFromSquares(squares),
+                isOpenForEditing: false,
+            } as CluesViewProp;
+            props.push(prop);
         });
-        props.downClues?.forEach(clue => {
-            map.set(getClueKey(clue, false), false);
-        });
-        return map;
+        return props;
     }
 
     function toggleEditor(event: any) {
         let target = event.target;
+        while (!["clue"].includes(target.classList[0])) {
+            target = target.parentElement;
+            if (!target) return;
+        }
         let targetKey = target.attributes["data-key"].value;
         
-        var newToggleStates = deepClone(toggleStates);
-        newToggleStates.set(targetKey, !newToggleStates.get(targetKey));
-        setToggleStates(newToggleStates);
+        let newClueProps = deepClone(clueProps) as CluesViewProp[];
+        newClueProps.find(p => p.key === targetKey)!.isOpenForEditing = true;
+        setClueProps(newClueProps);
     }
 
     function handleKeyDown(event: any) {
@@ -32,16 +55,12 @@ function CluesView(props: CluesViewProps) {
         let keyPressed: string = event.key.toUpperCase();
 
         if (keyPressed === "ENTER") {
-            let number = +targetKey.slice(0, targetKey.length-1);
-            let dir = targetKey[targetKey.length-1];
-            let clue = dir === "A" ? 
-                props.acrossClues!.find(c => c.number === number) : 
-                props.downClues!.find(c => c.number === number);
-
-            clue!.clue = target.value;
-            var newToggleStates = deepClone(toggleStates);
-            newToggleStates.set(targetKey, false);
-            setToggleStates(newToggleStates);
+            let newClueProps = deepClone(clueProps) as CluesViewProp[];
+            let targetProp = newClueProps.find(p => p.key === targetKey)!;
+            targetProp.clue = target.value;
+            targetProp.isOpenForEditing = false;
+            Globals.puzzle!.clues.set(targetKey, target.value);
+            setClueProps(newClueProps);
         }
     }
 
@@ -55,14 +74,14 @@ function CluesView(props: CluesViewProps) {
                 <div className="clues-header">{isAcross ? "ACROSS" : "DOWN"}</div>
                 <div className="clues-clues">
                     {clueList.map(clue => (
-                        <div key={getClueKey(clue, isAcross)}>
-                            <div className="clue" data-key={getClueKey(clue, isAcross)} onClick={toggleEditor}>
+                        <div key={clue.key}>
+                            <div className="clue" data-key={clue.key} onClick={toggleEditor}>
                                 <div className="clue-number">{clue.number}</div>
-                                <div className="clue-entry">{clue.entry}</div>
+                                <div className="clue-entry" style={{display:"none"}}>{clue.entry}</div>
                                 {clue.clue.length > 0 ? clue.clue : "(blank clue)"}
                             </div>
-                            {toggleStates.get(getClueKey(clue, isAcross)) &&
-                                <textarea className="clue-editor" defaultValue={clue.clue} data-key={getClueKey(clue, isAcross)}
+                            {clue.isOpenForEditing &&
+                                <textarea className="clue-editor" defaultValue={clue.clue} data-key={clue.key}
                                     onKeyDown={handleKeyDown} onFocus={handleFocus}>
                                 </textarea>
                             }
@@ -73,14 +92,10 @@ function CluesView(props: CluesViewProps) {
         );
     }
 
-    function getClueKey(clue: CluesViewProp, isAcross: boolean): string {
-        return clue.number.toString() + (isAcross ? "A" : "D");
-    }
-
     return (
         <div className="clues-view">
-            {renderCluesContainer(true, props.acrossClues!)}
-            {renderCluesContainer(false, props.downClues!)}
+            {renderCluesContainer(true, clueProps.filter(p => p.direction === WordDirection.Across))}
+            {renderCluesContainer(false, clueProps.filter(p => p.direction === WordDirection.Down))}
         </div>
     )
 }
