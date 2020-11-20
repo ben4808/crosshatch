@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppContext } from './AppContext';
 import { AppProps } from './AppProps';
 import CluesView from './components/CluesView/CluesView';
@@ -9,7 +9,7 @@ import { FillStatus } from './models/FillStatus';
 import Globals from './lib/windowService';
 import "./App.scss";
 import { Puzzle } from './models/Puzzle';
-import { deepClone, newPuzzle } from './lib/util';
+import { newPuzzle } from './lib/util';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
@@ -17,17 +17,23 @@ function App(props: AppProps) {
   const [gridHeight, setGridHeight] = useState(props.gridHeight);
   const [fillStatus, setFillStatus] = useState(FillStatus.Ready);
   const [updateSemaphore, setUpdateSemaphore] = useState(0);
+  const [appState, setAppState] = useState(getAppContext());
 
-  const [appState, setAppState] = useState({ 
-    triggerUpdate: triggerUpdate,
-    switchActiveView: switchActiveView,
-    fillWord: fillWord,
-    fillGrid: fillGrid,
-    pauseFill: pauseFill,
-    fillStatus: fillStatus,
-    setFillStatus: setFillStatus,
-    setPuzzle: setPuzzle,
-  });
+  function getAppContext() {
+    return { 
+      triggerUpdate: triggerUpdate,
+      switchActiveView: switchActiveView,
+      fillWord: fillWord,
+      fillGrid: fillGrid,
+      pauseFill: pauseFill,
+      setFillStatus: setFillStatus,
+      setPuzzle: setPuzzle,
+    }
+  }
+
+  useEffect(() => {
+    setAppState(getAppContext());
+  }, [updateSemaphore]);
 
   // useEffect(() => {
   //   Globals.fillQueue = priorityQueue<FillNode>();
@@ -48,7 +54,8 @@ function App(props: AppProps) {
   // }, []);
 
   function triggerUpdate() {
-    setUpdateSemaphore(updateSemaphore + 1);
+    let newSemaphore = updateSemaphore + 1;
+    setUpdateSemaphore(newSemaphore);
   }
 
   function switchActiveView(newView: string) {
@@ -105,7 +112,7 @@ function App(props: AppProps) {
       </div>
       
       <div className="main-panel">
-        <Grid updateSemaphore={updateSemaphore} height={gridHeight} width={gridWidth}></Grid>
+        <Grid updateSemaphore={updateSemaphore}></Grid>
       </div>
     </AppContext.Provider>
   );

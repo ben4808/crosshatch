@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { SquareType } from '../../models/SquareType';
 import { SquareProps } from '../Square/SquareProps';
-import { GridProps } from './GridProps';
 import "./Grid.scss";
 import Square from '../Square/Square';
 import { GridState } from '../../models/GridState';
@@ -11,7 +10,7 @@ import { compareTuples, doesWordContainSquare, getGrid, getWordAtSquare, newWord
 import { clearFill, getUncheckedSquareDir, populateWords, updateGridConstraintInfo } from '../../lib/grid';
 import { GridWord } from '../../models/GridWord';
 
-function Grid(props: GridProps) {
+function Grid(props: any) {
     const [selectedSquare, setSelectedSquare] = useState([-1, -1] as [number, number]);
     const [selectedWord, setSelectedWord] = useState(newWord());
     const [updateSemaphore, setUpdateSemaphore] = useState(0);
@@ -160,22 +159,22 @@ function Grid(props: GridProps) {
         return <Square {...props}></Square>
     }
 
-    let gridState: GridState = Globals.puzzle!.grid!;
+    let grid: GridState = Globals.puzzle!.grid!;
 
     let squareElements = [];
-    for (let row = 0; row < props.height; row++) {
-        for (let col = 0; col < props.width; col++) {
-            let sqProps = getSquareProps(gridState, row, col, selectedSquare, selectedWord);
+    for (let row = 0; row < grid.height; row++) {
+        for (let col = 0; col < grid.width; col++) {
+            let sqProps = getSquareProps(grid, row, col, selectedSquare, selectedWord);
             squareElements.push(getSquareElement(sqProps));
         }
     }
 
     let columnTemplateStyle = {
-        gridTemplateColumns: `repeat(${props.width}, 1fr)`
+        gridTemplateColumns: `repeat(${grid.width}, 1fr)`
     } as React.CSSProperties;
 
     return (
-        <div id="Grid" className="grid-container" style={columnTemplateStyle} key={props.updateSemaphore}
+        <div id="Grid" className="grid-container" style={columnTemplateStyle}
             onClick={handleClick} onKeyDown={handleKeyDown} tabIndex={0}>
             {squareElements}
         </div>
