@@ -152,6 +152,7 @@ function Grid(props: any) {
             isSelected: isSquareSelected() && compareTuples(selectedSquare, [row, col]),
             isInSelectedWord: isWordSelected() && doesWordContainSquare(selectedWord, row, col),
             constraintSum: square.constraintInfo ? square.constraintInfo.sumTotal : 1000,
+            isCircled: square.isCircled,
         };
     }
 

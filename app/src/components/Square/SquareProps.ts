@@ -14,4 +14,5 @@ export interface SquareProps {
     isSelected: boolean;
     isInSelectedWord: boolean;
     constraintSum: number;
+    isCircled: boolean;
 }

@@ -31,7 +31,7 @@ export async function processPuzData(data: Blob): Promise<Puzzle | undefined> {
                 square.type = SquareType.Black;
             if (curChar === "-") {} // no data entered
             if (curChar.match(/[A-Z]/)) {
-                //square.userContent = square.chosenFillContent = square.fillContent = curChar;
+                square.userContent = square.chosenFillContent = square.fillContent = curChar;
             }
             i++;
         }
@@ -52,6 +52,65 @@ export async function processPuzData(data: Blob): Promise<Puzzle | undefined> {
         puzzle.clues.set(key, clue);
     });
 
+    [puzzle.notes, i] = getNextString(restOfFile, i);
+
+    let rebusSquareMappings = new Map<string, number>();
+    let rebusValues = new Map<number, string>();
+
+    while (i < restOfFile.length) {
+        let sectionType = restOfFile.slice(i, i+4);
+        i += 4;
+        let dlI = 0x34 + i;
+        let dataLength = new Uint16Array(await data.slice(dlI, dlI+2).arrayBuffer())[0];
+        i += 2;
+        i += 2; // skip checksum
+
+        if (sectionType === "GRBS") { // rebus grid
+            let secI = 0x34 + i;
+            for (let row = 0; row < height; row++) {
+                for (let col = 0; col < width; col++) {
+                    let n = new Uint8Array(await data.slice(secI, secI + 1).arrayBuffer())[0];
+                    secI++;
+                    if (n > 0) {
+                        rebusSquareMappings.set(`${row},${col}`, n-1);
+                    }
+                }
+            }
+        }
+        if (sectionType === "RTBL") { // rebus values
+            let valuesStr = restOfFile.slice(i, i + dataLength);
+            let valueStrs = valuesStr.split(";");
+            valueStrs.forEach(str => {
+                let tokens = str.split(":");
+                let n = +tokens[0].trim();
+                let val = tokens[1];
+                if (n > 0) rebusValues.set(n, val);
+            });
+        }
+        if (sectionType === "GEXT") { // extra flags
+            let secI = 0x34 + i;
+            for (let row = 0; row < height; row++) {
+                for (let col = 0; col < width; col++) {
+                    let n = new Uint8Array(await data.slice(secI, secI + 1).arrayBuffer())[0];
+                    secI++;
+                    if (n & 0x80) {
+                        puzzle.grid.squares[row][col].isCircled = true;
+                    }
+                }
+            }
+        }
+
+        i += dataLength + 1;
+    }
+
+    if (rebusSquareMappings.size > 0) {
+        rebusSquareMappings.forEach((v, k) => {
+            let tokens = k.split(",");
+            let square = puzzle.grid.squares[+tokens[0]][+tokens[1]];
+            square.userContent = square.chosenFillContent = square.fillContent = rebusValues.get(v)!;
+        });
+    }
+
     return puzzle;
 }
 
@@ -67,7 +126,7 @@ function getNextString(data: string, i: number): [string, number] {
         i++;
     }
     i++;
-    return [ret, i];
+    return [ret.trim(), i];
 }
 
 export function generatePuzFile(puzzle: Puzzle): Blob {

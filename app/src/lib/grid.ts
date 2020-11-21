@@ -202,6 +202,7 @@ export function createNewGrid(width: number, height: number): GridState {
                 row: row,
                 col: col,
                 type: SquareType.White,
+                isCircled: false,
             };
         }
     }
