@@ -10,4 +10,6 @@ export const AppContext = React.createContext({
     pauseFill: () => {},
     setFillStatus: (_: FillStatus) => {},
     setPuzzle: (_: Puzzle) => {},
+    createNewPuzzle: (w: number, h: number) => {},
+    exportPuz: () => {},
   });

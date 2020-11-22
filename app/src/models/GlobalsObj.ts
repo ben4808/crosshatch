@@ -6,6 +6,7 @@ import { QualityClass } from "./QualityClass";
 
 export interface GlobalsObj {
     puzzle?: Puzzle;
+    selectedWordKey?: string;
     //selectedSquare?: [number, number];
     //selectedWord?: GridWord;
 

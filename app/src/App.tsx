@@ -10,11 +10,12 @@ import Globals from './lib/windowService';
 import "./App.scss";
 import { Puzzle } from './models/Puzzle';
 import { newPuzzle } from './lib/util';
+import { generatePuzFile } from './lib/puzFiles';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
-  const [gridWidth, setGridWidth] = useState(props.gridWidth);
-  const [gridHeight, setGridHeight] = useState(props.gridHeight);
+  const [gridWidth, setGridWidth] = useState(15);
+  const [gridHeight, setGridHeight] = useState(15);
   const [fillStatus, setFillStatus] = useState(FillStatus.Ready);
   const [updateSemaphore, setUpdateSemaphore] = useState(0);
   const [appState, setAppState] = useState(getAppContext());
@@ -28,6 +29,8 @@ function App(props: AppProps) {
       pauseFill: pauseFill,
       setFillStatus: setFillStatus,
       setPuzzle: setPuzzle,
+      createNewPuzzle: createNewPuzzle,
+      exportPuz: exportPuz,
     }
   }
 
@@ -87,13 +90,31 @@ function App(props: AppProps) {
       // forceUpdate();
   }
 
+  function createNewPuzzle(width: number, height: number) {
+    setPuzzle(newPuzzle(width, height));
+    setGridWidth(width);
+    setGridHeight(height);
+  }
+
   function setPuzzle(puzzle: Puzzle) {
     Globals.puzzle = puzzle;
     triggerUpdate();
   }
 
+  function exportPuz() {
+    let puzzle = Globals.puzzle!;
+    let blob = generatePuzFile(puzzle);
+    let filename = puzzle.title+".puz";
+    let file = new File([blob], filename);
+    const url= window.URL.createObjectURL(file);
+    let puzzleLink = document.getElementById("download-puzzle-link");
+    puzzleLink!.setAttribute("href", url);
+    puzzleLink!.setAttribute("download", filename);
+    puzzleLink!.click();
+  }
+
   if (!Globals.puzzle) {
-    setPuzzle(newPuzzle(gridWidth, gridHeight));
+    createNewPuzzle(gridWidth, gridHeight);
   }
 
   return (

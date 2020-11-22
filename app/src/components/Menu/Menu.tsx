@@ -1,4 +1,4 @@
-import React, { useContext } from 'react';
+import React, { createRef, useContext, useRef } from 'react';
 import "./Menu.scss";
 import { MenuProps } from './MenuProps';
 import { AppContext } from '../../AppContext';
@@ -6,6 +6,7 @@ import { processPuzData } from '../../lib/puzFiles';
 
 function Menu(props: MenuProps) {
     const appContext = useContext(AppContext);
+    const sizeRefs = useRef([createRef(), createRef()] as any[]);
 
     function handleViewChange(event: any) {
         let target = event.target;
@@ -14,7 +15,13 @@ function Menu(props: MenuProps) {
         appContext.switchActiveView(newView);
     }
 
-    function handleNewGrid() {
+    function handleNewPuzzle() {
+        if (!window.confirm("Are you sure you want to start a new puzzle?")) return;
+
+        let newWidth = +sizeRefs.current[0].current.value;
+        let newHeight = +sizeRefs.current[1].current.value;
+
+        appContext.createNewPuzzle(newWidth, newHeight);
     }
 
     function handleLoadPuz() {
@@ -22,6 +29,7 @@ function Menu(props: MenuProps) {
     }
 
     function handleExportPuz() {
+        appContext.exportPuz();
     }
 
     function handleFocus(event: any) {
@@ -60,10 +68,12 @@ function Menu(props: MenuProps) {
             </div>
             
             <div className="new-grid-group">
-                <div className="btn btn-primary" onClick={handleNewGrid}>New Grid</div>
-                <input type="text" className="form-control" defaultValue={props.gridWidth} onFocus={handleFocus}></input>
+                <div className="btn btn-primary" onClick={handleNewPuzzle}>New Puzzle</div>
+                <input type="text" className="form-control" defaultValue={props.gridWidth} onFocus={handleFocus}
+                    ref={sizeRefs.current[0]}></input>
                 <div className="menu-gridsize-sep"><div style={{height:"6px", float:"none"}}></div>x</div>
-                <input type="text" className="form-control" defaultValue={props.gridHeight} onFocus={handleFocus}></input>
+                <input type="text" className="form-control" defaultValue={props.gridHeight} onFocus={handleFocus}
+                    ref={sizeRefs.current[1]}></input>
             </div>
             
             <div id="loadPuz" className="btn btn-primary menu-button" onClick={handleLoadPuz}>Load .puz</div>

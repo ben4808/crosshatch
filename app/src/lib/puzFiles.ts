@@ -188,9 +188,9 @@ export function generatePuzFile(puzzle: Puzzle): Blob {
     pos++;
 
     let c_cib = cksum_region(bytes, 0x2c, 8, 0);
-    let cksum = c_cib; 
+    let cksum = c_cib;
     let squaresTotal = grid.width*grid.height;
-    cksum = cksum_region(bytes, solutionPos, squaresTotal, cksum); 
+    cksum = cksum_region(bytes, solutionPos, squaresTotal, cksum);
     cksum = cksum_region(bytes, gridPos, squaresTotal, cksum);
     if (puzzle.title.length > 0) cksum = cksum_region(bytes, titlePos, puzzle.title.length+1, cksum);
     if (puzzle.author.length > 0) cksum = cksum_region(bytes, authorPos, puzzle.author.length+1, cksum);

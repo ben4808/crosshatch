@@ -25,7 +25,7 @@ import { loadPhilList, loadPeterBrodaList, load5sMainList, loadMainPlusBroda } f
 
 ReactDOM.render(
   <React.StrictMode>
-    <App gridHeight={15} gridWidth={15} activeView="Clues" />
+    <App activeView="Clues" />
   </React.StrictMode>,
   document.getElementById('root')
 );

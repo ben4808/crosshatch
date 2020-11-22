@@ -28,6 +28,12 @@
     font-size: 12px;
     padding: 2px 0;
     display: inline-block;
+    cursor: pointer;
+    width: 100%;
+}
+
+.clue:hover {
+    background-color: #ddd;
 }
 
 .clue-number {
@@ -35,7 +41,7 @@
     font-weight: bold;
     margin-right: 5px;
     float: left;
-    padding-top: 1px;
+    padding-top: 0.5px;
 }
 
 .clue-entry {
@@ -49,4 +55,9 @@
     font-size: 12px;
     padding: 0;
     height: 60px;
+}
+
+.clue-selected {
+    background-color: lightblue;
+    border: 1px solid darkblue;
 }
