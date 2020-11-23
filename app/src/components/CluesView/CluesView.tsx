@@ -78,7 +78,7 @@ function CluesView(props: any) {
     function applyClueChange(targetKey: string, newValue: string) {
         let newClueProps = deepClone(clueProps) as CluesViewProp[];
         let targetProp = newClueProps.find(p => p.key === targetKey)!;
-        targetProp.clue = newValue;
+        targetProp.clue = newValue === "(blank clue)" ? "" : newValue;
         targetProp.isOpenForEditing = false;
         Globals.puzzle!.clues.set(targetKey, newValue);
         setClueProps(newClueProps);

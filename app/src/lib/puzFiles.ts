@@ -146,7 +146,7 @@ export function generatePuzFile(puzzle: Puzzle): Blob {
     for (let row = 0; row < grid.height; row++) {
         for (let col = 0; col < grid.width; col++) {
             let sq = grid.squares[row][col];
-            let char = sq.type === SquareType.Black ? "." : sq.userContent ? sq.userContent : "-";
+            let char = sq.type === SquareType.Black ? "." : sq.userContent ? sq.userContent : " ";
             insertString(bytes, char, pos);
             pos++;
         }
@@ -175,16 +175,16 @@ export function generatePuzFile(puzzle: Puzzle): Blob {
     let sortedWords = sortWordsForPuz(puzzle.grid.words);
     sortedWords.forEach(word => {
         let key = clueKey(word);
-        orderedClues.push(puzzle.clues.get(key)!);
+        orderedClues.push(puzzle.clues.get(key)! || "");
     });
 
     let cluesPos = pos;
-    puzzle.clues.forEach(clue => {
-        insertString(bytes, clue + "\0", pos);
-        pos += clue.length + 1;
+    orderedClues.forEach(oc => {
+        insertString(bytes, oc + "\0", pos);
+        pos += oc.length + 1;
     });
 
-    insertString(bytes, "\0", pos);
+    insertString(bytes, puzzle.notes + "\0", pos);
     pos++;
 
     let c_cib = cksum_region(bytes, 0x2c, 8, 0);

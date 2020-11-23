@@ -3,10 +3,12 @@ import { FillNode } from "./FillNode";
 import { IndexedWordList } from "./IndexedWordList";
 import { Puzzle } from "./Puzzle";
 import { QualityClass } from "./QualityClass";
+import { WordDirection } from "./WordDirection";
 
 export interface GlobalsObj {
     puzzle?: Puzzle;
     selectedWordKey?: string;
+    selectedWordDir?: WordDirection;
     //selectedSquare?: [number, number];
     //selectedWord?: GridWord;
 

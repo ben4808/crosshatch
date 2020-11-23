@@ -24,7 +24,9 @@ export function populateWords(grid: GridState) {
 
         let nextSq = dir === WordDirection.Across ? [row, col+1] : [row+1, col];
         if (nextSq[0] === grid.height || nextSq[1] === grid.width || isBlackSquare(grid.squares[nextSq[0]][nextSq[1]])) {
-            grid.words.push(currentWord);
+            if ((dir === WordDirection.Across && currentWord.end[1] - currentWord.start[1] > 0) ||
+                (dir === WordDirection.Down && currentWord.end[0] - currentWord.start[0] > 0))
+                grid.words.push(currentWord);
             currentWord = newWord();
         }
     }

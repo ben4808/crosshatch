@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { SquareType } from '../../models/SquareType';
 import { SquareProps } from '../Square/SquareProps';
 import "./Grid.scss";
@@ -6,17 +6,20 @@ import Square from '../Square/Square';
 import { GridState } from '../../models/GridState';
 import { WordDirection } from '../../models/WordDirection';
 import Globals from '../../lib/windowService';
-import { compareTuples, doesWordContainSquare, getGrid, getWordAtSquare, newWord, otherDir } from '../../lib/util';
+import { clueKey, compareTuples, doesWordContainSquare, getGrid, getWordAtSquare, newWord, otherDir } from '../../lib/util';
 import { clearFill, getUncheckedSquareDir, populateWords, updateGridConstraintInfo } from '../../lib/grid';
 import { GridWord } from '../../models/GridWord';
+import { AppContext } from '../../AppContext';
 
 function Grid(props: any) {
     const [selectedSquare, setSelectedSquare] = useState([-1, -1] as [number, number]);
     const [selectedWord, setSelectedWord] = useState(newWord());
     const [updateSemaphore, setUpdateSemaphore] = useState(0);
+    const appContext = useContext(AppContext);
 
     useEffect(() => {
-        forceUpdate();
+        if (selectedWord.start[0] > -1 && clueKey(selectedWord) !== Globals.selectedWordKey)
+            clearSelection();
     }, [props.updateSemaphore]);
 
     function handleClick(event: any) {
@@ -30,7 +33,7 @@ function Grid(props: any) {
         let col = +target.attributes["data-col"].value;
         let grid = getGrid();
         
-        let newDirection = selectedWord.direction;
+        let newDirection = Globals.selectedWordDir!;
 
         let uncheckedSquareDir = getUncheckedSquareDir(grid, row, col);
         if (uncheckedSquareDir !== undefined) {
@@ -44,7 +47,11 @@ function Grid(props: any) {
             setSelectedSquare([row, col]);
         }
 
-        setSelectedWord(getWordAtSquare(grid, row, col, newDirection) || newWord());
+        let newSelectedWord = getWordAtSquare(grid, row, col, newDirection) || newWord();
+        setSelectedWord(newSelectedWord);
+        Globals.selectedWordKey = clueKey(newSelectedWord);
+        Globals.selectedWordDir = newSelectedWord.direction;
+        appContext.triggerUpdate();
     }
     
     function handleKeyDown(event: any) {
@@ -90,6 +97,7 @@ function Grid(props: any) {
         }
 
         if (blackSquareChanged) {
+            setSelectedWord(newWord());
             clearFill(grid);
             populateWords(grid);
             //updateGridConstraintInfo(grid);
@@ -99,7 +107,7 @@ function Grid(props: any) {
             //updateGridConstraintInfo(grid);
         }
 
-        forceUpdate();
+        appContext.triggerUpdate();
     }
 
     function advanceCursor() {
@@ -107,7 +115,7 @@ function Grid(props: any) {
     
         let selSq = selectedSquare;
         let grid = getGrid();
-        let dir = selectedWord.direction;
+        let dir = Globals.selectedWordDir!;
         if ((dir === WordDirection.Across && selSq[1] === grid.width-1) || (dir === WordDirection.Down && selSq[0] === grid.height-1))
             return;
         setSelectedSquare(dir === WordDirection.Across ? [selSq[0], selSq[1] + 1] : [selSq[0] + 1, selSq[1]]);
@@ -117,7 +125,7 @@ function Grid(props: any) {
         if (!isSquareSelected()) return;
     
         let selSq = selectedSquare;
-        let dir = selectedWord.direction;
+        let dir = Globals.selectedWordDir!;
         if ((dir === WordDirection.Across && selSq[1] === 0) || (dir === WordDirection.Down && selSq[0] === 0))
             return;
         setSelectedSquare(dir === WordDirection.Across ? [selSq[0], selSq[1] - 1] : [selSq[0] - 1, selSq[1]]);
@@ -125,6 +133,11 @@ function Grid(props: any) {
 
     function forceUpdate() {
         setUpdateSemaphore(updateSemaphore + 1);
+    }
+
+    function clearSelection() {
+        setSelectedSquare([-1, -1]);
+        setSelectedWord(newWord());
     }
 
     function isSquareSelected(): boolean {
@@ -160,7 +173,49 @@ function Grid(props: any) {
         return <Square {...props}></Square>
     }
 
-    let grid: GridState = Globals.puzzle!.grid!;
+    function suppressEnterKey(event: any) {
+        let keyPressed: string = event.key.toUpperCase();
+
+        if (keyPressed === "ENTER") {
+            event.preventDefault();
+        }
+    }
+
+    function handleFocus(event: any) {
+        selectElementContents(event.target);
+    }
+
+    // https://stackoverflow.com/questions/6139107/programmatically-select-text-in-a-contenteditable-html-element/6150060#6150060
+    function selectElementContents(el: any) {
+        var range = document.createRange();
+        range.selectNodeContents(el);
+        var sel = window.getSelection();
+        sel!.removeAllRanges();
+        sel!.addRange(range);
+    }
+
+    function setTitle() {
+        let newTitle = document.getElementById("puzzleTitle")!.innerText;
+        Globals.puzzle!.title = newTitle === "(title)" ? "Untitled" : newTitle;
+    }
+
+    function setAuthor() {
+        let newAuthor = document.getElementById("puzzleAuthor")!.innerText;
+        Globals.puzzle!.author = newAuthor === "(author)" ? "" : newAuthor;
+    }
+
+    function setCopyright() {
+        let newCopyright = document.getElementById("puzzleCopyright")!.innerText;
+        Globals.puzzle!.copyright = newCopyright === "© copyright" ? "" : newCopyright;
+    }
+
+    function setNotes() {
+        let newNotes = document.getElementById("puzzleNotes")!.innerText;
+        Globals.puzzle!.notes = newNotes === "(notes)" ? "" : newNotes;
+    }
+
+    let puzzle = Globals.puzzle!;
+    let grid = puzzle.grid!;
 
     let squareElements = [];
     for (let row = 0; row < grid.height; row++) {
@@ -175,10 +230,25 @@ function Grid(props: any) {
     } as React.CSSProperties;
 
     return (
-        <div id="Grid" className="grid-container" style={columnTemplateStyle}
-            onClick={handleClick} onKeyDown={handleKeyDown} tabIndex={0}>
-            {squareElements}
-        </div>
+        <>
+            <div id="puzzleTitle" className="puzzle-title editable" contentEditable={true} suppressContentEditableWarning={true}
+                onKeyDown={suppressEnterKey} onBlur={setTitle} onFocusCapture={handleFocus}>{puzzle.title || "(title)"}</div>
+            <div className="puzzle-author-by">by&nbsp;</div>
+            <div id="puzzleAuthor" className="puzzle-author editable" contentEditable={true} suppressContentEditableWarning={true}
+                onKeyDown={suppressEnterKey} onBlur={setAuthor} onFocusCapture={handleFocus}>{puzzle.author || "(author)"}</div>
+            <div className="puzzle-author-by">&nbsp;</div>
+            <div id="puzzleCopyright" className="puzzle-copyright editable" contentEditable={true} suppressContentEditableWarning={true}
+                onKeyDown={suppressEnterKey} onBlur={setCopyright} onFocusCapture={handleFocus}>{puzzle.copyright || "© copyright"}</div>
+            
+            <div id="Grid" className="grid-container" style={columnTemplateStyle}
+                onClick={handleClick} onKeyDown={handleKeyDown} tabIndex={0}>
+                {squareElements}
+            </div>
+
+            <div className="puzzle-notes-label">Notes:</div>
+            <div id="puzzleNotes" className="puzzle-notes editable" contentEditable={true} suppressContentEditableWarning={true}
+                onKeyDown={suppressEnterKey} onBlur={setNotes} onFocusCapture={handleFocus}>{puzzle.notes || "(notes)"}</div>
+        </>
     );
 }
 

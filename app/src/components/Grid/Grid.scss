@@ -104,3 +104,34 @@
     border-radius: 50%/50%;
     border: 1px solid black;
 }
+
+.puzzle-title {
+    display: inline-block;
+    color: #444;
+    font-size: 20px;
+    margin-bottom: 4px;
+}
+.puzzle-author, .puzzle-author-by {
+    display: inline-block;
+    color: #666;
+    font-size: 18px;
+}
+.puzzle-author-by {
+    margin-left: 10px;
+}
+.puzzle-copyright {
+    margin-top: -8px;
+    margin-bottom: 8px;
+}
+.puzzle-notes-label {
+    font-weight: bold;
+    font-size: 14px;
+    margin: 5px 0 -2px 0;
+}
+.puzzle-notes {
+    font-size: 14px;
+}
+
+.editable:hover {
+    background-color: #ddd;
+}

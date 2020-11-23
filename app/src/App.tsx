@@ -11,6 +11,7 @@ import "./App.scss";
 import { Puzzle } from './models/Puzzle';
 import { newPuzzle } from './lib/util';
 import { generatePuzFile } from './lib/puzFiles';
+import { WordDirection } from './models/WordDirection';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
@@ -98,13 +99,15 @@ function App(props: AppProps) {
 
   function setPuzzle(puzzle: Puzzle) {
     Globals.puzzle = puzzle;
+    Globals.selectedWordKey = "";
+    Globals.selectedWordDir = WordDirection.Across;
     triggerUpdate();
   }
 
   function exportPuz() {
     let puzzle = Globals.puzzle!;
     let blob = generatePuzFile(puzzle);
-    let filename = puzzle.title+".puz";
+    let filename = (puzzle.title || "Untitled")+".puz";
     let file = new File([blob], filename);
     const url= window.URL.createObjectURL(file);
     let puzzleLink = document.getElementById("download-puzzle-link");

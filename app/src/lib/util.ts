@@ -184,11 +184,12 @@ export function getWordLength(word: GridWord): number {
 
 export function newPuzzle(gridWidth: number, gridHeight: number): Puzzle {
     return {
-        title: "Untitled",
+        title: "",
         author: "",
         copyright: "",
         grid: createNewGrid(gridWidth, gridHeight),
         clues: new Map<string, string>(),
+        notes: "",
     } as Puzzle;
 }
 
