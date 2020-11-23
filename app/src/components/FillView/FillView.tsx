@@ -1,27 +1,29 @@
 import React, { useContext, useEffect } from 'react';
-import { AppContext } from '../../AppContext';
 import { SymmetryType } from '../../models/SymmetryType';
 import "./FillView.scss";
 import Globals from '../../lib/windowService';
-//import { FillStatus } from '../../models/FillStatus';
+import { FillStatus } from '../../models/FillStatus';
+import { AppContext } from '../../AppContext';
 
 function FillView(props: any) {
     const appContext = useContext(AppContext);
 
     useEffect(() => {
+        // eslint-disable-next-line
+        let a = appContext.triggerUpdate;
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [props.updateSemaphore]);
 
     function handleFillWordClick() {
-        appContext.fillWord();
+        Globals.fillWord!();
     }
 
     function handleFillGridClick() {
-        appContext.fillGrid();
+        Globals.fillGrid!();
     }
 
     function handlePauseFill() {
-        appContext.pauseFill();
+        Globals.pauseFill!();
     }
 
     function handleSymmetryChange(event: any) {
@@ -45,14 +47,29 @@ function FillView(props: any) {
         return ["None", "Rotate180", "MirrorHorizontal", "MirrorVertical"];
     }
 
+    function getFillStatusString(status: FillStatus): string {
+        switch(status) {
+            case FillStatus.Ready: return "Ready to Fill";
+            case FillStatus.Running: return "Fill Running...";
+            case FillStatus.Success: return "Fill Succeeded";
+            case FillStatus.Failed: return "Fill Failed";
+            case FillStatus.Paused: return "Fill Paused";
+            default: return "";
+        }
+    }
+
     let grid = Globals.puzzle?.grid;
     let selectedSymmetry = SymmetryType[Globals.gridSymmetry!];
     let symmetryOptions = (!grid || grid.width === grid.height) ?
         Object.values(SymmetryType).filter(t => isNaN(Number(t))) :
         getSymmetryTypesForRectGrids();
 
+    let fillStatus = getFillStatusString(Globals.fillStatus!);
+
     return (
         <div id="FillView" className="fill-container">
+            <div className="fill-status">{fillStatus}</div>
+            <br />
             <button className="btn btn-primary" onClick={handleFillWordClick}>Fill Word</button>
             <br /><br />
             <button className="btn btn-primary" onClick={handleFillGridClick}>Fill Grid</button>
@@ -69,14 +86,3 @@ function FillView(props: any) {
 }
 
 export default FillView;
-
-// function getFillStatusString(status: FillStatus): string {
-//     switch(status) {
-//         case FillStatus.Ready: return "Ready to Fill";
-//         case FillStatus.Running: return "Fill Running...";
-//         case FillStatus.Success: return "Fill Succeeded";
-//         case FillStatus.Failed: return "Fill Failed";
-//         case FillStatus.Paused: return "Fill Paused";
-//         default: return "";
-//     }
-// }

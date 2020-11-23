@@ -1,5 +1,6 @@
 import { PriorityQueue } from "../lib/priorityQueue";
 import { FillNode } from "./FillNode";
+import { FillStatus } from "./FillStatus";
 import { IndexedWordList } from "./IndexedWordList";
 import { Puzzle } from "./Puzzle";
 import { QualityClass } from "./QualityClass";
@@ -11,13 +12,10 @@ export interface GlobalsObj {
     selectedWordKey?: string;
     selectedWordDir?: WordDirection;
     gridSymmetry?: SymmetryType;
-    //selectedSquare?: [number, number];
-    //selectedWord?: GridWord;
 
     fillQueue?: PriorityQueue<FillNode>;
     isVisualFillRunning: boolean;
-    //currentDepth?: number;
-    //fillStatus?: FillStatus;
+    fillStatus?: FillStatus;
     //completedGrids?: [number, GridState][];
 
     wordList?: IndexedWordList;
@@ -25,11 +23,7 @@ export interface GlobalsObj {
     starterLengthBuckets?: Map<number, string[]>;
     isFirstFillCall: boolean;
 
-    // fillWordHandler?: () => void;
-    // fillGridHandler?: () => void;
-    // pauseFill?: () => void;
-    // changeView?: () => void;
-    // makeNewGrid?: () => void;
-    // loadPuz?: () => void;
-    // exportPuz?: () => void;
+    fillWord?: () => void;
+    fillGrid?: () => void;
+    pauseFill?: () => void;
 }

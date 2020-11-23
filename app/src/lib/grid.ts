@@ -178,10 +178,11 @@ export function getConstraintSquareSum(squares: GridSquare[]): number {
     return total;
 }
 
-export function getLettersFromSquares(squares: GridSquare[]): string {
+export function getLettersFromSquares(squares: GridSquare[], includeFillContent?: boolean): string {
+    if (includeFillContent === undefined) includeFillContent = true;
     let ret = "";
     squares.forEach(sq => {
-        ret += sq.fillContent || "-";
+        ret += (includeFillContent ? sq.fillContent : sq.userContent) || "-";
     });
     return ret;
 }

@@ -1,11 +1,13 @@
 import { EntryCandidate } from "../models/EntryCandidate";
 import { FillNode } from "../models/FillNode";
+import { FillStatus } from "../models/FillStatus";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { QualityClass } from "../models/QualityClass";
 import { WordDirection } from "../models/WordDirection";
-import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
+import { clearFill, generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
+import { priorityQueue } from "./priorityQueue";
 import { deepClone, compareTuples, getWordAtSquare, getSquaresForWord, indexedWordListLookup, isBlackSquare, 
     otherDir, sum, getWordLength, getRandomWordsOfLength, isWordEmpty, isWordFull, doesWordContainSquare, getGrid } from "./util";
 import Globals from './windowService';
@@ -14,13 +16,15 @@ export function fillWord(): GridState {
     let fillQueue = Globals.fillQueue!;
     let grid = getGrid();
 
-    // if ([FillStatus.Ready, FillStatus.Running, FillStatus.Paused].find(x => x === Globals.fillStatus) === undefined) {
-    //     return grid;
-    // }
+    if ([FillStatus.Ready, FillStatus.Running, FillStatus.Paused].find(x => x === Globals.fillStatus) === undefined) {
+        return grid;
+    }
 
-    //Globals.fillStatus = FillStatus.Running;
+    Globals.fillStatus = FillStatus.Running;
 
     if (Globals.isFirstFillCall) {
+        Globals.fillQueue = priorityQueue<FillNode>();
+        fillQueue = Globals.fillQueue!;
         let firstNode = makeNewNode(grid, 0, false);
 
         firstNode.fillWord = getMostConstrainedWord(firstNode);
@@ -31,8 +35,8 @@ export function fillWord(): GridState {
     }
 
     if (!Globals.isFirstFillCall && fillQueue.isEmpty()) {
-        //Globals.fillStatus = FillStatus.Failed;
-        //clearFill(grid);
+        Globals.fillStatus = FillStatus.Failed;
+        clearFill(grid);
         return grid;
     }
     Globals.isFirstFillCall = false;
@@ -114,9 +118,9 @@ export function fillWord(): GridState {
     insertEntryIntoGrid(newGrid, node.fillWord!, node.chosenEntry);
 
     if (isGridFilled(newGrid)) {
-        insertIntoCompletedGrids(node);
+        //insertIntoCompletedGrids(node);
         chainNewNodeNotViable(prevNode);
-        //Globals.fillStatus = FillStatus.Success;
+        Globals.fillStatus = FillStatus.Success;
         return newGrid;
     }
 
@@ -401,7 +405,7 @@ function isGridFilled(grid: GridState): boolean {
 function getMostConstrainedWord(node: FillNode): GridWord | undefined {
     let grid = node.startGrid;
 
-    if (isGridEmpty(grid)) {//Globals.isFirstFillCall && isGridEmpty(grid)) {
+    if (Globals.isFirstFillCall && isGridEmpty(grid)) {
         return getLongestWord(grid);
     }
 
@@ -527,7 +531,7 @@ function insertEntryIntoGrid(grid: GridState, word: GridWord, newEntry: EntryCan
     grid.usedWords.set(newEntry.word, true);
 }
 
-function insertIntoCompletedGrids(node: FillNode) {
+//function insertIntoCompletedGrids(node: FillNode) {
     // let completedGrids = Globals.completedGrids!;
     // let score = calculateNodePriority(node);
     // let grid = node.endGrid;
@@ -539,4 +543,4 @@ function insertIntoCompletedGrids(node: FillNode) {
     //     i -= 1;
     // }
     // completedGrids[i] = item;
-}
+//}

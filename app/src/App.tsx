@@ -13,12 +13,13 @@ import { newPuzzle } from './lib/util';
 import { generatePuzFile } from './lib/puzFiles';
 import { WordDirection } from './models/WordDirection';
 import { SymmetryType } from './models/SymmetryType';
+import { priorityQueue } from './lib/priorityQueue';
+import { FillNode } from './models/FillNode';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
-  const [gridWidth, setGridWidth] = useState(15);
-  const [gridHeight, setGridHeight] = useState(15);
-  const [fillStatus, setFillStatus] = useState(FillStatus.Ready);
+  const [gridWidth, setGridWidth] = useState(5);
+  const [gridHeight, setGridHeight] = useState(5);
   const [updateSemaphore, setUpdateSemaphore] = useState(0);
   const [appState, setAppState] = useState(getAppContext());
 
@@ -26,10 +27,6 @@ function App(props: AppProps) {
     return { 
       triggerUpdate: triggerUpdate,
       switchActiveView: switchActiveView,
-      fillWord: fillWord,
-      fillGrid: fillGrid,
-      pauseFill: pauseFill,
-      setFillStatus: setFillStatus,
       setPuzzle: setPuzzle,
       createNewPuzzle: createNewPuzzle,
       exportPuz: exportPuz,
@@ -50,31 +47,6 @@ function App(props: AppProps) {
     setActiveView(newView);
   }
 
-  function fillWord() {
-    // Globals.gridState = fillWord();
-    // forceUpdate();
-  }
-
-  function fillGrid() {
-      // Globals.fillStatus = FillStatus.Ready;
-      // doFillGrid();
-  }
-
-  function doFillGrid() {
-      // if ([FillStatus.Success, FillStatus.Failed, FillStatus.Paused].find(x => x === Globals.fillStatus) !== undefined) {
-      //     return;
-      // }
-
-      // Globals.gridState = fillWord();
-      // forceUpdate();
-      // setTimeout(() => doFillGrid(), 10);
-  }
-
-  function pauseFill() {
-      // Globals.fillStatus = FillStatus.Paused;
-      // forceUpdate();
-  }
-
   function createNewPuzzle(width: number, height: number) {
     setPuzzle(newPuzzle(width, height));
     setGridWidth(width);
@@ -85,6 +57,10 @@ function App(props: AppProps) {
     Globals.puzzle = puzzle;
     Globals.selectedWordKey = "";
     Globals.selectedWordDir = WordDirection.Across;
+    Globals.gridSymmetry = SymmetryType.Rotate180;
+    Globals.fillStatus = FillStatus.Ready;
+    Globals.isFirstFillCall = true;
+    Globals.fillQueue = priorityQueue<FillNode>();
     triggerUpdate();
   }
 
@@ -102,7 +78,6 @@ function App(props: AppProps) {
 
   if (!Globals.puzzle) {
     createNewPuzzle(gridWidth, gridHeight);
-    Globals.gridSymmetry = SymmetryType.Rotate180;
   }
 
   return (

@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useEffect, useReducer, useState } from 'react';
 import { SquareType } from '../../models/SquareType';
 import { SquareProps } from '../Square/SquareProps';
 import "./Grid.scss";
@@ -11,10 +11,14 @@ import { clearFill, getUncheckedSquareDir, populateWords, updateGridConstraintIn
 import { GridWord } from '../../models/GridWord';
 import { AppContext } from '../../AppContext';
 import { SymmetryType } from '../../models/SymmetryType';
+import { fillWord } from '../../lib/fill';
+import { FillStatus } from '../../models/FillStatus';
 
 function Grid(props: any) {
     const [selectedSquare, setSelectedSquare] = useState([-1, -1] as [number, number]);
     const [selectedWord, setSelectedWord] = useState(newWord());
+    // eslint-disable-next-line
+    const [ignored, forceUpdate] = useReducer(x => x + 1, 0);
     const appContext = useContext(AppContext);
 
     useEffect(() => {
@@ -22,6 +26,41 @@ function Grid(props: any) {
             clearSelection();
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [props.updateSemaphore]);
+
+    useEffect(() => {
+        Globals.fillWord = handleFillWord;
+        Globals.fillGrid = handleFillGrid;
+        Globals.pauseFill = handlePauseFill;
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+
+    function handleFillWord() {
+        Globals.puzzle!.grid = fillWord();
+        forceUpdate();
+        appContext.triggerUpdate();
+    }
+
+    function handleFillGrid() {
+        Globals.fillStatus = FillStatus.Ready;
+        appContext.triggerUpdate();
+        doFillGrid();
+    }
+
+    function doFillGrid() {
+        if ([FillStatus.Success, FillStatus.Failed, FillStatus.Paused].find(x => x === Globals.fillStatus) !== undefined) {
+            appContext.triggerUpdate();
+            return;
+        }
+
+        Globals.puzzle!.grid = fillWord();
+        forceUpdate();
+        setTimeout(() => doFillGrid(), 10);
+    }
+
+    function handlePauseFill() {
+        Globals.fillStatus = FillStatus.Paused;
+        forceUpdate();
+    }
 
     function handleClick(event: any) {
         let target = event.target;
@@ -110,11 +149,11 @@ function Grid(props: any) {
             setSelectedWord(newWord());
             clearFill(grid);
             populateWords(grid);
-            //updateGridConstraintInfo(grid);
+            updateGridConstraintInfo(grid);
         }
         else if (letterChanged)  {
             clearFill(grid);
-            //updateGridConstraintInfo(grid);
+            updateGridConstraintInfo(grid);
         }
 
         appContext.triggerUpdate();
@@ -126,28 +165,27 @@ function Grid(props: any) {
         let h = grid.height - 1;
         let r = initSquare[0];
         let c = initSquare[1];
-        let symmetryType = SymmetryType[Globals.gridSymmetry!];
         let ret = [initSquare];
 
-        switch (symmetryType) {
-            case "Rotate180":
+        switch (Globals.gridSymmetry!) {
+            case SymmetryType.Rotate180:
                 ret.push([h - r, w - c]);
                 break;
-            case "Rotate90":
+            case SymmetryType.Rotate90:
                 ret.push([c, h - r]);
                 ret.push([h - r, w - c]);
                 ret.push([w - c, r]);
                 break;
-            case "MirrorHorizontal":
+            case SymmetryType.MirrorHorizontal:
                 ret.push([r, w - c]);
                 break;
-            case "MirrorVertical":
+            case SymmetryType.MirrorVertical:
                 ret.push([h - r, c]);
                 break;
-            case "MirrorNWSE":
+            case SymmetryType.MirrorNWSE:
                 ret.push([w - c, h - r]);
                 break;
-            case "MirrorNESW":
+            case SymmetryType.MirrorNESW:
                 ret.push([c, r]);
                 break;
         }
