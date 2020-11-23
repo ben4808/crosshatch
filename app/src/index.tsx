@@ -9,8 +9,7 @@ import { loadPhilList, loadPeterBrodaList, load5sMainList, loadMainPlusBroda } f
 
 ReactDOM.render(
   <React.StrictMode>
-    <App activeView="Clues" />
+    <App activeView="Fill" />
   </React.StrictMode>,
   document.getElementById('root')
 );
-

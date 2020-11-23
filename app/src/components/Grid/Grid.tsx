@@ -10,16 +10,17 @@ import { clueKey, compareTuples, doesWordContainSquare, getGrid, getWordAtSquare
 import { clearFill, getUncheckedSquareDir, populateWords, updateGridConstraintInfo } from '../../lib/grid';
 import { GridWord } from '../../models/GridWord';
 import { AppContext } from '../../AppContext';
+import { SymmetryType } from '../../models/SymmetryType';
 
 function Grid(props: any) {
     const [selectedSquare, setSelectedSquare] = useState([-1, -1] as [number, number]);
     const [selectedWord, setSelectedWord] = useState(newWord());
-    const [updateSemaphore, setUpdateSemaphore] = useState(0);
     const appContext = useContext(AppContext);
 
     useEffect(() => {
         if (selectedWord.start[0] > -1 && clueKey(selectedWord) !== Globals.selectedWordKey)
             clearSelection();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [props.updateSemaphore]);
 
     function handleClick(event: any) {
@@ -79,7 +80,11 @@ function Grid(props: any) {
         if (key === "BACKSPACE") {
             if (sq.fillContent === undefined) letterChanged = false;
             if (sq.type === SquareType.Black) {
-                sq.type = SquareType.White;
+                getSymmetrySquares([row, col]).forEach(res => {
+                    let resSq = grid.squares[res[0]][res[1]];
+                    resSq.type = SquareType.White;
+                });
+
                 blackSquareChanged = true;
             }
 
@@ -90,7 +95,12 @@ function Grid(props: any) {
         }
         // toggle black square
         if (key === ".") {
-            sq.type = sq.type === SquareType.White ? SquareType.Black : SquareType.White;
+            let newSquareType = sq.type === SquareType.White ? SquareType.Black : SquareType.White;
+            getSymmetrySquares([row, col]).forEach(res => {
+                let resSq = grid.squares[res[0]][res[1]];
+                resSq.type = newSquareType;
+            });
+
             blackSquareChanged = true;
             letterChanged = false;
             advanceCursor();
@@ -108,6 +118,41 @@ function Grid(props: any) {
         }
 
         appContext.triggerUpdate();
+    }
+
+    function getSymmetrySquares(initSquare: [number, number]): [number, number][] {
+        let grid = getGrid();
+        let w = grid.width - 1;
+        let h = grid.height - 1;
+        let r = initSquare[0];
+        let c = initSquare[1];
+        let symmetryType = SymmetryType[Globals.gridSymmetry!];
+        let ret = [initSquare];
+
+        switch (symmetryType) {
+            case "Rotate180":
+                ret.push([h - r, w - c]);
+                break;
+            case "Rotate90":
+                ret.push([c, h - r]);
+                ret.push([h - r, w - c]);
+                ret.push([w - c, r]);
+                break;
+            case "MirrorHorizontal":
+                ret.push([r, w - c]);
+                break;
+            case "MirrorVertical":
+                ret.push([h - r, c]);
+                break;
+            case "MirrorNWSE":
+                ret.push([w - c, h - r]);
+                break;
+            case "MirrorNESW":
+                ret.push([c, r]);
+                break;
+        }
+
+        return ret;
     }
 
     function advanceCursor() {
@@ -129,10 +174,6 @@ function Grid(props: any) {
         if ((dir === WordDirection.Across && selSq[1] === 0) || (dir === WordDirection.Down && selSq[0] === 0))
             return;
         setSelectedSquare(dir === WordDirection.Across ? [selSq[0], selSq[1] - 1] : [selSq[0] - 1, selSq[1]]);
-    }
-
-    function forceUpdate() {
-        setUpdateSemaphore(updateSemaphore + 1);
     }
 
     function clearSelection() {
@@ -231,6 +272,7 @@ function Grid(props: any) {
 
     return (
         <>
+            <div className="puzzle-author-by">&nbsp;</div>
             <div id="puzzleTitle" className="puzzle-title editable" contentEditable={true} suppressContentEditableWarning={true}
                 onKeyDown={suppressEnterKey} onBlur={setTitle} onFocusCapture={handleFocus}>{puzzle.title || "(title)"}</div>
             <div className="puzzle-author-by">by&nbsp;</div>

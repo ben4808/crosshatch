@@ -12,6 +12,7 @@ import { Puzzle } from './models/Puzzle';
 import { newPuzzle } from './lib/util';
 import { generatePuzFile } from './lib/puzFiles';
 import { WordDirection } from './models/WordDirection';
+import { SymmetryType } from './models/SymmetryType';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
@@ -37,25 +38,8 @@ function App(props: AppProps) {
 
   useEffect(() => {
     setAppState(getAppContext());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [updateSemaphore]);
-
-  // useEffect(() => {
-  //   Globals.fillQueue = priorityQueue<FillNode>();
-  //   Globals.fillStatus = FillStatus.Ready;
-  //   Globals.currentDepth = 0;
-  //   Globals.isFirstFillCall = true;
-  //   Globals.fillWordHandler = handleFillWord;
-  //   Globals.fillGridHandler = handleFillGrid;
-  //   Globals.pauseFill = pauseFill;
-
-  //   if (!Globals.gridState) {
-  //       Globals.gridState = createNewGrid(props.height, props.width);
-  //       populateWords(Globals.gridState!);
-  //   }
-    
-  //   forceUpdate();
-  //   // eslint-disable-next-line react-hooks/exhaustive-deps
-  // }, []);
 
   function triggerUpdate() {
     let newSemaphore = updateSemaphore + 1;
@@ -118,6 +102,7 @@ function App(props: AppProps) {
 
   if (!Globals.puzzle) {
     createNewPuzzle(gridWidth, gridHeight);
+    Globals.gridSymmetry = SymmetryType.Rotate180;
   }
 
   return (
