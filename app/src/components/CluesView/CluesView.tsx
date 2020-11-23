@@ -14,7 +14,7 @@ function CluesView(props: any) {
     useEffect(() => {
         setClueProps(initClueProps());
         setSelectedKey(Globals.selectedWordKey!);
-    }, [props.updateSemaphore]);
+    }, [props.updateSemaphore])
 
     function initClueProps(): CluesViewProp[] {
         let props = [] as CluesViewProp[];

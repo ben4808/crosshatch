@@ -1,19 +1,10 @@
-import React, { useContext, useEffect } from 'react';
+import React from 'react';
 import { SymmetryType } from '../../models/SymmetryType';
 import "./FillView.scss";
 import Globals from '../../lib/windowService';
 import { FillStatus } from '../../models/FillStatus';
-import { AppContext } from '../../AppContext';
 
-function FillView(props: any) {
-    const appContext = useContext(AppContext);
-
-    useEffect(() => {
-        // eslint-disable-next-line
-        let a = appContext.triggerUpdate;
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [props.updateSemaphore]);
-
+function FillView() {
     function handleFillWordClick() {
         Globals.fillWord!();
     }

@@ -14,7 +14,7 @@ import { SymmetryType } from '../../models/SymmetryType';
 import { fillWord } from '../../lib/fill';
 import { FillStatus } from '../../models/FillStatus';
 
-function Grid(props: any) {
+function Grid() {
     const [selectedSquare, setSelectedSquare] = useState([-1, -1] as [number, number]);
     const [selectedWord, setSelectedWord] = useState(newWord());
     // eslint-disable-next-line
@@ -24,8 +24,7 @@ function Grid(props: any) {
     useEffect(() => {
         if (selectedWord.start[0] > -1 && clueKey(selectedWord) !== Globals.selectedWordKey)
             clearSelection();
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, [props.updateSemaphore]);
+    });
 
     useEffect(() => {
         Globals.fillWord = handleFillWord;
@@ -60,6 +59,7 @@ function Grid(props: any) {
     function handlePauseFill() {
         Globals.fillStatus = FillStatus.Paused;
         forceUpdate();
+        appContext.triggerUpdate();
     }
 
     function handleClick(event: any) {

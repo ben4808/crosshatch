@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useReducer, useState } from 'react';
 import { AppContext } from './AppContext';
 import { AppProps } from './AppProps';
 import CluesView from './components/CluesView/CluesView';
@@ -21,7 +21,14 @@ function App(props: AppProps) {
   const [gridWidth, setGridWidth] = useState(5);
   const [gridHeight, setGridHeight] = useState(5);
   const [updateSemaphore, setUpdateSemaphore] = useState(0);
+  // eslint-disable-next-line
+  const [ignored, forceUpdate] = useReducer(x => x + 1, 0);
   const [appState, setAppState] = useState(getAppContext());
+
+  useEffect(() => {
+    setAppState(getAppContext());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [updateSemaphore]);
 
   function getAppContext() {
     return { 
@@ -33,14 +40,9 @@ function App(props: AppProps) {
     }
   }
 
-  useEffect(() => {
-    setAppState(getAppContext());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [updateSemaphore]);
-
   function triggerUpdate() {
-    let newSemaphore = updateSemaphore + 1;
-    setUpdateSemaphore(newSemaphore);
+    setUpdateSemaphore(updateSemaphore + 1);
+    forceUpdate();
   }
 
   function switchActiveView(newView: string) {
@@ -91,12 +93,12 @@ function App(props: AppProps) {
             <CluesView updateSemaphore={updateSemaphore}></CluesView>
         }
         {activeView === "Fill" && 
-            <FillView updateSemaphore={updateSemaphore}></FillView>
+            <FillView></FillView>
         }
       </div>
       
       <div className="main-panel">
-        <Grid updateSemaphore={updateSemaphore}></Grid>
+        <Grid></Grid>
       </div>
     </AppContext.Provider>
   );

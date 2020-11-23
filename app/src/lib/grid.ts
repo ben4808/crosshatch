@@ -1,9 +1,13 @@
 import { ConstraintInfo } from "../models/ConstraintInfo";
+import { FillNode } from "../models/FillNode";
+import { FillStatus } from "../models/FillStatus";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
+import { priorityQueue } from "./priorityQueue";
+import Globals from './windowService';
 import { getSquaresForWord, isBlackSquare, newWord, forAllGridSquares, 
     indexedWordListLookupSquares, isWordFull, isWordEmpty } from "./util";
 
@@ -236,6 +240,10 @@ export function getUncheckedSquareDir(grid: GridState, row: number, col: number)
 }
 
 export function clearFill(grid: GridState) {
+    Globals.fillStatus = FillStatus.Ready;
+    Globals.isFirstFillCall = true;
+    Globals.fillQueue = priorityQueue<FillNode>();
+
     grid.squares.forEach(row => {
         row.forEach(sq => {
             if (!sq.userContent && !sq.chosenFillContent) {
