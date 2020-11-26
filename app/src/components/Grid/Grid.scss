@@ -63,6 +63,7 @@
     position: absolute;
     left: 1px;
     top: -1px;
+    text-shadow: 1px 1px 0 white, 1px -1px 0 white, -1px 1px 0 white, -1px -1px 0 white;
 }
 
 .grid-content {
@@ -86,4 +87,52 @@
 }
 .grid-content-crosswordese {
     color: tomato;
+}
+
+.grid-content-rebus {
+    font-size: 8px;
+    padding-top: 9px;
+}
+.grid-square-circled {
+    width: 25px;
+    height: 28px;
+    background-color: transparent;
+    position: absolute;
+    top: 0;
+    left: 0;
+    user-select: none;
+    border-radius: 50%/50%;
+    border: 1px solid black;
+}
+
+.puzzle-title {
+    display: inline-block;
+    color: #444;
+    font-size: 20px;
+    margin-bottom: 4px;
+    margin-left: -15px;
+}
+.puzzle-author, .puzzle-author-by {
+    display: inline-block;
+    color: #666;
+    font-size: 18px;
+}
+.puzzle-author-by {
+    margin-left: 10px;
+}
+.puzzle-copyright {
+    margin-top: -8px;
+    margin-bottom: 8px;
+}
+.puzzle-notes-label {
+    font-weight: bold;
+    font-size: 14px;
+    margin: 5px 0 -2px 0;
+}
+.puzzle-notes {
+    font-size: 14px;
+}
+
+.editable:hover {
+    background-color: #ddd;
 }

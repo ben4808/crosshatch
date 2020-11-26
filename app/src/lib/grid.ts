@@ -1,12 +1,15 @@
 import { ConstraintInfo } from "../models/ConstraintInfo";
+import { FillNode } from "../models/FillNode";
+import { FillStatus } from "../models/FillStatus";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
-import { IndexedWordList } from "../models/IndexedWordList";
+import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
-import { compareTuples, getSquaresForWord,
-    isBlackSquare, newWord, forAllGridSquares, indexedWordListLookupSquares, isWordFull, isWordEmpty } from "./util";
+import { priorityQueue } from "./priorityQueue";
 import Globals from './windowService';
+import { getSquaresForWord, isBlackSquare, newWord, forAllGridSquares, 
+    indexedWordListLookupSquares, isWordFull, isWordEmpty } from "./util";
 
 export function populateWords(grid: GridState) {
     function processSquare(grid: GridState, row: number, col: number, dir: WordDirection) {
@@ -21,22 +24,18 @@ export function populateWords(grid: GridState) {
             currentWord.start = [row, col]; 
         }
 
-        if (Globals.selectedSquare && dir === oldDir && compareTuples([row, col], Globals.selectedSquare)) {
-            Globals.selectedWord = currentWord;
-        }
-
         currentWord.end = [row, col];
 
         let nextSq = dir === WordDirection.Across ? [row, col+1] : [row+1, col];
         if (nextSq[0] === grid.height || nextSq[1] === grid.width || isBlackSquare(grid.squares[nextSq[0]][nextSq[1]])) {
-            grid.words.push(currentWord);
+            if ((dir === WordDirection.Across && currentWord.end[1] - currentWord.start[1] > 0) ||
+                (dir === WordDirection.Down && currentWord.end[0] - currentWord.start[0] > 0))
+                grid.words.push(currentWord);
             currentWord = newWord();
         }
     }
 
-    let oldDir = Globals.selectedWord?.direction || WordDirection.Across;
     grid.words = [];
-    Globals.selectedWord = undefined;
 
     numberizeGrid(grid);
 
@@ -52,6 +51,11 @@ export function populateWords(grid: GridState) {
             processSquare(grid, row, col, WordDirection.Down);
         }
     }
+
+    grid.words.sort((a, b) => {
+        if (a.direction !== b.direction) return a.direction === WordDirection.Across ? -1 : 1;
+        return a.number! - b.number!;
+    });
 }
 
 export function updateGridConstraintInfo(grid: GridState) {
@@ -113,8 +117,7 @@ export function generateConstraintInfoForSquares(grid: GridState, squares: GridS
         return squares;
     }
 
-    let wl: IndexedWordList = Globals.wordList!;
-    let entryOptions = indexedWordListLookupSquares(wl, grid, squares);
+    let entryOptions = indexedWordListLookupSquares(grid, squares);
     if (entryOptions.length > 200) return ret;
 
     let foundZeroSquare = false;
@@ -179,10 +182,11 @@ export function getConstraintSquareSum(squares: GridSquare[]): number {
     return total;
 }
 
-export function getLettersFromSquares(squares: GridSquare[]): string {
+export function getLettersFromSquares(squares: GridSquare[], includeFillContent?: boolean): string {
+    if (includeFillContent === undefined) includeFillContent = true;
     let ret = "";
     squares.forEach(sq => {
-        ret += sq.fillContent || ".";
+        ret += (includeFillContent ? sq.fillContent : sq.userContent) || "-";
     });
     return ret;
 }
@@ -194,3 +198,57 @@ export function gridToString(grid: GridState): string {
     });
     return chs.join("");
 }
+
+export function createNewGrid(width: number, height: number): GridState {
+    let squares: GridSquare[][] = [];
+
+    for (let row = 0; row < height; row++) {
+        squares.push([]);
+        for (let col = 0; col < width; col++) {
+            squares[row][col] = {
+                row: row,
+                col: col,
+                type: SquareType.White,
+                isCircled: false,
+            };
+        }
+    }
+
+    let grid: GridState = {
+        height: height,
+        width: width,
+        squares: squares,
+        words: [],
+        usedWords: new Map<string, boolean>(),
+    };
+
+    populateWords(grid);
+
+    return grid;
+}
+
+export function getUncheckedSquareDir(grid: GridState, row: number, col: number): WordDirection | undefined {
+    if (grid.squares[row][col].type === SquareType.Black) return undefined;
+    if ((col === 0 || grid.squares[row][col-1].type === SquareType.Black) &&
+        (col === grid.width-1 || grid.squares[row][col+1].type === SquareType.Black))
+        return WordDirection.Down;
+    if ((row === 0 || grid.squares[row-1][col].type === SquareType.Black) &&
+        (row === grid.height-1 || grid.squares[row+1][col].type === SquareType.Black))
+        return WordDirection.Across;
+
+    return undefined;
+}
+
+export function clearFill(grid: GridState) {
+    Globals.fillStatus = FillStatus.Ready;
+    Globals.isFirstFillCall = true;
+    Globals.fillQueue = priorityQueue<FillNode>();
+
+    grid.squares.forEach(row => {
+        row.forEach(sq => {
+            if (!sq.userContent && !sq.chosenFillContent) {
+                sq.fillContent = undefined;
+            }
+        });
+    });
+  }

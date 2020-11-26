@@ -115,8 +115,8 @@ export async function loadWordList(source: string, url: string, parserFunc: (lin
     return ret;
 }
 
-export function queryIndexedWordList(wl: IndexedWordList, 
-    length: number, pos1: number, val1: string, pos2?: number, val2?: string): string[] {
+export function queryIndexedWordList(length: number, pos1: number, val1: string, pos2?: number, val2?: string): string[] {
+    let wl = Globals.wordList!;
     let words: string[];
     if (pos2 && val2) {
         words = wl.buckets.twoVal[length-2][pos1-1][pos2-(pos1+1)][val1.charCodeAt(0)-65][val2.charCodeAt(0)-65];
@@ -134,9 +134,9 @@ function indexWordList(entries: string[]): any {
         twoVal: [] as any[],
     };
 
-    Globals.lengthBuckets = new Map<number, string[]>();
+    Globals.starterLengthBuckets = new Map<number, string[]>();
     for (let length = 2; length <= 15; length++) {
-        Globals.lengthBuckets.set(length, []);
+        Globals.starterLengthBuckets.set(length, []);
     }
 
     for (let length = 2; length <= 15; length++) {
@@ -167,7 +167,7 @@ function indexWordList(entries: string[]): any {
 
     entries.forEach(word => {
         if (Math.random() < 0.01)
-            Globals.lengthBuckets!.get(word.length)!.push(word);
+            Globals.starterLengthBuckets!.get(word.length)!.push(word);
 
         // 1-position entries
         for (let pos1 = 1; pos1 <= word.length; pos1++) {

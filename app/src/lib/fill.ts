@@ -1,4 +1,3 @@
-import { clearFill } from "../components/Grid/Grid";
 import { EntryCandidate } from "../models/EntryCandidate";
 import { FillNode } from "../models/FillNode";
 import { FillStatus } from "../models/FillStatus";
@@ -7,14 +6,15 @@ import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { QualityClass } from "../models/QualityClass";
 import { WordDirection } from "../models/WordDirection";
-import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
+import { clearFill, generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
+import { priorityQueue } from "./priorityQueue";
 import { deepClone, compareTuples, getWordAtSquare, getSquaresForWord, indexedWordListLookup, isBlackSquare, 
-    otherDir, sum, getWordLength, getRandomWordsOfLength, isWordEmpty, isWordFull, doesWordContainSquare } from "./util";
+    otherDir, sum, getWordLength, getRandomWordsOfLength, isWordEmpty, isWordFull, doesWordContainSquare, getGrid } from "./util";
 import Globals from './windowService';
 
 export function fillWord(): GridState {
     let fillQueue = Globals.fillQueue!;
-    let grid = Globals.gridState!;
+    let grid = getGrid();
 
     if ([FillStatus.Ready, FillStatus.Running, FillStatus.Paused].find(x => x === Globals.fillStatus) === undefined) {
         return grid;
@@ -23,6 +23,8 @@ export function fillWord(): GridState {
     Globals.fillStatus = FillStatus.Running;
 
     if (Globals.isFirstFillCall) {
+        Globals.fillQueue = priorityQueue<FillNode>();
+        fillQueue = Globals.fillQueue!;
         let firstNode = makeNewNode(grid, 0, false);
 
         firstNode.fillWord = getMostConstrainedWord(firstNode);
@@ -116,7 +118,7 @@ export function fillWord(): GridState {
     insertEntryIntoGrid(newGrid, node.fillWord!, node.chosenEntry);
 
     if (isGridFilled(newGrid)) {
-        insertIntoCompletedGrids(node);
+        //insertIntoCompletedGrids(node);
         chainNewNodeNotViable(prevNode);
         Globals.fillStatus = FillStatus.Success;
         return newGrid;
@@ -291,14 +293,13 @@ function populateEntryCandidates(node: FillNode): boolean {
         entryMap.set(candidate.word, candidate);
     });
 
-    let wl = Globals.wordList!;
     let grid = node.startGrid;
     let wordSquares = getSquaresForWord(grid, node.fillWord!);
     let fillOptions: string[];
     if (!isWordEmpty(wordSquares))
-        fillOptions = indexedWordListLookup(wl, grid, node.fillWord!).filter(x => !entryMap.has(x) && !grid.usedWords.has(x));
+        fillOptions = indexedWordListLookup(grid, node.fillWord!).filter(x => !entryMap.has(x) && !grid.usedWords.has(x));
     else
-        fillOptions = getRandomWordsOfLength(wl, wordSquares.length).filter(x => !grid.usedWords.has(x));
+        fillOptions = getRandomWordsOfLength(wordSquares.length).filter(x => !grid.usedWords.has(x));
     if (fillOptions.length === 0) return viableEntries.length > 0;
 
     fillOptions.sort((a, b) => Globals.qualityClasses!.get(b)! - Globals.qualityClasses!.get(a)!);
@@ -530,16 +531,16 @@ function insertEntryIntoGrid(grid: GridState, word: GridWord, newEntry: EntryCan
     grid.usedWords.set(newEntry.word, true);
 }
 
-function insertIntoCompletedGrids(node: FillNode) {
-    let completedGrids = Globals.completedGrids!;
-    let score = calculateNodePriority(node);
-    let grid = node.endGrid;
-    completedGrids.push([score, grid]);
-    let i = completedGrids.length - 1;
-    let item = completedGrids[i];
-    while (i > 0 && completedGrids[i][0] > completedGrids[i-1][0]) {
-        completedGrids[i] = completedGrids[i-1];
-        i -= 1;
-    }
-    completedGrids[i] = item;
-}
+//function insertIntoCompletedGrids(node: FillNode) {
+    // let completedGrids = Globals.completedGrids!;
+    // let score = calculateNodePriority(node);
+    // let grid = node.endGrid;
+    // completedGrids.push([score, grid]);
+    // let i = completedGrids.length - 1;
+    // let item = completedGrids[i];
+    // while (i > 0 && completedGrids[i][0] > completedGrids[i-1][0]) {
+    //     completedGrids[i] = completedGrids[i-1];
+    //     i -= 1;
+    // }
+    // completedGrids[i] = item;
+//}

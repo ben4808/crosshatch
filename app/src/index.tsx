@@ -9,8 +9,7 @@ loadMainPlusBroda();
 
 ReactDOM.render(
   <React.StrictMode>
-    <App />
+    <App activeView="Fill" />
   </React.StrictMode>,
   document.getElementById('root')
 );
-

@@ -7,6 +7,7 @@ export interface GridSquare {
     col: number;
     number?: number;
     type: SquareType;
+    isCircled: boolean;
 
     userContent?: string;
     chosenFillContent?: string;

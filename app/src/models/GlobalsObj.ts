@@ -1,28 +1,29 @@
 import { PriorityQueue } from "../lib/priorityQueue";
 import { FillNode } from "./FillNode";
 import { FillStatus } from "./FillStatus";
-import { GridState } from "./GridState";
-import { GridWord } from "./GridWord";
 import { IndexedWordList } from "./IndexedWordList";
+import { Puzzle } from "./Puzzle";
 import { QualityClass } from "./QualityClass";
+import { SymmetryType } from "./SymmetryType";
+import { WordDirection } from "./WordDirection";
 
-// if only I could get useContext to work
 export interface GlobalsObj {
-    gridState?: GridState;
-    selectedSquare?: [number, number];
-    selectedWord?: GridWord;
+    puzzle?: Puzzle;
+    selectedWordKey?: string;
+    selectedWordDir?: WordDirection;
+    gridSymmetry?: SymmetryType;
 
     fillQueue?: PriorityQueue<FillNode>;
-    currentDepth?: number;
+    isVisualFillRunning: boolean;
     fillStatus?: FillStatus;
-    completedGrids?: [number, GridState][];
+    //completedGrids?: [number, GridState][];
 
     wordList?: IndexedWordList;
     qualityClasses?: Map<string, QualityClass>;
-    lengthBuckets?: Map<number, string[]>;
+    starterLengthBuckets?: Map<number, string[]>;
     isFirstFillCall: boolean;
 
-    fillWordHandler?: () => void;
-    fillGridHandler?: () => void;
+    fillWord?: () => void;
+    fillGrid?: () => void;
     pauseFill?: () => void;
 }

@@ -8,6 +8,7 @@ function Square(props: SquareProps) {
 }
 
 function getSquareElement(props: SquareProps) {
+    let content = props.userContent ? props.userContent : props.chosenFillContent ? props.chosenFillContent : props.fillContent || "";
     if (props.type === SquareType.White) {
         return <div 
                     className={"grid-square" + 
@@ -21,8 +22,12 @@ function getSquareElement(props: SquareProps) {
                         between(props.constraintSum, 1, 100) ? " grid-square-constrained-1" : ""
                         )} 
                     data-row={props.row} data-col={props.col}>
+            {props.isCircled && 
+                <div className="grid-square-circled"></div>
+            }
             <div className="grid-number">{props.number ?? ""}</div>
             <div className={"grid-content" + 
+                        (content.length > 1 ? " grid-content-rebus" : "") +
                         (props.userContent ? "" :
                          props.chosenFillContent ? " grid-content-chosen-fill" : 
                          props.qualityClass === QualityClass.Lively ? " grid-content-lively" :
@@ -31,7 +36,7 @@ function getSquareElement(props: SquareProps) {
                          props.qualityClass === QualityClass.Iffy ? " grid-content-iffy" :
                          props.qualityClass === QualityClass.NotAThing ? " grid-content-notathing" : ""
                         )}>
-                    {props.userContent ? props.userContent : props.chosenFillContent ? props.chosenFillContent : props.fillContent || ""}
+                    {content}
             </div>
         </div>
     }
