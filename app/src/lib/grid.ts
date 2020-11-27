@@ -9,7 +9,9 @@ import { WordDirection } from "../models/WordDirection";
 import { priorityQueue } from "./priorityQueue";
 import Globals from './windowService';
 import { getSquaresForWord, isBlackSquare, newWord, forAllGridSquares, 
-    indexedWordListLookupSquares, isWordFull, isWordEmpty } from "./util";
+    indexedWordListLookupSquares, isWordFull, isWordEmpty, getWordAtSquare } from "./util";
+import { Section } from "../models/Section";
+import { SectionCandidate } from "../models/SectionCandidate";
 
 export function populateWords(grid: GridState) {
     function processSquare(grid: GridState, row: number, col: number, dir: WordDirection) {
@@ -251,4 +253,73 @@ export function clearFill(grid: GridState) {
             }
         });
     });
-  }
+}
+
+export function generateGridSections(grid: GridState): Section[] {
+    function iterateSection(section: Section, grid: GridState, sq: GridSquare, usedSquares: Map<string, boolean>) {
+        section.openSquareCount++;
+        usedSquares.set(`${sq.row},${sq.col}`, true);
+
+        getNeighboringSquares(grid, sq).forEach(neighbor => {
+            if (isOpenSquare(grid, neighbor) && !usedSquares.has(`${neighbor.row},${neighbor.col}`)) {
+                iterateSection(section, grid, neighbor, usedSquares);
+            }
+
+            [WordDirection.Across, WordDirection.Down].forEach(dir => {
+                let word = getWordAtSquare(grid, neighbor.row, neighbor.col, dir)!;
+                if (!section.words.includes(word)) {
+                    section.words.push(word);
+                    let squares = getSquaresForWord(grid, word);
+                    squares.forEach(wsq => {
+                        section.squares.set(`${wsq.row},${wsq.col}`, true);
+                    });
+                }
+            });
+        });
+    }
+
+    let sections = [] as Section[];
+    let usedSquares = new Map<string, boolean>();
+    let i = 1;
+
+    forAllGridSquares(grid, sq => {
+        if (isOpenSquare(grid, sq) && !usedSquares.has(`${sq.row},${sq.col}`)) {
+            let newSection = {
+                number: i++,
+                openSquareCount: 0,
+                squares: new Map<string, boolean>(),
+                words: [],
+                candidates: new Map<string, SectionCandidate>(),
+            } as Section;
+
+            iterateSection(newSection, grid, sq, usedSquares);
+            sections.push(newSection);
+        }
+    });
+
+    return sections.sort((a, b) => a.openSquareCount - b.openSquareCount);
+}
+
+function isOpenSquare(grid: GridState, sq: GridSquare): boolean {
+    let neighbors = getNeighboringSquares(grid, sq);
+    return neighbors.length === 8 && !neighbors.find(n => isBlackSquare(n));
+}
+
+function getNeighboringSquares(grid: GridState, sq: GridSquare): GridSquare[] {
+    let ret = [] as GridSquare[];
+    let nClear = sq.row > 0;
+    let sClear = sq.row < grid.height-1;
+    let wClear = sq.col > 0;
+    let eClear = sq.col < grid.width-1;
+
+    if (nClear && wClear) ret.push(grid.squares[sq.row-1][sq.col-1]);
+    if (nClear) ret.push(grid.squares[sq.row-1][sq.col]);
+    if (nClear && eClear) ret.push(grid.squares[sq.row-1][sq.col+1]);
+    if (eClear) ret.push(grid.squares[sq.row][sq.col+1]);
+    if (sClear && eClear) ret.push(grid.squares[sq.row+1][sq.col+1]);
+    if (sClear) ret.push(grid.squares[sq.row+1][sq.col]);
+    if (sClear && wClear) ret.push(grid.squares[sq.row+1][sq.col-1]);
+    if (wClear) ret.push(grid.squares[sq.row][sq.col-1]);
+
+    return ret;
+}

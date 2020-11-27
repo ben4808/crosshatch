@@ -7,7 +7,7 @@ import { GridState } from '../../models/GridState';
 import { WordDirection } from '../../models/WordDirection';
 import Globals from '../../lib/windowService';
 import { clueKey, compareTuples, doesWordContainSquare, getGrid, getWordAtSquare, newWord, otherDir } from '../../lib/util';
-import { clearFill, getUncheckedSquareDir, populateWords, updateGridConstraintInfo } from '../../lib/grid';
+import { clearFill, generateGridSections, getUncheckedSquareDir, populateWords, updateGridConstraintInfo } from '../../lib/grid';
 import { GridWord } from '../../models/GridWord';
 import { AppContext } from '../../AppContext';
 import { SymmetryType } from '../../models/SymmetryType';
@@ -149,6 +149,7 @@ function Grid() {
             setSelectedWord(newWord());
             clearFill(grid);
             populateWords(grid);
+            generateGridSections(Globals.puzzle!.grid!);
             updateGridConstraintInfo(grid);
         }
         else if (letterChanged)  {
