@@ -18,8 +18,8 @@ import { FillNode } from './models/FillNode';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
-  const [gridWidth, setGridWidth] = useState(5);
-  const [gridHeight, setGridHeight] = useState(5);
+  const [gridWidth, setGridWidth] = useState(15);
+  const [gridHeight, setGridHeight] = useState(4);
   const [updateSemaphore, setUpdateSemaphore] = useState(0);
   // eslint-disable-next-line
   const [ignored, forceUpdate] = useReducer(x => x + 1, 0);
@@ -59,7 +59,7 @@ function App(props: AppProps) {
     Globals.puzzle = puzzle;
     Globals.selectedWordKey = "";
     Globals.selectedWordDir = WordDirection.Across;
-    Globals.gridSymmetry = SymmetryType.Rotate180;
+    Globals.gridSymmetry = SymmetryType.MirrorHorizontal;
     Globals.fillStatus = FillStatus.Ready;
     Globals.isFirstFillCall = true;
     Globals.fillQueue = priorityQueue<FillNode>();

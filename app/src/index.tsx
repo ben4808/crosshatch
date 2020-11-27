@@ -5,7 +5,7 @@ import 'bootstrap/dist/css/bootstrap.css';
 // eslint-disable-next-line
 import { loadPhilList, loadPeterBrodaList, load5sMainList, loadMainPlusBroda } from './lib/wordList';
 
-loadMainPlusBroda();
+//loadMainPlusBroda();
 
 ReactDOM.render(
   <React.StrictMode>
