@@ -9,9 +9,10 @@ import { WordDirection } from "../models/WordDirection";
 import { priorityQueue } from "./priorityQueue";
 import Globals from './windowService';
 import { getSquaresForWord, isBlackSquare, newWord, forAllGridSquares, 
-    indexedWordListLookupSquares, isWordFull, isWordEmpty, getWordAtSquare } from "./util";
+    indexedWordListLookupSquares, isWordFull, isWordEmpty, getWordAtSquare, getGrid } from "./util";
 import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
+import { SymmetryType } from "../models/SymmetryType";
 
 export function populateWords(grid: GridState) {
     function processSquare(grid: GridState, row: number, col: number, dir: WordDirection) {
@@ -320,6 +321,40 @@ function getNeighboringSquares(grid: GridState, sq: GridSquare): GridSquare[] {
     if (sClear) ret.push(grid.squares[sq.row+1][sq.col]);
     if (sClear && wClear) ret.push(grid.squares[sq.row+1][sq.col-1]);
     if (wClear) ret.push(grid.squares[sq.row][sq.col-1]);
+
+    return ret;
+}
+
+export function getSymmetrySquares(initSquare: [number, number]): [number, number][] {
+    let grid = getGrid();
+    let w = grid.width - 1;
+    let h = grid.height - 1;
+    let r = initSquare[0];
+    let c = initSquare[1];
+    let ret = [initSquare];
+
+    switch (Globals.gridSymmetry!) {
+        case SymmetryType.Rotate180:
+            ret.push([h - r, w - c]);
+            break;
+        case SymmetryType.Rotate90:
+            ret.push([c, h - r]);
+            ret.push([h - r, w - c]);
+            ret.push([w - c, r]);
+            break;
+        case SymmetryType.MirrorHorizontal:
+            ret.push([r, w - c]);
+            break;
+        case SymmetryType.MirrorVertical:
+            ret.push([h - r, c]);
+            break;
+        case SymmetryType.MirrorNWSE:
+            ret.push([w - c, h - r]);
+            break;
+        case SymmetryType.MirrorNESW:
+            ret.push([c, r]);
+            break;
+    }
 
     return ret;
 }

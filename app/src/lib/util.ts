@@ -193,8 +193,8 @@ export function newPuzzle(gridWidth: number, gridHeight: number): Puzzle {
     } as Puzzle;
 }
 
-export function clueKey(word: GridWord): string {
-    return `${word.start[0]},${word.start[1]},${word.direction === WordDirection.Across ? "A" : "D"}`;
+export function clueKey(word: GridWord | undefined): string {
+    return word ? `${word.start[0]},${word.start[1]},${word.direction === WordDirection.Across ? "A" : "D"}` : "";
 }
 
 export function getGrid(): GridState {

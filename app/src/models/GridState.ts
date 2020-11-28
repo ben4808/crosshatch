@@ -6,6 +6,6 @@ export interface GridState {
     height: number;
     width: number;
     squares: GridSquare[][];
-    words: GridWord[];
+    words: Map<string, GridWord>;
     usedWords: Map<string, boolean>;
 }

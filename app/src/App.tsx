@@ -5,16 +5,12 @@ import CluesView from './components/CluesView/CluesView';
 import FillView from './components/FillView/FillView';
 import Grid from './components/Grid/Grid';
 import Menu from './components/Menu/Menu';
-import { FillStatus } from './models/FillStatus';
 import Globals from './lib/windowService';
 import "./App.scss";
 import { Puzzle } from './models/Puzzle';
 import { newPuzzle } from './lib/util';
 import { generatePuzFile } from './lib/puzFiles';
-import { WordDirection } from './models/WordDirection';
 import { SymmetryType } from './models/SymmetryType';
-import { priorityQueue } from './lib/priorityQueue';
-import { FillNode } from './models/FillNode';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
@@ -58,11 +54,7 @@ function App(props: AppProps) {
   function setPuzzle(puzzle: Puzzle) {
     Globals.puzzle = puzzle;
     Globals.selectedWordKey = "";
-    Globals.selectedWordDir = WordDirection.Across;
     Globals.gridSymmetry = SymmetryType.MirrorHorizontal;
-    Globals.fillStatus = FillStatus.Ready;
-    Globals.isFirstFillCall = true;
-    Globals.fillQueue = priorityQueue<FillNode>();
     triggerUpdate();
   }
 

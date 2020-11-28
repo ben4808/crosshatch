@@ -5,5 +5,5 @@ export interface SectionCandidate {
     grid: GridState;
     minQualityClass: QualityClass;
     score: number;
-    madeUpEntry: string;
+    madeUpEntries: string[];
 }

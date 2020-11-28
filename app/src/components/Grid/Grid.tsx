@@ -10,21 +10,13 @@ import { clueKey, compareTuples, doesWordContainSquare, getGrid, getWordAtSquare
 import { clearFill, generateGridSections, getUncheckedSquareDir, populateWords, updateGridConstraintInfo } from '../../lib/grid';
 import { GridWord } from '../../models/GridWord';
 import { AppContext } from '../../AppContext';
-import { SymmetryType } from '../../models/SymmetryType';
 import { fillWord } from '../../lib/fill';
-import { FillStatus } from '../../models/FillStatus';
 
 function Grid() {
     const [selectedSquare, setSelectedSquare] = useState([-1, -1] as [number, number]);
-    const [selectedWord, setSelectedWord] = useState(newWord());
     // eslint-disable-next-line
     const [ignored, forceUpdate] = useReducer(x => x + 1, 0);
     const appContext = useContext(AppContext);
-
-    useEffect(() => {
-        if (selectedWord.start[0] > -1 && clueKey(selectedWord) !== Globals.selectedWordKey)
-            clearSelection();
-    });
 
     useEffect(() => {
         Globals.fillWord = handleFillWord;
@@ -34,32 +26,25 @@ function Grid() {
     }, []);
 
     function handleFillWord() {
-        Globals.puzzle!.grid = fillWord();
+        fillWord();
         forceUpdate();
-        appContext.triggerUpdate();
     }
 
     function handleFillGrid() {
-        Globals.fillStatus = FillStatus.Ready;
-        appContext.triggerUpdate();
         doFillGrid();
     }
 
     function doFillGrid() {
-        if ([FillStatus.Success, FillStatus.Failed, FillStatus.Paused].find(x => x === Globals.fillStatus) !== undefined) {
-            appContext.triggerUpdate();
-            return;
-        }
+        if (!Globals.isFillRunning) return;
 
-        Globals.puzzle!.grid = fillWord();
+        fillWord();
         forceUpdate();
-        setTimeout(() => doFillGrid(), 10);
+        setTimeout(() => doFillGrid(), 5);
     }
 
     function handlePauseFill() {
-        Globals.fillStatus = FillStatus.Paused;
+        Globals.isFillRunning = false;
         forceUpdate();
-        appContext.triggerUpdate();
     }
 
     function handleClick(event: any) {
@@ -87,15 +72,14 @@ function Grid() {
             setSelectedSquare([row, col]);
         }
 
-        let newSelectedWord = getWordAtSquare(grid, row, col, newDirection) || newWord();
-        setSelectedWord(newSelectedWord);
+        let newSelectedWord = getWordAtSquare(grid, row, col, newDirection);
         Globals.selectedWordKey = clueKey(newSelectedWord);
-        Globals.selectedWordDir = newSelectedWord.direction;
+        Globals.selectedWordDir = newDirection;
         appContext.triggerUpdate();
     }
     
     function handleKeyDown(event: any) {
-        if (Globals.isVisualFillRunning) return;
+        if (Globals.isFillRunning) return;
         if (!isSquareSelected()) return;
 
         let grid = getGrid();
@@ -158,40 +142,6 @@ function Grid() {
         }
 
         appContext.triggerUpdate();
-    }
-
-    function getSymmetrySquares(initSquare: [number, number]): [number, number][] {
-        let grid = getGrid();
-        let w = grid.width - 1;
-        let h = grid.height - 1;
-        let r = initSquare[0];
-        let c = initSquare[1];
-        let ret = [initSquare];
-
-        switch (Globals.gridSymmetry!) {
-            case SymmetryType.Rotate180:
-                ret.push([h - r, w - c]);
-                break;
-            case SymmetryType.Rotate90:
-                ret.push([c, h - r]);
-                ret.push([h - r, w - c]);
-                ret.push([w - c, r]);
-                break;
-            case SymmetryType.MirrorHorizontal:
-                ret.push([r, w - c]);
-                break;
-            case SymmetryType.MirrorVertical:
-                ret.push([h - r, c]);
-                break;
-            case SymmetryType.MirrorNWSE:
-                ret.push([w - c, h - r]);
-                break;
-            case SymmetryType.MirrorNESW:
-                ret.push([c, r]);
-                break;
-        }
-
-        return ret;
     }
 
     function advanceCursor() {

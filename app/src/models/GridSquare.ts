@@ -12,7 +12,7 @@ export interface GridSquare {
     userContent?: string;
     chosenFillContent?: string;
     fillContent?: string;
-    qualityClass?: QualityClass;
 
+    qualityClass?: QualityClass;
     constraintInfo?: ConstraintInfo;
 }
