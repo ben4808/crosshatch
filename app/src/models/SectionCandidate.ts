@@ -6,4 +6,6 @@ export interface SectionCandidate {
     minQualityClass: QualityClass;
     score: number;
     madeUpEntries: string[];
+    includedSections: number[];
+    isFilteredOut: boolean;
 }

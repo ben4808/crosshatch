@@ -7,6 +7,8 @@ import { queryIndexedWordList } from "./wordList";
 import Globals from './windowService';
 import { Puzzle } from "../models/Puzzle";
 import { createNewGrid } from "./grid";
+import { ContentType } from "../models/ContentType";
+import { WordKey } from "../models/WordKey";
 
 export function average(arr: number[]): number {
     return arr.reduce((a,b) => a + b, 0) / arr.length;
@@ -193,10 +195,29 @@ export function newPuzzle(gridWidth: number, gridHeight: number): Puzzle {
     } as Puzzle;
 }
 
-export function clueKey(word: GridWord | undefined): string {
-    return word ? `${word.start[0]},${word.start[1]},${word.direction === WordDirection.Across ? "A" : "D"}` : "";
+export function wordKey(word: GridWord): WordKey {
+    return {
+        row: word.start[0],
+        col: word.start[1],
+        dir: word.direction,
+    } as WordKey;
 }
 
 export function getGrid(): GridState {
     return Globals.puzzle!.grid!;
+}
+
+export function getSelectedWord(): GridWord | undefined {
+    let grid = getGrid();
+    if (!Globals.selectedWordKey) return undefined;
+    return grid.words.get(Globals.selectedWordKey);
+}
+
+export function mapKeys<TKey, TVal>(map: Map<TKey, TVal>): TKey[] {
+    return Array.from(map.keys());
+}
+
+export function isUserFilled(sq: GridSquare): boolean {
+    return sq.contentType === ContentType.User || sq.contentType === ContentType.ChosenWord 
+        || sq.contentType === ContentType.ChosenSection;
 }

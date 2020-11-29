@@ -1,13 +1,16 @@
 import { PriorityQueue } from "../lib/priorityQueue";
 import { FillNode } from "./FillNode";
-import { GridWord } from "./GridWord";
 import { SectionCandidate } from "./SectionCandidate";
+import { WordDirection } from "./WordDirection";
+import { WordKey } from "./WordKey";
 
 export interface Section {
     number: number;
     openSquareCount: number;
-    squares: Map<string, boolean>;
-    words: Map<string, GridWord>;
-    candidates: Map<string, SectionCandidate>;
+    // <[row,col], true>
+    squares: Map<[number, number], boolean>;
+    words: Map<WordKey, boolean>;
+    // <id, sc>
+    candidates: Map<number, SectionCandidate>;
     fillQueue?: PriorityQueue<FillNode>;
 }

@@ -6,11 +6,13 @@ import Square from '../Square/Square';
 import { GridState } from '../../models/GridState';
 import { WordDirection } from '../../models/WordDirection';
 import Globals from '../../lib/windowService';
-import { clueKey, compareTuples, doesWordContainSquare, getGrid, getWordAtSquare, newWord, otherDir } from '../../lib/util';
-import { clearFill, generateGridSections, getUncheckedSquareDir, populateWords, updateGridConstraintInfo } from '../../lib/grid';
+import { compareTuples, doesWordContainSquare, getGrid, getSelectedWord, getWordAtSquare, otherDir, wordKey } from '../../lib/util';
+import { getSymmetrySquares, getUncheckedSquareDir, populateWords, updateGridConstraintInfo } from '../../lib/grid';
 import { GridWord } from '../../models/GridWord';
 import { AppContext } from '../../AppContext';
 import { fillWord } from '../../lib/fill';
+import { ContentType } from '../../models/ContentType';
+import { updateGlobalSectionFilters, updateGlobalSections } from '../../lib/section';
 
 function Grid() {
     const [selectedSquare, setSelectedSquare] = useState([-1, -1] as [number, number]);
@@ -31,6 +33,7 @@ function Grid() {
     }
 
     function handleFillGrid() {
+        Globals.isFillRunning = true;
         doFillGrid();
     }
 
@@ -72,14 +75,12 @@ function Grid() {
             setSelectedSquare([row, col]);
         }
 
-        let newSelectedWord = getWordAtSquare(grid, row, col, newDirection);
-        Globals.selectedWordKey = clueKey(newSelectedWord);
         Globals.selectedWordDir = newDirection;
+        setSelWordAtSelSquare([row, col]);
         appContext.triggerUpdate();
     }
     
     function handleKeyDown(event: any) {
-        if (Globals.isFillRunning) return;
         if (!isSquareSelected()) return;
 
         let grid = getGrid();
@@ -87,21 +88,24 @@ function Grid() {
         let col = selectedSquare[1];
 
         let key: string = event.key.toUpperCase();
-        let letterChanged = true;
+        let letterChanged = false;
         let blackSquareChanged = false;
         let sq = grid.squares[row][col];
 
         if (key.match(/^[A-Z]$/)) {
-            if (sq.fillContent === key) letterChanged = false;
-            if (sq.type === SquareType.Black) return;
-
-            sq.userContent = key;
-            sq.chosenFillContent = key;
-            sq.fillContent = key;
             advanceCursor();
+
+            if (sq.type === SquareType.Black) return;
+            if (sq.content === key && sq.contentType !== ContentType.Autofill) return;
+
+            sq.content = key;
+            sq.contentType = ContentType.User;
+            letterChanged = true;
         }
         if (key === "BACKSPACE") {
-            if (sq.fillContent === undefined) letterChanged = false;
+            backupCursor();
+
+            if (sq.content !== undefined && sq.contentType !== ContentType.Autofill) letterChanged = true;
             if (sq.type === SquareType.Black) {
                 getSymmetrySquares([row, col]).forEach(res => {
                     let resSq = grid.squares[res[0]][res[1]];
@@ -111,13 +115,13 @@ function Grid() {
                 blackSquareChanged = true;
             }
 
-            sq.userContent = undefined;
-            sq.chosenFillContent = undefined;
-            sq.fillContent = undefined;
-            backupCursor();
+            sq.content = undefined;
+            sq.contentType = ContentType.User;
         }
         // toggle black square
         if (key === ".") {
+            advanceCursor();
+
             let newSquareType = sq.type === SquareType.White ? SquareType.Black : SquareType.White;
             getSymmetrySquares([row, col]).forEach(res => {
                 let resSq = grid.squares[res[0]][res[1]];
@@ -125,19 +129,20 @@ function Grid() {
             });
 
             blackSquareChanged = true;
-            letterChanged = false;
-            advanceCursor();
+        }
+        // toggle cirlced square
+        if (key === ",") {
+            if (sq.type === SquareType.Black) return;
+            sq.isCircled = !sq.isCircled;
         }
 
         if (blackSquareChanged) {
-            setSelectedWord(newWord());
-            clearFill(grid);
             populateWords(grid);
-            generateGridSections(Globals.puzzle!.grid!);
+            updateGlobalSections(grid);
             updateGridConstraintInfo(grid);
         }
         else if (letterChanged)  {
-            clearFill(grid);
+            updateGlobalSectionFilters(grid);
             updateGridConstraintInfo(grid);
         }
 
@@ -152,7 +157,10 @@ function Grid() {
         let dir = Globals.selectedWordDir!;
         if ((dir === WordDirection.Across && selSq[1] === grid.width-1) || (dir === WordDirection.Down && selSq[0] === grid.height-1))
             return;
-        setSelectedSquare(dir === WordDirection.Across ? [selSq[0], selSq[1] + 1] : [selSq[0] + 1, selSq[1]]);
+
+        let newSelSq = (dir === WordDirection.Across ? [selSq[0], selSq[1] + 1] : [selSq[0] + 1, selSq[1]]) as [number, number];
+        setSelectedSquare(newSelSq);
+        setSelWordAtSelSquare(newSelSq);
     }
     
     function backupCursor() {
@@ -162,12 +170,10 @@ function Grid() {
         let dir = Globals.selectedWordDir!;
         if ((dir === WordDirection.Across && selSq[1] === 0) || (dir === WordDirection.Down && selSq[0] === 0))
             return;
-        setSelectedSquare(dir === WordDirection.Across ? [selSq[0], selSq[1] - 1] : [selSq[0] - 1, selSq[1]]);
-    }
 
-    function clearSelection() {
-        setSelectedSquare([-1, -1]);
-        setSelectedWord(newWord());
+        let newSelSq = (dir === WordDirection.Across ? [selSq[0], selSq[1] - 1] : [selSq[0] - 1, selSq[1]]) as [number, number];
+        setSelectedSquare(newSelSq);
+        setSelWordAtSelSquare(newSelSq);
     }
 
     function isSquareSelected(): boolean {
@@ -175,11 +181,17 @@ function Grid() {
     }
     
     function isWordSelected(): boolean {
-        return !!selectedWord.number;
+        return !!getSelectedWord();
+    }
+
+    function setSelWordAtSelSquare(newSelSquare: [number, number]) {
+        let grid = getGrid();
+        let word = getWordAtSquare(grid, newSelSquare[0], newSelSquare[1], Globals.selectedWordDir!);
+        Globals.selectedWordKey = word ? wordKey(word) : undefined;
     }
 
     function getSquareProps(grid: GridState, row: number, col: number, 
-        selectedSquare: [number, number], selectedWord: GridWord): SquareProps {
+        selectedSquare: [number, number], selectedWord: GridWord | undefined): SquareProps {
         let square = grid.squares[row][col];
     
         return {
@@ -188,12 +200,11 @@ function Grid() {
             col: col,
             number: square.number,
             type: square.type,
-            userContent: square.userContent,
-            chosenFillContent: square.chosenFillContent,
-            fillContent: square.fillContent,
+            content: square.content,
+            contentType: square.contentType,
             qualityClass: square.qualityClass,
             isSelected: isSquareSelected() && compareTuples(selectedSquare, [row, col]),
-            isInSelectedWord: isWordSelected() && doesWordContainSquare(selectedWord, row, col),
+            isInSelectedWord: isWordSelected() && doesWordContainSquare(selectedWord!, row, col),
             constraintSum: square.constraintInfo ? square.constraintInfo.sumTotal : 1000,
             isCircled: square.isCircled,
         };
@@ -250,7 +261,7 @@ function Grid() {
     let squareElements = [];
     for (let row = 0; row < grid.height; row++) {
         for (let col = 0; col < grid.width; col++) {
-            let sqProps = getSquareProps(grid, row, col, selectedSquare, selectedWord);
+            let sqProps = getSquareProps(grid, row, col, selectedSquare, getSelectedWord());
             squareElements.push(getSquareElement(sqProps));
         }
     }
