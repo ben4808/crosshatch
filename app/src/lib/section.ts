@@ -6,7 +6,8 @@ import { SectionCandidate } from "../models/SectionCandidate";
 import { WordDirection } from "../models/WordDirection";
 import { WordKey } from "../models/WordKey";
 import { priorityQueue } from "./priorityQueue";
-import { forAllGridSquares, getGrid, getSquaresForWord, getWordAtSquare, isBlackSquare, isUserFilled, mapKeys, wordKey } from "./util";
+import { forAllGridSquares, getSquaresForWord, getWordAtSquare, 
+    isBlackSquare, isUserFilled, mapKeys, wordKey } from "./util";
 import Globals from './windowService';
 
 export function updateGlobalSections(newGrid: GridState) {

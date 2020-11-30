@@ -15,6 +15,7 @@ export interface GlobalsObj {
 
     sections?: Section[];
     sectionI?: number;
+    activeSectionI?: number;
 
     wordList?: IndexedWordList;
     qualityClasses?: Map<string, QualityClass>;
