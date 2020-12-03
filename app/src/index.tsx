@@ -3,9 +3,9 @@ import ReactDOM from 'react-dom';
 import App from './App';
 import 'bootstrap/dist/css/bootstrap.css';
 // eslint-disable-next-line
-import { loadPhilList, loadPeterBrodaList, load5sMainList, loadMainPlusBroda } from './lib/wordList';
+import { loadPhilList, loadPeterBrodaList, load5sMainList, loadMainPlusBroda, loadMainBrodaEntries } from './lib/wordList';
 
-loadMainPlusBroda();
+loadMainBrodaEntries();
 
 ReactDOM.render(
   <React.StrictMode>

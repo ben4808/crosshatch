@@ -46,6 +46,13 @@ export function loadMainPlusBroda() {
     });
 }
 
+export function loadMainBrodaEntries() {
+    loadWordList("Main Plus Broda Entries", "http://localhost/classifier/mainBrodaEntries.txt", parse5sMainList).then((wordList) => {
+        Globals.wordList = wordList;
+        console.log("Word List loaded");
+    });
+}
+
 function parse5sMainList(lines: string[]): string[] {
     let map = new Map<string, QualityClass>();
     let words = [] as string[];
