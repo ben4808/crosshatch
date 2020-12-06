@@ -177,7 +177,7 @@ export function forAllGridSquares(grid: GridState, func: (sq: GridSquare) => voi
     });
 }
 
-export function getWordLength(word: GridWord): number {
+export function wordLength(word: GridWord): number {
     if (word.direction === WordDirection.Across)
         return word.end[1] - word.start[1];
     else
@@ -195,12 +195,8 @@ export function newPuzzle(gridWidth: number, gridHeight: number): Puzzle {
     } as Puzzle;
 }
 
-export function wordKey(word: GridWord): WordKey {
-    return {
-        row: word.start[0],
-        col: word.start[1],
-        dir: word.direction,
-    } as WordKey;
+export function wordKey(word: GridWord): string {
+    return `[${word.start[0]},${word.start[1]},${word.direction === WordDirection.Across ? "A" : "D"}]`;
 }
 
 export function getGrid(): GridState {
@@ -217,7 +213,15 @@ export function mapKeys<TKey, TVal>(map: Map<TKey, TVal>): TKey[] {
     return Array.from(map.keys());
 }
 
+export function mapValues<TKey, TVal>(map: Map<TKey, TVal>): TVal[] {
+    return Array.from(map.values());
+}
+
 export function isUserFilled(sq: GridSquare): boolean {
     return sq.contentType === ContentType.User || sq.contentType === ContentType.ChosenWord 
         || sq.contentType === ContentType.ChosenSection;
+}
+
+export function isAcross(word: GridWord): boolean {
+    return word.direction === WordDirection.Across;
 }

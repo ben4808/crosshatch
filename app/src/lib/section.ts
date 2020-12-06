@@ -4,9 +4,9 @@ import { GridState } from "../models/GridState";
 import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
 import { WordDirection } from "../models/WordDirection";
-import { WordKey } from "../models/WordKey";
-import { priorityQueue } from "./priorityQueue";
+import { PriorityQueue } from "./priorityQueue";
 import { forAllGridSquares, getSquaresForWord, getWordAtSquare, 
+    isAcross, 
     isBlackSquare, isUserFilled, mapKeys, wordKey } from "./util";
 import Globals from './windowService';
 
@@ -63,7 +63,7 @@ export function generateGridSections(grid: GridState): Section[] {
         usedSquares.set(`${sq.row},${sq.col}`, true);
 
         getNeighboringSquares(grid, sq).forEach(neighbor => {
-            if (isOpenSquare(grid, neighbor) && !usedSquares.has(`${neighbor.row},${neighbor.col}`)) {
+            if (!usedSquares.has(`${neighbor.row},${neighbor.col}`) && isOpenSquare(grid, neighbor)) {
                 iterateSection(section, grid, neighbor, usedSquares);
             }
 
@@ -73,7 +73,7 @@ export function generateGridSections(grid: GridState): Section[] {
                     section.words.set(wordKey(word), true);
                     let squares = getSquaresForWord(grid, word);
                     squares.forEach(wsq => {
-                        section.squares.set([wsq.row, wsq.col], true);
+                        section.squares.set(`${wsq.row},${wsq.col}`, true);
                     });
                 }
             });
@@ -90,15 +90,42 @@ export function generateGridSections(grid: GridState): Section[] {
             let newSection = {
                 number: i++,
                 openSquareCount: 0,
-                squares: new Map<[number, number], boolean>(),
-                words: new Map<WordKey, boolean>(),
-                candidates: new Map<number, SectionCandidate>(),
-                fillQueue: priorityQueue<FillNode>(),
+                squares: new Map<string, boolean>(),
+                words: new Map<string, boolean>(),
+                stackWords: new Map<string, boolean>(),
+                candidates: new Map<string, SectionCandidate[]>(),
+                fillQueues: new Map<string, PriorityQueue<FillNode>>(),
             } as Section;
 
             iterateSection(newSection, grid, sq, usedSquares);
             sections.push(newSection);
         }
+    });
+
+    sections.forEach(section => {
+        section.words.forEach((_, key) => {
+            if (section.stackWords.has(key)) return;
+
+            let word = grid.words.get(key)!;
+            let stackedNeighbors = mapKeys(section.words).filter(ok => {
+                let otherWord = grid.words.get(ok)!;
+                if (isAcross(word) && Math.abs(word.start[0] - otherWord.start[0]) === 1) {
+                    let intersectionCount = Math.min(word.end[1], otherWord.end[1]) - Math.max(word.start[1], otherWord.start[1]) + 1;
+                    return intersectionCount >= 5;
+                }
+                if (!isAcross(word) && Math.abs(word.start[1] - otherWord.start[1]) === 1) {
+                    let intersectionCount = Math.min(word.end[0], otherWord.end[0]) - Math.max(word.start[0], otherWord.start[0]) + 1;
+                    return intersectionCount >= 5;
+                }
+            }); 
+
+            if (stackedNeighbors.length > 0) {
+                section.stackWords.set(key, true);
+                stackedNeighbors.forEach(sk => {
+                    section.stackWords.set(sk, true);
+                });
+            }
+        });
     });
 
     Globals.sectionI = i;
