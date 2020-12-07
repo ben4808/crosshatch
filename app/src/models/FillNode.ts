@@ -12,4 +12,5 @@ export interface FillNode {
     depth: number;
     isChainNode: boolean;
     backtracks: number;
+    madeUpWords: string[];
 }

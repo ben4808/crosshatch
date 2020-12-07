@@ -13,9 +13,10 @@ export interface GlobalsObj {
     gridSymmetry?: SymmetryType;
     isFillRunning: boolean;
 
-    sections?: Section[];
-    sectionI?: number;
-    activeSectionI?: number;
+    sections?: Map<number, Section>;
+    activeSectionId?: number;
+    selectedSectionIds?: number[];
+    nextSectionId?: number;
 
     wordList?: IndexedWordList;
     qualityClasses?: Map<string, QualityClass>;

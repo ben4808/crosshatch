@@ -225,3 +225,8 @@ export function isUserFilled(sq: GridSquare): boolean {
 export function isAcross(word: GridWord): boolean {
     return word.direction === WordDirection.Across;
 }
+
+export function gridSquareAtKey(grid: GridState, sqKey: string): GridSquare {
+    let rowCol = sqKey.split(",").map(x => +x);
+    return grid.squares[rowCol[0]][rowCol[1]];
+}

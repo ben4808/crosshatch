@@ -1,3 +1,4 @@
+import { ContentType } from '../models/ContentType';
 import { EntryCandidate } from '../models/EntryCandidate';
 import { FillNode } from '../models/FillNode';
 import { GridSquare } from '../models/GridSquare';
@@ -5,58 +6,115 @@ import { GridState } from '../models/GridState';
 import { GridWord } from '../models/GridWord';
 import { QualityClass } from '../models/QualityClass';
 import { Section } from '../models/Section';
-import { SectionCandidate } from '../models/SectionCandidate';
 import { WordDirection } from '../models/WordDirection';
-import { generateConstraintInfoForSquares } from './grid';
-import { PriorityQueue } from './priorityQueue';
+import { generateConstraintInfoForSquares, getLettersFromSquares } from './grid';
+import { PriorityQueue, priorityQueue } from './priorityQueue';
+import { insertSectionCandidateIntoGrid } from './section';
 import { deepClone, getSquaresForWord, wordLength, mapKeys, isWordFull, isUserFilled, 
-    getWordAtSquare, otherDir, isWordEmpty, indexedWordListLookup, getRandomWordsOfLength } from './util';
+    getWordAtSquare, otherDir, isWordEmpty, indexedWordListLookup, getRandomWordsOfLength, 
+    wordKey, compareTuples, doesWordContainSquare } from './util';
 import Globals from './windowService';
 
-export function fillSectionWord(fillQueue: PriorityQueue<FillNode>, section: Section,
-        sectionCandidate: SectionCandidate): GridState {
-    let node = fillQueue.peek()!;
-    let gridToReturn = node.startGrid;
+export function fillSectionWord() {
+    let section = Globals.sections!.get(Globals.activeSectionId!)!;
+    let selectedSectionsKey = Globals.selectedSectionIds!.sort().map(i => i.toString()).join(",");
+    let fillQueue = section.fillQueues.get(selectedSectionsKey);
+    if (!fillQueue) {
+        let newFillQueue = priorityQueue<FillNode>();
+        populateSeedNodes(newFillQueue, Globals.selectedSectionIds!);
+        fillQueue = newFillQueue;
+        section.fillQueues.set(selectedSectionsKey, fillQueue);
+    }
 
+    let score = processSectionNode(fillQueue!.peek()!, section);
+    if (score === undefined) {
+        
+    }
+}
+
+function populateSeedNodes(fillQueue: PriorityQueue<FillNode>, selectedSectionIds: number[]) {
+    let intersectingSectionIds = [] as number[];
+    let activeSectionId = Globals.activeSectionId!;
+    let activeSection = Globals.sections!.get(activeSectionId)!;
+    selectedSectionIds.forEach(sid => {
+        let otherSection = Globals.sections!.get(sid)!;
+        if (sid !== activeSectionId && otherSection.candidates.length > 0 && doSectionsIntersect(sid, activeSectionId)) {
+            intersectingSectionIds.push(sid);
+        }
+    });
+    intersectingSectionIds.sort();
+
+    if (intersectingSectionIds.length === 0) {
+        fillQueue.insert(makeNewNode(Globals.puzzle!.grid, 0, false), 0);
+        return;
+    }
+
+    let comboKey = intersectingSectionIds.map(x => x.toString()).join(",");
+    let candidateCounts = intersectingSectionIds.map(i => Globals.sections!.get(i)!.candidates.length);
+    let grid = Globals.puzzle!.grid;
+    let newPermutations = getNewPermutations(candidateCounts, comboKey, activeSection);
+    newPermutations.forEach(perm => {
+        let node = makeNewNode(grid, 0, false);
+        for (let i = 0; i < perm.length; i++) {
+            let candidate = Globals.sections!.get(intersectingSectionIds[i])!.candidates[perm[i]];
+            insertSectionCandidateIntoGrid(node.startGrid, candidate, activeSection);
+        }
+        fillQueue.insert(node, 0);
+    });
+}
+
+function getNewPermutations(candidateCounts: number[], comboKey: string, section: Section): number[][] {
+    function processPerm() {
+        let perm = permsQueue.shift();
+        if (!perm || newPerms.length >= 50) return;
+
+        let permKey = perm.map(i => i.toString()).join(",");
+        if (triedPerms.has(permKey)) return;
+
+        triedPerms.set(permKey, true);
+        newPerms.push(perm);
+
+        for(let i = 0; i < perm.length; i++) {
+            if (perm[i] === candidateCounts[i] - 1) continue;
+
+            let newPerm = deepClone(perm);
+            newPerm[i]++;
+            permsQueue.push(newPerm);
+        }
+
+        processPerm();
+    }
+
+    let curIs = [] as number[];
+    let newPerms = [] as number[][];
+    for(let i = 0; i < candidateCounts.length; i++) curIs.push(1);
+    let triedPerms = section.triedComboPerms.get(comboKey)!;
+    let permsQueue = [curIs];
+
+    processPerm();
+    return newPerms;
+}
+
+function doSectionsIntersect(id1: number, id2: number) {
+    let wordKeys1 = mapKeys(Globals.sections!.get(id1)!.words);
+    let wordKeys2 = mapKeys(Globals.sections!.get(id2)!.words);
+
+    return wordKeys1.find(w => wordKeys2.includes(w));
+}
+
+// returns score of best entryCandidate, or undefined if no viable options
+export function processSectionNode(node: FillNode, section: Section): number | undefined {
     node.fillWord = selectWordToFill(node, section);
 
     populateAndScoreEntryCandidates(node);
 
     let viableCandidates = getViableCandidates(node);
-    if(viableCandidates.length === 0) {
-        if (prevNode.isChainNode) {
-            if (shouldMakeNewNode) {
-                chainNewNodeNotViable(prevNode);
-                fillQueue.pop();
-                fillQueue.insert(prevNode, calculateNodePriority(prevNode));
-            }
-            else {
-                chainNodeMaxBacktracks(node);
-                fillQueue.pop();
-            }
-        }
-        else {
-            fillQueue.pop();
-        }
-        
-        return fillWord();
-    }
+    if(viableCandidates.length === 0) return undefined;
 
     node.chosenEntry = chooseEntryFromCandidates(viableCandidates);
-    insertEntryIntoGrid(newGrid, node.fillWord!, node.chosenEntry);
+    insertEntryIntoGrid(node.endGrid, node.fillWord!, node.chosenEntry);
 
-    if (isGridFilled(newGrid)) {
-        //insertIntoCompletedGrids(node);
-        chainNewNodeNotViable(prevNode);
-        Globals.fillStatus = FillStatus.Success;
-        return newGrid;
-    }
-
-    if (shouldMakeNewNode) {
-        fillQueue.insert(node, calculateNodePriority(node));
-    }
-    
-    return newGrid;
+    return node.entryCandidates[0].score!;
 }
 
 export function makeNewNode(grid: GridState, depth: number, isChainNode: boolean): FillNode {
@@ -67,6 +125,7 @@ export function makeNewNode(grid: GridState, depth: number, isChainNode: boolean
         depth: depth,
         isChainNode: isChainNode,
         backtracks: 0,
+        madeUpWords: [],
     } as FillNode;
 }
 
@@ -102,26 +161,27 @@ function selectWordToFill(node: FillNode, section: Section): GridWord | undefine
 
 function getWordConstraintScore(squares: GridSquare[]): number {
     let total = 0;
-    let openSquareCount = 0;
+    let unfilledSquareCount = 0;
     let foundZero = false;
     squares.forEach(sq => {
         if (isUserFilled(sq)) return;
-        let sum = sq.constraintInfo ? sq.constraintInfo.sumTotal : 1000;
+        let sum = sq.constraintInfo!.isCalculated ? sq.constraintInfo!.sumTotal : 1000;
         if (sum === 0) {
             foundZero = true;
             return;
         }
         total += Math.log2(sum + 1);
-        openSquareCount++;
+        unfilledSquareCount++;
     });
 
-    return foundZero ? 0 : total / openSquareCount;
+    return foundZero ? 0 : total / unfilledSquareCount;
 }
 
 function populateAndScoreEntryCandidates(node: FillNode) {
     let grid = node.startGrid;
     let wordSquares = getSquaresForWord(grid, node.fillWord!);
     let crosses = getUnfilledCrosses(grid, node.fillWord!);
+    if (crosses.length === 0) return;
 
     let oldLength = node.entryCandidates.length;
     while (true) {
@@ -129,19 +189,12 @@ function populateAndScoreEntryCandidates(node: FillNode) {
         if (node.entryCandidates.length === oldLength) break;
         oldLength = node.entryCandidates.length;
 
-        node.entryCandidates.forEach(candidate => {
-            if (!candidate.isViable) return;
-
-            if (crosses.length === 0) {
-                candidate.score = calculateCandidateScore(candidate, 1, 1);
-                return;
-            }
-    
-            let foundBadCross = false;
+        node.entryCandidates.filter(ec => ec.isViable).forEach(candidate => {
             let totalCrossScores = 0;
             let lowestCrossScore = 1e8;
+            let isViable = true;
             crosses.forEach(cross => {
-                if (foundBadCross) return;
+                if (!isViable) return;
                 let squares = getSquaresForWord(grid, cross);
                 let newSquares: GridSquare[] = deepClone(squares);
     
@@ -158,23 +211,33 @@ function populateAndScoreEntryCandidates(node: FillNode) {
                 sqToReplace.content = newVal;
     
                 if (sqToReplace.constraintInfo && !sqToReplace.constraintInfo.viableLetters.has(newVal)) {
-                    foundBadCross = true;
-                    return;
+                    if (squares.length > 4 || node.madeUpWords.length > 0) {
+                        isViable = false;
+                        return;
+                    }
+                    else {
+                        node.madeUpWords.push(wordKey(cross));
+                    }
                 }
                 
-                let populatedSquares = generateConstraintInfoForSquares(grid, newSquares);
-                if (populatedSquares === undefined) {
-                    foundBadCross = true;
-                    return;
+                generateConstraintInfoForSquares(grid, newSquares);
+                if (newSquares.find(sq => sq.constraintInfo!.isCalculated && sq.constraintInfo!.sumTotal === 0)) {
+                    if (squares.length > 4 || node.madeUpWords.length > 0) {
+                        isViable = false;
+                        return;
+                    }
+                    else {
+                        node.madeUpWords.push(wordKey(cross));
+                    }
                 }
-                candidate.constraintSquaresForCrosses.push(populatedSquares);
+                candidate.constraintSquaresForCrosses.push(newSquares);
     
                 let crossScore = getWordConstraintScore(newSquares);
                 totalCrossScores += crossScore;
                 if (crossScore < lowestCrossScore) lowestCrossScore = crossScore;
             });
     
-            if (foundBadCross || totalCrossScores === 0) {
+            if (!isViable) {
                 candidate.score = 0;
                 candidate.isViable = false;
                 return;
@@ -188,15 +251,10 @@ function populateAndScoreEntryCandidates(node: FillNode) {
         if (viableCandidates.length >= 10) break;
     }
 
-    // eslint-disable-next-line
-    let viableCandidates = node.entryCandidates.filter(x => x.isViable);
-    viableCandidates = viableCandidates.sort((a, b) => b.score! - a.score!);
+    node.entryCandidates.sort((a, b) => b.score! - a.score!);
 }
 
-function getUnfilledCrosses(grid: GridState, prevWord: GridWord | undefined): GridWord[] {
-    if (!prevWord) return [];
-    let word = prevWord!;
-
+export function getUnfilledCrosses(grid: GridState, word: GridWord): GridWord[] {
     let squares = getSquaresForWord(grid, word);
     let crosses = squares
         .map(sq => getWordAtSquare(grid, sq.row, sq.col, otherDir(word.direction)))
@@ -245,10 +303,10 @@ function calculateCandidateScore(candidate: EntryCandidate, averageCrossScore: n
 
     let qualityClass = Globals.qualityClasses!.get(candidate.word);
     switch(qualityClass) {
-        case QualityClass.Lively: return 1e6 + 2*rawScore;
-        case QualityClass.Normal: return 1e6 + rawScore;
-        case QualityClass.Crosswordese: return 1e3 + 2*rawScore;
-        case QualityClass.Iffy: return 1e3 + rawScore;
+        case QualityClass.Lively: return rawScore * 12;
+        case QualityClass.Normal: return rawScore * 9;
+        case QualityClass.Crosswordese: return rawScore * 3;
+        case QualityClass.Iffy: return rawScore * 1;
     }
 
     return rawScore;
@@ -261,4 +319,68 @@ function getViableCandidates(node: FillNode): EntryCandidate[] {
     else {
         return node.entryCandidates.filter(ec => ec.isViable && !ec.hasBeenChained);
     }
+}
+
+function chooseEntryFromCandidates(candidates: EntryCandidate[]): EntryCandidate {
+    let weightedCandidates = deepClone(candidates) as EntryCandidate[];
+
+    let topScore = weightedCandidates[0].score!;
+    weightedCandidates.forEach(c => {
+        c.score! = Math.pow(c.score! / topScore, 3);
+    });
+
+    let roll = Math.random();
+    for (let i = weightedCandidates.length - 1; i >= 0; i--) {
+        let score = weightedCandidates[i].score!;
+        if (score >= roll)
+            return candidates.find(c => c.word === weightedCandidates[i].word)!;
+    }
+
+    return candidates.find(c => c.word === weightedCandidates[0].word)!;
+}
+
+function insertEntryIntoGrid(grid: GridState, word: GridWord, newEntry: EntryCandidate) {
+    function processSquare() {
+        if (crossIndex < crosses.length) {
+            let cross = crosses[crossIndex];
+            if (doesWordContainSquare(cross, curPos[0], curPos[1])) {
+                let crossSquares = getSquaresForWord(grid, cross);
+                let newCrossSquares = newEntry.constraintSquaresForCrosses[crossIndex];
+                if (newCrossSquares.length > 0) {
+                    crossSquares.forEach((sq, i) => {
+                        grid.squares[sq.row][sq.col] = newEntry.constraintSquaresForCrosses[crossIndex][i];
+                    });
+                }
+
+                let letters = getLettersFromSquares(newCrossSquares);
+                if (!letters.includes(".")) grid.usedWords.set(letters, true);
+
+                crossIndex++;
+            }
+        }
+        
+        let sq = grid.squares[curPos[0]][curPos[1]];
+        sq.content = newEntry.word[wordIndex];
+        sq.contentType = ContentType.Autofill;
+        sq.constraintInfo = {
+            isCalculated: true,
+            sumTotal: 1,
+            viableLetters: new Map<string, number>([[sq.content, 1]]),
+        }
+        wordIndex++;
+    }
+
+    let curPos = word.start;
+    let wordIndex = 0;
+    let crossIndex = 0;
+    let crosses = getUnfilledCrosses(grid, word);
+    while (!compareTuples(curPos, word.end)) {
+        processSquare();
+
+        curPos = word.direction === WordDirection.Across ?
+            [curPos[0], curPos[1]+1] : [curPos[0]+1, curPos[1]];
+    }
+    processSquare();
+
+    grid.usedWords.set(newEntry.word, true);
 }

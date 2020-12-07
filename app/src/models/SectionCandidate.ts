@@ -7,4 +7,5 @@ export interface SectionCandidate {
     score: number;
     madeUpEntries: string[];
     isFilteredOut: boolean;
+    isComplete: boolean;
 }

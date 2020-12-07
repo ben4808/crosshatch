@@ -105,43 +105,33 @@ function numberizeGrid(grid: GridState) {
     }
 }
 
-export function generateConstraintInfoForSquares(grid: GridState, squares: GridSquare[]): GridSquare[] | undefined {
-    let ret = [] as GridSquare[];
-
-    if (isWordEmpty(squares)) return ret;
-
-    if (isWordFull(squares)) {
-        squares.forEach(sq => {
+export function generateConstraintInfoForSquares(grid: GridState, squares: GridSquare[]) {
+    squares.forEach(sq => {
+        if (sq.content) {
             sq.constraintInfo = {
+                isCalculated: true,
                 sumTotal: 1,
-                viableLetters: new Map<string, number>([[sq.fillContent!, 1]]),
+                viableLetters: new Map<string, number>([[sq.content!, 1]]),
             };
-        });
-        return squares;
-    }
+        }
+        else {
+            sq.constraintInfo = {
+                isCalculated: true,
+                sumTotal: 0,
+                viableLetters: new Map<string, number>(),
+            }
+        }
+    });
+    if (isWordEmpty(squares) || isWordFull(squares)) return;
 
     let entryOptions = indexedWordListLookupSquares(grid, squares);
-    if (entryOptions.length > 200) return ret;
+    if (entryOptions.length > 200) {
+        squares.forEach(sq => { sq.constraintInfo!.isCalculated = false; });
+        return;
+    }
 
-    let foundZeroSquare = false;
     for (let i = 0; i < squares.length; i++) {
         let sq = squares[i];
-
-        let justInitialized = false;
-        if (!sq.constraintInfo) {
-            sq.constraintInfo = {
-                viableLetters: new Map<string, number>(),
-                sumTotal: 0,
-            } as ConstraintInfo;
-            justInitialized = true;
-        }
-
-        if (sq.fillContent) {
-            sq.constraintInfo.sumTotal = 1;
-            sq.constraintInfo.viableLetters = new Map<string, number>([[sq.fillContent, 1]]);
-            continue;
-        }
-
         let letters = entryOptions.map(x => x[i]);
         let newViableLetters = new Map<string, number>();
         letters.forEach(ltr => {
@@ -150,31 +140,21 @@ export function generateConstraintInfoForSquares(grid: GridState, squares: GridS
 
         let sumTotal = 0;
         let existingViableLetters = sq.constraintInfo!.viableLetters;
-        if (!justInitialized) {
-            newViableLetters.forEach((v, k) => {
-                if (!existingViableLetters.has(k))
-                newViableLetters.delete(k);
-            });
-            newViableLetters.forEach((v, k) => {
-                let oldVal = existingViableLetters.get(k) || 0;
-                let newVal = Math.min(v, oldVal);
-                if (newVal > 0) newViableLetters.set(k, newVal);
-                else newViableLetters.delete(k);
-                sumTotal += newVal;
-            });
-        }
-        else {
-            newViableLetters.forEach((v, k) => {
-                sumTotal += v;
-            });
-        }
+        newViableLetters.forEach((v, k) => {
+            if (!existingViableLetters.has(k))
+            newViableLetters.delete(k);
+        });
+        newViableLetters.forEach((v, k) => {
+            let oldVal = existingViableLetters.get(k) || 0;
+            let newVal = Math.min(v, oldVal);
+            if (newVal > 0) newViableLetters.set(k, newVal);
+            else newViableLetters.delete(k);
+            sumTotal += newVal;
+        });
 
-        if (sumTotal === 0) foundZeroSquare = true;
         sq.constraintInfo!.viableLetters = newViableLetters;
-        sq.constraintInfo.sumTotal = sumTotal;
+        sq.constraintInfo!.sumTotal = sumTotal;
     }
-
-    return foundZeroSquare ? undefined : squares;
 }
 
 export function getConstraintSquareSum(squares: GridSquare[]): number {

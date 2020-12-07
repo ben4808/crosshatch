@@ -1,16 +1,18 @@
+import { ContentType } from "../models/ContentType";
 import { FillNode } from "../models/FillNode";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
 import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
 import { WordDirection } from "../models/WordDirection";
+import { getUnfilledCrosses } from "./fill2";
+import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
 import { PriorityQueue } from "./priorityQueue";
-import { forAllGridSquares, getSquaresForWord, getWordAtSquare, 
-    isAcross, 
+import { forAllGridSquares, getSquaresForWord, getWordAtSquare, gridSquareAtKey, isAcross, 
     isBlackSquare, isUserFilled, mapKeys, wordKey } from "./util";
 import Globals from './windowService';
 
-export function updateGlobalSections(newGrid: GridState) {
+export function updateSections(newGrid: GridState) {
     function keysStr(section: Section): string {
         return Array.from(section.squares.keys()).sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : a[1] - b[1])
             .map(k => `(${k[0]},${k[1]}`).join(",");
@@ -41,7 +43,7 @@ export function updateGlobalSections(newGrid: GridState) {
     Globals.sections = newSections;
 }
 
-export function updateGlobalSectionFilters(grid: GridState) {
+export function updateSectionFilters(grid: GridState) {
     let sections = Globals.sections!;
     sections.forEach(sec => {
         sec.candidates.forEach(can => {
@@ -55,6 +57,48 @@ export function updateGlobalSectionFilters(grid: GridState) {
             }
         });
     });
+}
+
+export function getSectionString(grid: GridState, section: Section): string {
+    let ret = [] as string[];
+    mapKeys(section.squares).forEach(sq => {
+        let rowCol = sq.split(",").map(x => +x);
+        let content = grid.squares[rowCol[0]][rowCol[1]].content;
+        ret.push(content ? content! : ".");
+    });
+    return ret.join("");
+}
+
+export function insertSectionCandidateIntoGrid(grid: GridState, candidate: SectionCandidate, section: Section) {
+    section.squares.forEach((_, sqKey) => {
+        let sq = gridSquareAtKey(grid, sqKey);
+        let candidateSq = gridSquareAtKey(candidate.grid, sqKey);
+        sq.content = candidateSq.content;
+        sq.constraintInfo = {
+            isCalculated: true,
+            sumTotal: 1,
+            viableLetters: new Map<string, number>([[sq.content!, 1]]),
+        }
+        if (!isUserFilled(sq)) {
+            sq.contentType = ContentType.Autofill;
+        }
+    });
+
+    section.words.forEach((_, key) => {
+        let word = grid.words.get(key)!;
+        let squares = getSquaresForWord(grid, word);
+        grid.usedWords.set(getLettersFromSquares(squares), true);
+    });
+
+    section.unfilledCrosses.forEach((_, key) => {
+        let word = grid.words.get(key)!;
+        let squares = getSquaresForWord(grid, word);
+        generateConstraintInfoForSquares(grid, squares);
+    });
+}
+
+export function switchSections(newSectionId: number, selectedSections: number[]) {
+
 }
 
 export function generateGridSections(grid: GridState): Section[] {
@@ -82,13 +126,14 @@ export function generateGridSections(grid: GridState): Section[] {
 
     let sections = [] as Section[];
     let usedSquares = new Map<string, boolean>();
-    if (Globals.sectionI === undefined) Globals.sectionI = 1;
-    let i = Globals.sectionI!;
+    if (Globals.nextSectionId === undefined) Globals.nextSectionId = 1;
+    let i = Globals.nextSectionId!;
 
+    // populate sections
     forAllGridSquares(grid, sq => {
         if (!usedSquares.has(`${sq.row},${sq.col}`) && isOpenSquare(grid, sq)) {
             let newSection = {
-                number: i++,
+                id: i,
                 openSquareCount: 0,
                 squares: new Map<string, boolean>(),
                 words: new Map<string, boolean>(),
@@ -98,10 +143,13 @@ export function generateGridSections(grid: GridState): Section[] {
             } as Section;
 
             iterateSection(newSection, grid, sq, usedSquares);
+            if (newSection.openSquareCount === 1) return;
             sections.push(newSection);
+            i++;
         }
     });
 
+    // populate stackWords
     sections.forEach(section => {
         section.words.forEach((_, key) => {
             if (section.stackWords.has(key)) return;
@@ -128,7 +176,20 @@ export function generateGridSections(grid: GridState): Section[] {
         });
     });
 
-    Globals.sectionI = i;
+    // populate unfilledCrosses
+    sections.forEach(section => {
+        section.words.forEach((_, key) => {
+            let word = grid.words.get(key)!;
+            let crosses = getUnfilledCrosses(grid, word);
+            crosses.forEach(cross => {
+                let crossKey = wordKey(cross);
+                if (!section.words.has(crossKey))
+                    section.unfilledCrosses.set(crossKey, true);
+            });
+        });
+    });
+
+    Globals.nextSectionId = i;
     return sections.sort((a, b) => a.openSquareCount - b.openSquareCount);
 }
 
