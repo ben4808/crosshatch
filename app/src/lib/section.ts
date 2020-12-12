@@ -5,7 +5,7 @@ import { GridState } from "../models/GridState";
 import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
 import { WordDirection } from "../models/WordDirection";
-import { getUnfilledCrosses } from "./fill2";
+import { getUnfilledCrosses, getWordScore } from "./fill2";
 import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
 import { PriorityQueue } from "./priorityQueue";
 import { forAllGridSquares, getSquaresForWord, getWordAtSquare, gridSquareAtKey, isAcross, 
@@ -215,4 +215,26 @@ function getNeighboringSquares(grid: GridState, sq: GridSquare): GridSquare[] {
     if (wClear) ret.push(grid.squares[sq.row][sq.col-1]);
 
     return ret;
+}
+
+export function newSectionCandidate(node: FillNode, section: Section): SectionCandidate {
+    let grid = node.endGrid;
+    return {
+        grid: grid,
+        score: calculateSectionCandidateScore(grid, section),
+        madeUpEntries: node.madeUpWords,
+        isFilteredOut: false,
+    } as SectionCandidate;
+}
+
+export function calculateSectionCandidateScore(grid: GridState, section: Section): number {
+    let total = 0;
+    section.words.forEach((_, wordKey) => {
+        let word = grid.words.get(wordKey)!;
+        let squares = getSquaresForWord(grid, word);
+        let str = getLettersFromSquares(squares);
+        total += getWordScore(str);
+    });
+
+    return total / section.words.size;
 }

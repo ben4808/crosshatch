@@ -15,7 +15,7 @@ export interface Section {
     triedComboPerms: Map<string, Map<string, boolean>>;
     // <sectionString, >
     triedComboSquares: Map<string, boolean>;
-    candidates: SectionCandidate[];
+    candidates: Map<string, SectionCandidate>;
     // <includedList, >
     fillQueues: Map<string, PriorityQueue<FillNode>>;
 }

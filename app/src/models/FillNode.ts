@@ -13,4 +13,5 @@ export interface FillNode {
     isChainNode: boolean;
     backtracks: number;
     madeUpWords: string[];
+    needsNewPriority: boolean;
 }
