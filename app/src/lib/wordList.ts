@@ -115,14 +115,30 @@ export async function loadWordList(source: string, url: string, parserFunc: (lin
     return ret;
 }
 
-export function queryIndexedWordList(length: number, pos1: number, val1: string, pos2?: number, val2?: string): string[] {
+export function queryIndexedWordList(pattern: string): string[] {
     let wl = Globals.wordList!;
-    let words: string[];
-    if (pos2 && val2) {
-        words = wl.buckets.twoVal[length-2][pos1-1][pos2-(pos1+1)][val1.charCodeAt(0)-65][val2.charCodeAt(0)-65];
+    let words = [] as string[];
+    let letters = [] as [number, string][];
+    let length = pattern.length;
+    for (let i = 0; i < pattern.length; i++) {
+        if (pattern[i] !== "-") {
+            letters.push([i+1, pattern[i]]);
+        }
     }
-    else {
-        words = wl.buckets.oneVal[length-2][pos1-1][val1.charCodeAt(0)-65];
+
+    if (letters.length === 1) {
+        words = wl.buckets.oneVal[length-2][letters[0][0]-1][letters[0][1].charCodeAt(0)-65];
+    }
+    if (letters.length > 1) {
+        let pos1 = letters[0][0];
+        let pos2 = letters[1][0];
+        let val1 = letters[0][1];
+        let val2 = letters[1][1];
+        words = wl.buckets.twoVal[length-2][pos1-1][pos2-(pos1+1)][val1.charCodeAt(0)-65][val2.charCodeAt(0)-65];
+
+        for (let i = 2; i < letters.length; i++) {
+            words = words.filter(w => w[letters[i][0]] === letters[i][1]);
+        }
     }
 
     return words;
@@ -133,11 +149,6 @@ function indexWordList(entries: string[]): any {
         oneVal: [] as any[],
         twoVal: [] as any[],
     };
-
-    Globals.starterLengthBuckets = new Map<number, string[]>();
-    for (let length = 2; length <= 15; length++) {
-        Globals.starterLengthBuckets.set(length, []);
-    }
 
     for (let length = 2; length <= 15; length++) {
         ret.oneVal.push([] as any[]);
@@ -166,9 +177,6 @@ function indexWordList(entries: string[]): any {
     }
 
     entries.forEach(word => {
-        if (Math.random() < 0.01)
-            Globals.starterLengthBuckets!.get(word.length)!.push(word);
-
         // 1-position entries
         for (let pos1 = 1; pos1 <= word.length; pos1++) {
             ret.oneVal[word.length-2][pos1-1][word[pos1-1].charCodeAt(0)-65].push(word);

@@ -4,11 +4,10 @@ import { QualityClass } from "./QualityClass";
 import { Section } from "./Section";
 import { SymmetryType } from "./SymmetryType";
 import { WordDirection } from "./WordDirection";
-import { WordKey } from "./WordKey";
 
 export interface GlobalsObj {
     puzzle?: Puzzle;
-    selectedWordKey?: WordKey;
+    selectedWordKey?: string;
     selectedWordDir?: WordDirection;
     gridSymmetry?: SymmetryType;
     isFillRunning: boolean;
@@ -20,7 +19,6 @@ export interface GlobalsObj {
 
     wordList?: IndexedWordList;
     qualityClasses?: Map<string, QualityClass>;
-    starterLengthBuckets?: Map<number, string[]>;
 
     fillWord?: () => void;
     fillGrid?: () => void;

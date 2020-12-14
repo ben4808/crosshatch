@@ -8,7 +8,6 @@ import Globals from './windowService';
 import { Puzzle } from "../models/Puzzle";
 import { createNewGrid } from "./grid";
 import { ContentType } from "../models/ContentType";
-import { WordKey } from "../models/WordKey";
 
 export function average(arr: number[]): number {
     return arr.reduce((a,b) => a + b, 0) / arr.length;
@@ -65,46 +64,8 @@ export function indexedWordListLookup(grid: GridState, word: GridWord): string[]
 }
 
 export function indexedWordListLookupSquares(grid: GridState, squares: GridSquare[]): string[] {
-    let length = squares.length;
-
-    let letters: [number, string][] = [];
-    for(let pos = 1; pos <= length; pos++) {
-        let ltr = squares[pos-1].fillContent;
-        if (ltr) {
-            letters.push([pos, ltr]);
-        }
-    }
-
-    if (letters.length === 1) {
-        return queryIndexedWordList(length, letters[0][0], letters[0][1]);
-    }
-
-    let possibles: string[] = [];
-    for(let i = 0; i < letters.length; i+=2) {
-        let entries = i === letters.length-1 ?
-            queryIndexedWordList(length, letters[i-1][0], letters[i-1][1], letters[i][0], letters[i][1]) :
-            queryIndexedWordList(length, letters[i][0], letters[i][1], letters[i+1][0], letters[i+1][1]);
-        if (entries.length === 0) return [];
-        possibles = i === 0 ? entries : intersectEntryLists(possibles, entries);
-    }
-
-    return possibles;
-}
-
-export function getRandomWordsOfLength(length: number): string[] {
-    let bucket = Globals.starterLengthBuckets!.get(length) || [];
-    let map = new Map<string, boolean>();
-    let ret = [];
-    for (let i = 0; i < 50; i++) {
-        let index = Math.floor(Math.random() * bucket.length);
-        let word = bucket[index];
-        if (!map.has(word)) {
-            map.set(word, true);
-            ret.push(word);
-        }
-    }
-
-    return ret;
+    let pattern = squares.map(sq => sq.content ? sq.content! : ".").join("");
+    return queryIndexedWordList(pattern);
 }
 
 export function getSquaresForWord(grid: GridState, word: GridWord): GridSquare[] {
@@ -120,20 +81,19 @@ export function getSquaresForWord(grid: GridState, word: GridWord): GridSquare[]
     return squares;
 }
 
-function intersectEntryLists(list1: string[], list2: string[]): string[] {
-    var hash2 = new Map(list2.map(i => [i, true]));
-    return list1.filter(word => hash2.has(word));
-}
-
 export function getWordAtSquare(grid: GridState, row: number, col: number, dir: WordDirection): GridWord | undefined {
-    if (dir === WordDirection.Across) {
-        return grid.words.find(x => x.direction === dir && x.start[0] === row && 
-            x.start[1] <= col && x.end[1] >= col);
-    }
-    else {
-        return grid.words.find(x => x.direction === dir && x.start[1] === col && 
-            x.start[0] <= row && x.end[0] >= row);
-    }
+    let ret = undefined as GridWord | undefined;
+
+    grid.words.forEach((word, _) => {
+        if (dir === WordDirection.Across && word.direction === dir && word.start[0] === row &&
+            word.start[1] <= col && word.end[1] >= col)
+            ret = word;
+        if (dir === WordDirection.Down && word.direction === dir && word.start[1] === col &&
+            word.start[0] <= row && word.end[0] >= row)
+            ret = word;
+    });
+
+    return ret;
 }
 
 export function newWord(): GridWord {
@@ -155,11 +115,11 @@ export function doesWordContainSquare(word: GridWord, row: number, col: number):
 }
 
 export function isWordEmpty(squares: GridSquare[]): boolean {
-    return !squares.find(x => !isBlackSquare(x) && x.fillContent);
+    return !squares.find(x => !isBlackSquare(x) && x.content);
 }
 
 export function isWordFull(squares: GridSquare[]): boolean {
-    return !squares.find(x => !isBlackSquare(x) && !x.fillContent);
+    return !squares.find(x => !isBlackSquare(x) && !x.content);
 }
 
 export function shuffleArray(array: any[]) {
@@ -199,6 +159,10 @@ export function wordKey(word: GridWord): string {
     return `[${word.start[0]},${word.start[1]},${word.direction === WordDirection.Across ? "A" : "D"}]`;
 }
 
+export function squareKey(sq: GridSquare | undefined): string {
+    return sq ? `${sq.row},${sq.col}` : "";
+}
+
 export function getGrid(): GridState {
     return Globals.puzzle!.grid!;
 }
@@ -229,4 +193,16 @@ export function isAcross(word: GridWord): boolean {
 export function gridSquareAtKey(grid: GridState, sqKey: string): GridSquare {
     let rowCol = sqKey.split(",").map(x => +x);
     return grid.squares[rowCol[0]][rowCol[1]];
+}
+
+export function isPartOfMadeUpWord(sq: GridSquare): boolean {
+    return sq.constraintInfo!.isCalculated && sq.constraintInfo!.sumTotal === 0;
+}
+
+// https://stackoverflow.com/questions/2450954/how-to-randomize-shuffle-a-javascript-array
+export function shuffle(array: any[]) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
 }

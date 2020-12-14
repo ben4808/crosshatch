@@ -5,7 +5,7 @@ import { GridState } from "../models/GridState";
 import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
 import { WordDirection } from "../models/WordDirection";
-import { getUnfilledCrosses, getWordScore } from "./fill2";
+import { getUnfilledCrosses, getWordScore } from "./fill";
 import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
 import { PriorityQueue } from "./priorityQueue";
 import { forAllGridSquares, getSquaresForWord, getWordAtSquare, gridSquareAtKey, isAcross, 

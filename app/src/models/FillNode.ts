@@ -12,6 +12,11 @@ export interface FillNode {
     depth: number;
     isChainNode: boolean;
     backtracks: number;
-    madeUpWords: string[];
+    madeUpWordKey?: string;
     needsNewPriority: boolean;
+    
+    anchorSquareKeys: string[];
+    anchorCombosLeft: [string, string][];
+    // <squareKey, <letter, count>>
+    viableLetterCounts: Map<string, Map<string, number>>;
 }
