@@ -179,11 +179,11 @@ export function getSelectedWord(): GridWord | undefined {
 }
 
 export function mapKeys<TKey, TVal>(map: Map<TKey, TVal>): TKey[] {
-    return Array.from(map.keys());
+    return Array.from(map.keys()) || [];
 }
 
 export function mapValues<TKey, TVal>(map: Map<TKey, TVal>): TVal[] {
-    return Array.from(map.values());
+    return Array.from(map.values()) || [];
 }
 
 export function isUserFilled(sq: GridSquare): boolean {

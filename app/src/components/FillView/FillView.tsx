@@ -70,7 +70,7 @@ function FillView() {
 
     function handleEntryCandidateClick(event: any) {
         let target = event.target;
-        while (target.classList.length < 1 || !target.classList.includes("fill-list-row-wrapper")) {
+        while (target.classList.length < 1 || target.classList[0] !== "fill-list-row-wrapper") {
             target = target.parentElement;
             if (!target) return;
         }
@@ -87,7 +87,7 @@ function FillView() {
 
     function handleEntryCandidateHover(event: any) {
         let target = event.target;
-        while (target.classList.length < 1 || !target.classList.includes("fill-list-row-wrapper")) {
+        while (target.classList.length < 1 || target.classList[0] !== "fill-list-row-wrapper") {
             target = target.parentElement;
             if (!target) return;
         }
@@ -108,7 +108,7 @@ function FillView() {
 
     function handleSectionClick(event: any) {
         let target = event.target;
-        while (target.classList.length < 1 || !target.classList.includes("fill-list-row-wrapper")) {
+        while (target.classList.length < 1 || target.classList[0] !== "fill-list-row-wrapper") {
             target = target.parentElement;
             if (!target) return;
         }
@@ -125,7 +125,7 @@ function FillView() {
 
     function handleSectionCandidateClick(event: any) {
         let target = event.target;
-        while (target.classList.length < 1 || !target.classList.includes("fill-list-row-wrapper")) {
+        while (target.classList.length < 1 || target.classList[0] !== "fill-list-row-wrapper") {
             target = target.parentElement;
             if (!target) return;
         }
@@ -140,7 +140,7 @@ function FillView() {
 
     function handleSectionCandidateHover(event: any) {
         let target = event.target;
-        while (target.classList.length < 1 || !target.classList.includes("fill-list-row-wrapper")) {
+        while (target.classList.length < 1 || target.classList[0] !== "fill-list-row-wrapper") {
             target = target.parentElement;
             if (!target) return;
         }
@@ -184,12 +184,12 @@ function FillView() {
 
     return (
         <div id="FillView" className="fill-container">
-            <div className="custom-control custom-switch">
+            <div className="custom-control custom-switch fill-switch">
                 <input type="checkbox" className="custom-control-input" id="fillSwitch" onClick={handleToggleFill} />
                 <label className="custom-control-label" htmlFor="fillSwitch">Fill</label>
             </div>
             <div className="fill-status">{fillStatus}</div>
-            <br /><br />
+            <br />
             Grid Symmetry: <br />
             <select className="custom-select symmetry-select" defaultValue={selectedSymmetry} onChange={handleSymmetryChange}>
                 {symmetryOptions.map(type => (
@@ -231,8 +231,8 @@ function FillView() {
                         <div className="fill-list-header">Size</div>
                         { sections.map(sec => (
                             <div className="fill-list-row-wrapper" key={sec.id} data-id={sec.id} onClick={handleSectionClick}>
-                                <div><input className="form-check-input" type="checkbox" 
-                                    checked={Globals.selectedSectionIds!.get(sec.id)} /></div>
+                                <div><input type="checkbox" className="section-checkbox"
+                                    defaultChecked={Globals.selectedSectionIds!.has(sec.id)} /></div>
                                 <div>{getPhoneticName(sec.id)}</div>
                                 <div>{sec.squares.size}</div>
                             </div>

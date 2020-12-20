@@ -115,6 +115,7 @@ export function generateGridSections(grid: GridState): Map<number, Section> {
             nextSectionId++;
         }
     });
+    if (sections.size === 2) sections.delete(1);
 
     // populate stackWords
     sections.forEach(section => {
@@ -122,13 +123,15 @@ export function generateGridSections(grid: GridState): Map<number, Section> {
             if (section.stackWords.has(key)) return;
 
             let word = grid.words.get(key)!;
-            let stackedNeighbors = mapKeys(section.words).filter(ok => {
-                let otherWord = grid.words.get(ok)!;
-                if (isAcross(word) && Math.abs(word.start[0] - otherWord.start[0]) === 1) {
+            let stackedNeighbors = mapKeys(section.words).filter(otherKey => {
+                if (otherKey === key) return false;
+
+                let otherWord = grid.words.get(otherKey)!;
+                if (isAcross(word) && isAcross(otherWord) && Math.abs(word.start[0] - otherWord.start[0]) === 1) {
                     let intersectionCount = Math.min(word.end[1], otherWord.end[1]) - Math.max(word.start[1], otherWord.start[1]) + 1;
                     return intersectionCount >= 5;
                 }
-                if (!isAcross(word) && Math.abs(word.start[1] - otherWord.start[1]) === 1) {
+                if (!isAcross(word) && !isAcross(otherWord) && Math.abs(word.start[1] - otherWord.start[1]) === 1) {
                     let intersectionCount = Math.min(word.end[0], otherWord.end[0]) - Math.max(word.start[0], otherWord.start[0]) + 1;
                     return intersectionCount >= 5;
                 }

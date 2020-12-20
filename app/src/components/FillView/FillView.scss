@@ -79,8 +79,24 @@
     background-color: lightblue;
 }
 
-// https://stackoverflow.com/questions/55593229/increasing-the-size-of-a-bootstrap-checkbox
-.custom-control-label::before ,.custom-control-label::after {
-    width:20px; 
-    height:20px
+.fill-switch {
+    cursor: pointer;
+    margin-left: 10px;
+}
+.custom-control-label {
+    width: 125px;
+    cursor: pointer;
+    padding-left: 5px;
+}
+.custom-control-label::before {
+    cursor: pointer;
+    transform: scale(1.4);
+}
+
+.fill-status {
+    margin-top: 5px;
+}
+
+.section-checkbox {
+    margin-left: 10px;
 }

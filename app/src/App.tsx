@@ -8,9 +8,11 @@ import Menu from './components/Menu/Menu';
 import Globals from './lib/windowService';
 import "./App.scss";
 import { Puzzle } from './models/Puzzle';
-import { newPuzzle } from './lib/util';
+import { getGrid, newPuzzle } from './lib/util';
 import { generatePuzFile } from './lib/puzFiles';
 import { SymmetryType } from './models/SymmetryType';
+import { FillStatus } from './models/FillStatus';
+import { generateGridSections } from './lib/section';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
@@ -70,8 +72,19 @@ function App(props: AppProps) {
     puzzleLink!.click();
   }
 
-  if (!Globals.puzzle) {
+  function initializeGlobals() {
     createNewPuzzle(gridWidth, gridHeight);
+    Globals.activeGrid = Globals.puzzle!.grid;
+    Globals.fillStatus = FillStatus.Ready;
+    let grid = getGrid();
+    Globals.sections = generateGridSections(grid);
+    Globals.activeSectionId = 0;
+    Globals.selectedSectionIds = new Map<number, boolean>();
+    Globals.selectedSectionIds.set(0, true);
+  }
+
+  if (!Globals.puzzle) {
+    initializeGlobals();
   }
 
   return (
