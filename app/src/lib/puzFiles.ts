@@ -3,7 +3,7 @@ import { Puzzle } from "../models/Puzzle";
 import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
 import { populateWords } from "./grid";
-import { clueKey, deepClone, newPuzzle } from "./util";
+import { deepClone, mapValues, newPuzzle, wordKey } from "./util";
 
 export async function loadPuzFile(url: string): Promise<Puzzle | undefined> {
     let response = await fetch(url);
@@ -31,7 +31,7 @@ export async function processPuzData(data: Blob): Promise<Puzzle | undefined> {
                 square.type = SquareType.Black;
             if (curChar === "-") {} // no data entered
             if (curChar.match(/[A-Z]/)) {
-                square.userContent = square.chosenFillContent = square.fillContent = curChar;
+                square.content = curChar;
             }
             i++;
         }
@@ -44,11 +44,11 @@ export async function processPuzData(data: Blob): Promise<Puzzle | undefined> {
     [puzzle.author, i] = getNextString(restOfFile, i);
     [puzzle.copyright, i] = getNextString(restOfFile, i);
 
-    let sortedWords = sortWordsForPuz(puzzle.grid.words);
+    let sortedWords = sortWordsForPuz(mapValues(puzzle.grid.words));
     sortedWords.forEach(word => {
         let clue = "";
         [clue, i] = getNextString(restOfFile, i);
-        let key = clueKey(word);
+        let key = wordKey(word);
         puzzle.clues.set(key, clue);
     });
 
@@ -107,7 +107,7 @@ export async function processPuzData(data: Blob): Promise<Puzzle | undefined> {
         rebusSquareMappings.forEach((v, k) => {
             let tokens = k.split(",");
             let square = puzzle.grid.squares[+tokens[0]][+tokens[1]];
-            square.userContent = square.chosenFillContent = square.fillContent = rebusValues.get(v)!;
+            square.content = rebusValues.get(v)!;
         });
     }
 
@@ -137,7 +137,7 @@ export function generatePuzFile(puzzle: Puzzle): Blob {
 
     insertNumber(bytes, grid.width, 0x2c, 1);
     insertNumber(bytes, grid.height, 0x2d, 1);
-    insertNumber(bytes, grid.words.length, 0x2e, 2);
+    insertNumber(bytes, grid.words.size, 0x2e, 2);
     insertNumber(bytes, 1, 0x30, 2);
     insertNumber(bytes, 0, 0x32, 2);
 
@@ -146,7 +146,7 @@ export function generatePuzFile(puzzle: Puzzle): Blob {
     for (let row = 0; row < grid.height; row++) {
         for (let col = 0; col < grid.width; col++) {
             let sq = grid.squares[row][col];
-            let char = sq.type === SquareType.Black ? "." : sq.userContent ? sq.userContent : " ";
+            let char = sq.type === SquareType.Black ? "." : sq.content ? sq.content : " ";
             insertString(bytes, char, pos);
             pos++;
         }
@@ -172,9 +172,9 @@ export function generatePuzFile(puzzle: Puzzle): Blob {
     pos += puzzle.copyright.length + 1;
 
     let orderedClues = [] as string[];
-    let sortedWords = sortWordsForPuz(puzzle.grid.words);
+    let sortedWords = sortWordsForPuz(mapValues(puzzle.grid.words));
     sortedWords.forEach(word => {
-        let key = clueKey(word);
+        let key = wordKey(word);
         orderedClues.push(puzzle.clues.get(key)! || "");
     });
 

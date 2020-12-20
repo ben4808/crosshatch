@@ -1,7 +1,7 @@
 import { CluesViewProp } from "./CluesViewProp";
 import React, { createRef, useEffect, useRef, useState } from 'react';
 import "./CluesView.scss";
-import { clueKey, deepClone, getSquaresForWord } from "../../lib/util";
+import { wordKey, deepClone, getSquaresForWord } from "../../lib/util";
 import Globals from '../../lib/windowService';
 import { getLettersFromSquares } from "../../lib/grid";
 import { WordDirection } from "../../models/WordDirection";
@@ -24,7 +24,7 @@ function CluesView(props: any) {
         let words = Globals.puzzle.grid.words;
         let clues = Globals.puzzle.clues;
         words.forEach(word => {
-            let key = clueKey(word);
+            let key = wordKey(word);
             let squares = getSquaresForWord(grid, word);
             let prop = {
                 number: word.number!,

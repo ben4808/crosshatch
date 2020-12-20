@@ -12,7 +12,7 @@ export interface FillNode {
     depth: number;
     isChainNode: boolean;
     backtracks: number;
-    madeUpWordKey?: string;
+    iffyWordKey?: string;
     needsNewPriority: boolean;
     
     anchorSquareKeys: string[];

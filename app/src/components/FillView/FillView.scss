@@ -78,3 +78,9 @@
 .fill-list-row-wrapper:hover > div {
     background-color: lightblue;
 }
+
+// https://stackoverflow.com/questions/55593229/increasing-the-size-of-a-bootstrap-checkbox
+.custom-control-label::before ,.custom-control-label::after {
+    width:20px; 
+    height:20px
+}

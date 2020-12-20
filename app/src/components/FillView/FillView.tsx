@@ -3,18 +3,19 @@ import { SymmetryType } from '../../models/SymmetryType';
 import "./FillView.scss";
 import Globals from '../../lib/windowService';
 import { FillStatus } from '../../models/FillStatus';
+import { getGrid, getSection, getSquaresForWord, mapValues } from '../../lib/util';
+import { getLongestStackWord, getPhoneticName, insertSectionCandidateIntoGrid, makeNewSection, sectionCandidateKey, updateSectionFilters } from '../../lib/section';
+import { getLettersFromSquares, insertEntryIntoGrid } from '../../lib/grid';
+import { makeNewNode } from '../../lib/fill';
+import { FillNode } from '../../models/FillNode';
 
 function FillView() {
-    function handleFillWordClick() {
-        Globals.fillWord!();
+    function triggerUpdate() {
+
     }
 
-    function handleFillGridClick() {
-        Globals.fillGrid!();
-    }
-
-    function handlePauseFill() {
-        Globals.pauseFill!();
+    function handleToggleFill() {
+        Globals.handleToggleFill!();
     }
 
     function handleSymmetryChange(event: any) {
@@ -42,18 +43,121 @@ function FillView() {
         switch(status) {
             case FillStatus.Ready: return "Ready to Fill";
             case FillStatus.Running: return "Fill Running...";
-            case FillStatus.Success: return "Fill Succeeded";
+            case FillStatus.Complete: return "Fill Complete";
             case FillStatus.Failed: return "Fill Failed";
-            case FillStatus.Paused: return "Fill Paused";
             default: return "";
         }
     }
 
-    function entryCandidateClick(event: any) {
-        alert("hi");
+    function getManualEntryNode(entry: string): FillNode {
+        let grid = getGrid();
+
+        let node = makeNewNode(grid, 0, false, undefined);
+        let wordKey = Globals.selectedWordKey!;
+        insertEntryIntoGrid(node, wordKey, entry);
+        return node;
     }
 
-    let grid = Globals.puzzle?.grid;
+    function getManualSectionNode(sectionCandidateKey: string): FillNode {
+        let grid = getGrid();
+
+        let node = makeNewNode(grid, 0, false, undefined);
+        let section = getSection();
+        let candidate = section.candidates.get(sectionCandidateKey)!;
+        insertSectionCandidateIntoGrid(node.startGrid, candidate, section);
+        return node;
+    }
+
+    function handleEntryCandidateClick(event: any) {
+        let target = event.target;
+        while (target.classList.length < 1 || !target.classList.includes("fill-list-row-wrapper")) {
+            target = target.parentElement;
+            if (!target) return;
+        }
+
+        if (!Globals.selectedWordKey) return;
+
+        let entry = target.attributes["data-word"].value as string;
+        let node = getManualEntryNode(entry);
+
+        Globals.hoverGrid = node.endGrid;
+        updateSectionFilters();
+        triggerUpdate();
+    }
+
+    function handleEntryCandidateHover(event: any) {
+        let target = event.target;
+        while (target.classList.length < 1 || !target.classList.includes("fill-list-row-wrapper")) {
+            target = target.parentElement;
+            if (!target) return;
+        }
+
+        if (!Globals.selectedWordKey) return;
+
+        let entry = target.attributes["data-word"].value as string;
+        let node = getManualEntryNode(entry);
+
+        Globals.hoverGrid = node.endGrid;
+        triggerUpdate();
+    }
+
+    function handleEntryCandidateBlur() {
+        Globals.hoverGrid = undefined;
+        triggerUpdate();
+    }
+
+    function handleSectionClick(event: any) {
+        let target = event.target;
+        while (target.classList.length < 1 || !target.classList.includes("fill-list-row-wrapper")) {
+            target = target.parentElement;
+            if (!target) return;
+        }
+
+        let sectionId = +target.attributes["data-id"].value;
+        if (Globals.selectedSectionIds!.get(sectionId))
+            Globals.selectedSectionIds!.delete(sectionId);
+        else
+            Globals.selectedSectionIds!.set(sectionId, true);
+
+        updateSectionFilters();
+        triggerUpdate();
+    }
+
+    function handleSectionCandidateClick(event: any) {
+        let target = event.target;
+        while (target.classList.length < 1 || !target.classList.includes("fill-list-row-wrapper")) {
+            target = target.parentElement;
+            if (!target) return;
+        }
+
+        let candidateKey = target.attributes["data-candidate-key"].value as string;
+        let node = getManualSectionNode(candidateKey);
+
+        Globals.hoverGrid = node.endGrid;
+        updateSectionFilters();
+        triggerUpdate();
+    }
+
+    function handleSectionCandidateHover(event: any) {
+        let target = event.target;
+        while (target.classList.length < 1 || !target.classList.includes("fill-list-row-wrapper")) {
+            target = target.parentElement;
+            if (!target) return;
+        }
+
+        let candidateKey = target.attributes["data-candidate-key"].value as string;
+        let node = getManualSectionNode(candidateKey);
+
+        Globals.hoverGrid = node.endGrid;
+        triggerUpdate();
+    }
+
+    function handleSectionCandidateBlur() {
+        Globals.hoverGrid = undefined;
+        triggerUpdate();
+    }
+
+    let grid = getGrid();
     let selectedSymmetry = SymmetryType[Globals.gridSymmetry!];
     let symmetryOptions = (!grid || grid.width === grid.height) ?
         Object.values(SymmetryType).filter(t => isNaN(Number(t))) :
@@ -61,18 +165,30 @@ function FillView() {
 
     let fillStatus = getFillStatusString(Globals.fillStatus!);
 
+    let entryCandidates = Globals.selectedWordNode ? Globals.selectedWordNode.entryCandidates : [];
+    let sections = Globals.sections ? mapValues(Globals.sections!).sort((a, b) => b.squares.size - a.squares.size) : [];
+    let activeSection = Globals.sections ? Globals.sections!.get(Globals.activeSectionId!)! : makeNewSection(-1);
+    let sectionCandidates = mapValues(activeSection.candidates).sort((a, b) => b.score - a.score);
+
     let entryCandidatesStyle = {
-        gridTemplateColumns: `4fr 1fr 1fr 1fr`
+        gridTemplateColumns: `4fr 1fr 2fr`
+    } as React.CSSProperties;
+
+    let sectionsStyle = {
+        gridTemplateColumns: `1fr 2fr 1fr`
+    } as React.CSSProperties;
+
+    let completedOptionsStyle = {
+        gridTemplateColumns: `4fr 1fr 2fr`
     } as React.CSSProperties;
 
     return (
         <div id="FillView" className="fill-container">
+            <div className="custom-control custom-switch">
+                <input type="checkbox" className="custom-control-input" id="fillSwitch" onClick={handleToggleFill} />
+                <label className="custom-control-label" htmlFor="fillSwitch">Fill</label>
+            </div>
             <div className="fill-status">{fillStatus}</div>
-            <br />
-            <button className="btn btn-primary" onClick={handleFillWordClick}>Fill Word</button>
-            <br /><br />
-            <button className="btn btn-primary" onClick={handleFillGridClick}>Fill Grid</button>
-            <button className="btn btn-secondary" onClick={handlePauseFill}>Pause</button>
             <br /><br />
             Grid Symmetry: <br />
             <select className="custom-select symmetry-select" defaultValue={selectedSymmetry} onChange={handleSymmetryChange}>
@@ -94,35 +210,54 @@ function FillView() {
                     <div className="fill-list-title">Entry Candidates</div>
                     <div className="fill-list" style={entryCandidatesStyle}>
                         <div className="fill-list-header">Entry</div>
-                        <div className="fill-list-header">min</div>
-                        <div className="fill-list-header">sum</div>
                         <div className="fill-list-header">Score</div>
-                        <div className="fill-list-row-wrapper">
-                            <div>CROSSWORDPUZZLEENTRIES</div>
-                            <div>0</div>
-                            <div>1470</div>
-                            <div>52.75</div>
-                        </div>
-                        <div className="fill-list-row-wrapper" onClick={entryCandidateClick}>
-                            <div>TESTENTRY</div>
-                            <div>3</div>
-                            <div>977</div>
-                            <div>14.2</div>
-                        </div>
+                        <div className="fill-list-header">Iffy</div>
+                        { entryCandidates.map(ec => (
+                            <div className="fill-list-row-wrapper" key={ec.word} data-word={ec.word}
+                                onClick={handleEntryCandidateClick} onMouseOver={handleEntryCandidateHover} 
+                                onMouseOut={handleEntryCandidateBlur}>
+                                <div>{ec.word}</div>
+                                <div>{ec.score.toFixed(2)}</div>
+                                <div>{ec.madeUpWord || ""}</div>
+                            </div>
+                        ))}
                     </div>
                 </div>
                 <div className="fill-list-box">
-                    <div className="fill-list-title">Saved Grids</div>
-                    <div className="fill-list-button">Remove</div>
-                    <div className="fill-list">
-
+                    <div className="fill-list-title">Sections</div>
+                    <div className="fill-list" style={sectionsStyle}>
+                        <div className="fill-list-header">Active</div>
+                        <div className="fill-list-header">ID</div>
+                        <div className="fill-list-header">Size</div>
+                        { sections.map(sec => (
+                            <div className="fill-list-row-wrapper" key={sec.id} data-id={sec.id} onClick={handleSectionClick}>
+                                <div><input className="form-check-input" type="checkbox" 
+                                    checked={Globals.selectedSectionIds!.get(sec.id)} /></div>
+                                <div>{getPhoneticName(sec.id)}</div>
+                                <div>{sec.squares.size}</div>
+                            </div>
+                        ))}
                     </div>
                 </div>
                 <div className="fill-list-box">
-                    <div className="fill-list-title">Grid Candidates</div>
-                    <div className="fill-list-button">Save</div>
-                    <div className="fill-list">
+                    <div className="fill-list-title">Completed Options</div>
+                    <div className="fill-list" style={completedOptionsStyle}>
+                        <div className="fill-list-header">Longest</div>
+                        <div className="fill-list-header">Score</div>
+                        <div className="fill-list-header">Iffy</div>
+                        { sectionCandidates.map(sc => {
+                            let entry = getLettersFromSquares(getSquaresForWord(sc.grid, getLongestStackWord(activeSection)));
+                            let candidateKey = sectionCandidateKey(activeSection, sc.grid);
 
+                            return (
+                            <div className="fill-list-row-wrapper" key={candidateKey} data-candidate-key={candidateKey}
+                                onClick={handleSectionCandidateClick} onMouseOver={handleSectionCandidateHover}
+                                onMouseOut={handleSectionCandidateBlur}>
+                                <div>{entry}</div>
+                                <div>{sc.score}</div>
+                                <div>{sc.iffyEntry || ""}</div>
+                            </div>
+                            )})}
                     </div>
                 </div>
             </div>

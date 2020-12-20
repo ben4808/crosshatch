@@ -6,8 +6,9 @@ import { WordDirection } from "../models/WordDirection";
 import { queryIndexedWordList } from "./wordList";
 import Globals from './windowService';
 import { Puzzle } from "../models/Puzzle";
-import { createNewGrid } from "./grid";
+import { createNewGrid, getLettersFromSquares } from "./grid";
 import { ContentType } from "../models/ContentType";
+import { Section } from "../models/Section";
 
 export function average(arr: number[]): number {
     return arr.reduce((a,b) => a + b, 0) / arr.length;
@@ -160,11 +161,15 @@ export function wordKey(word: GridWord): string {
 }
 
 export function squareKey(sq: GridSquare | undefined): string {
-    return sq ? `${sq.row},${sq.col}` : "";
+    return sq ? `[${sq.row},${sq.col}]` : "";
 }
 
 export function getGrid(): GridState {
-    return Globals.puzzle!.grid!;
+    return Globals.activeGrid!;
+}
+
+export function getSection(): Section {
+    return Globals.sections!.get(Globals.activeSectionId!)!;
 }
 
 export function getSelectedWord(): GridWord | undefined {
@@ -205,4 +210,8 @@ export function shuffle(array: any[]) {
         const j = Math.floor(Math.random() * (i + 1));
         [array[i], array[j]] = [array[j], array[i]];
     }
+}
+
+export function getEntryAtWordKey(grid: GridState, wordKey: string): string {
+    return getLettersFromSquares(getSquaresForWord(grid, grid.words.get(wordKey)!));
 }

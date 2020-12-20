@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useReducer, useState } from 'react';
+import React, { useContext, useReducer, useState } from 'react';
 import { SquareType } from '../../models/SquareType';
 import { SquareProps } from '../Square/SquareProps';
 import "./Grid.scss";
@@ -10,9 +10,9 @@ import { compareTuples, doesWordContainSquare, getGrid, getSelectedWord, getWord
 import { getSymmetrySquares, getUncheckedSquareDir, populateWords, updateGridConstraintInfo } from '../../lib/grid';
 import { GridWord } from '../../models/GridWord';
 import { AppContext } from '../../AppContext';
-import { fillWord } from '../../lib/fill';
 import { ContentType } from '../../models/ContentType';
-import { updateGlobalSectionFilters, updateGlobalSections } from '../../lib/section';
+import { generateGridSections, updateSectionFilters } from '../../lib/section';
+import { QualityClass } from '../../models/QualityClass';
 
 function Grid() {
     const [selectedSquare, setSelectedSquare] = useState([-1, -1] as [number, number]);
@@ -20,35 +20,35 @@ function Grid() {
     const [ignored, forceUpdate] = useReducer(x => x + 1, 0);
     const appContext = useContext(AppContext);
 
-    useEffect(() => {
-        Globals.fillWord = handleFillWord;
-        Globals.fillGrid = handleFillGrid;
-        Globals.pauseFill = handlePauseFill;
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
+    // useEffect(() => {
+    //     Globals.fillWord = handleFillWord;
+    //     Globals.fillGrid = handleFillGrid;
+    //     Globals.pauseFill = handlePauseFill;
+    //     // eslint-disable-next-line react-hooks/exhaustive-deps
+    // }, []);
 
-    function handleFillWord() {
-        fillWord();
-        forceUpdate();
-    }
+    // function handleFillWord() {
+    //     fillWord();
+    //     forceUpdate();
+    // }
 
-    function handleFillGrid() {
-        Globals.isFillRunning = true;
-        doFillGrid();
-    }
+    // function handleFillGrid() {
+    //     Globals.isFillRunning = true;
+    //     doFillGrid();
+    // }
 
-    function doFillGrid() {
-        if (!Globals.isFillRunning) return;
+    // function doFillGrid() {
+    //     if (!Globals.isFillRunning) return;
 
-        fillWord();
-        forceUpdate();
-        setTimeout(() => doFillGrid(), 5);
-    }
+    //     fillWord();
+    //     forceUpdate();
+    //     setTimeout(() => doFillGrid(), 5);
+    // }
 
-    function handlePauseFill() {
-        Globals.isFillRunning = false;
-        forceUpdate();
-    }
+    // function handlePauseFill() {
+    //     Globals.isFillRunning = false;
+    //     forceUpdate();
+    // }
 
     function handleClick(event: any) {
         let target = event.target;
@@ -138,11 +138,11 @@ function Grid() {
 
         if (blackSquareChanged) {
             populateWords(grid);
-            updateGlobalSections(grid);
+            Globals.sections = generateGridSections(grid);
             updateGridConstraintInfo(grid);
         }
         else if (letterChanged)  {
-            updateGlobalSectionFilters(grid);
+            updateSectionFilters();
             updateGridConstraintInfo(grid);
         }
 
@@ -202,7 +202,7 @@ function Grid() {
             type: square.type,
             content: square.content,
             contentType: square.contentType,
-            qualityClass: square.qualityClass,
+            qualityClass: QualityClass.Normal,
             isSelected: isSquareSelected() && compareTuples(selectedSquare, [row, col]),
             isInSelectedWord: isWordSelected() && doesWordContainSquare(selectedWord!, row, col),
             constraintSum: square.constraintInfo ? square.constraintInfo.sumTotal : 1000,

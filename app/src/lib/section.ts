@@ -2,56 +2,27 @@ import { ContentType } from "../models/ContentType";
 import { FillNode } from "../models/FillNode";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
+import { GridWord } from "../models/GridWord";
 import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
 import { WordDirection } from "../models/WordDirection";
 import { getUnfilledCrosses, getWordScore } from "./fill";
-import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
+import { generateConstraintInfoForSquares, getLettersFromSquares, getSquareAtKey } from "./grid";
 import { PriorityQueue } from "./priorityQueue";
-import { forAllGridSquares, getSquaresForWord, getWordAtSquare, gridSquareAtKey, isAcross, 
-    isBlackSquare, isUserFilled, mapKeys, wordKey } from "./util";
+import { forAllGridSquares, getEntryAtWordKey, getGrid, getSquaresForWord, getWordAtSquare, gridSquareAtKey, isAcross, 
+    isBlackSquare, isUserFilled, mapKeys, squareKey, wordKey, wordLength } from "./util";
 import Globals from './windowService';
 
-export function updateSections(newGrid: GridState) {
-    function keysStr(section: Section): string {
-        return Array.from(section.squares.keys()).sort((a, b) => a[0] !== b[0] ? a[0] - b[0] : a[1] - b[1])
-            .map(k => `(${k[0]},${k[1]}`).join(",");
-    }
-
-    let curSections = Globals.sections!;
-    let newSections = generateGridSections(newGrid);
-    let curSectionsKeys = new Map<string, Section>();
-    let newSectionNumbers = new Map<number, boolean>();
-    curSections.forEach(sec => {
-        curSectionsKeys.set(keysStr(sec), sec);
-    });
-    newSections.forEach(sec => {
-        newSectionNumbers.set(sec.number, true);
-    });
-    for (let i = 0; i < newSections.length; i++) {
-        let sec = newSections[i];
-        let secKey = keysStr(sec);
-        if (curSectionsKeys.has(secKey)) {
-            let curSection = curSectionsKeys.get(secKey)!;
-            curSection.candidates.forEach(can => {
-                can.includedSections = can.includedSections.filter(x => newSectionNumbers.has(x));
-            });
-            newSections[i] = curSectionsKeys.get(secKey)!;
-        }
-    }
-
-    Globals.sections = newSections;
-}
-
-export function updateSectionFilters(grid: GridState) {
+export function updateSectionFilters() {
     let sections = Globals.sections!;
+    let grid = getGrid();
     sections.forEach(sec => {
-        sec.candidates.forEach(can => {
-            let secSquares = mapKeys(sec.squares);
+        sec.candidates.forEach((can, _) => {
+            let sqKeys = mapKeys(sec.squares);
             can.isFilteredOut = false;
-            for (let secSq of secSquares) {
-                let gridSq = grid.squares[secSq[0]][secSq[1]];
-                let canSq = can.grid.squares[secSq[0]][secSq[1]];
+            for (let sqKey of sqKeys) {
+                let gridSq = getSquareAtKey(grid, sqKey);
+                let canSq = getSquareAtKey(can.grid, sqKey);
                 if (isUserFilled(gridSq) && canSq.content !== gridSq.content)
                     can.isFilteredOut = true;
             }
@@ -97,11 +68,7 @@ export function insertSectionCandidateIntoGrid(grid: GridState, candidate: Secti
     });
 }
 
-export function switchSections(newSectionId: number, selectedSections: number[]) {
-
-}
-
-export function generateGridSections(grid: GridState): Section[] {
+export function generateGridSections(grid: GridState): Map<number, Section> {
     function iterateSection(section: Section, grid: GridState, sq: GridSquare, usedSquares: Map<string, boolean>) {
         section.openSquareCount++;
         usedSquares.set(`${sq.row},${sq.col}`, true);
@@ -124,28 +91,28 @@ export function generateGridSections(grid: GridState): Section[] {
         });
     }
 
-    let sections = [] as Section[];
+    let sections = new Map<number, Section>();
     let usedSquares = new Map<string, boolean>();
-    if (Globals.nextSectionId === undefined) Globals.nextSectionId = 1;
-    let i = Globals.nextSectionId!;
+    let nextSectionId = 1;
+
+    // add full grid section
+    let fullSection = makeNewSection(0);
+    forAllGridSquares(grid, sq => {
+        if (!isBlackSquare(sq)) fullSection.squares.set(squareKey(sq), true);
+    });
+    grid.words.forEach(w => {
+        fullSection.words.set(wordKey(w), true);
+    });
+    sections.set(0, fullSection);
 
     // populate sections
     forAllGridSquares(grid, sq => {
         if (!usedSquares.has(`${sq.row},${sq.col}`) && isOpenSquare(grid, sq)) {
-            let newSection = {
-                id: i,
-                openSquareCount: 0,
-                squares: new Map<string, boolean>(),
-                words: new Map<string, boolean>(),
-                stackWords: new Map<string, boolean>(),
-                candidates: new Map<string, SectionCandidate[]>(),
-                fillQueues: new Map<string, PriorityQueue<FillNode>>(),
-            } as Section;
-
+            let newSection = makeNewSection(nextSectionId);
             iterateSection(newSection, grid, sq, usedSquares);
             if (newSection.openSquareCount === 1) return;
-            sections.push(newSection);
-            i++;
+            sections.set(newSection.id, newSection);
+            nextSectionId++;
         }
     });
 
@@ -165,6 +132,7 @@ export function generateGridSections(grid: GridState): Section[] {
                     let intersectionCount = Math.min(word.end[0], otherWord.end[0]) - Math.max(word.start[0], otherWord.start[0]) + 1;
                     return intersectionCount >= 5;
                 }
+                return false;
             }); 
 
             if (stackedNeighbors.length > 0) {
@@ -189,8 +157,7 @@ export function generateGridSections(grid: GridState): Section[] {
         });
     });
 
-    Globals.nextSectionId = i;
-    return sections.sort((a, b) => a.openSquareCount - b.openSquareCount);
+    return sections;
 }
 
 function isOpenSquare(grid: GridState, sq: GridSquare): boolean {
@@ -222,7 +189,7 @@ export function newSectionCandidate(node: FillNode, section: Section): SectionCa
     return {
         grid: grid,
         score: calculateSectionCandidateScore(grid, section),
-        madeUpEntries: node.madeUpWords,
+        iffyEntry: node.iffyWordKey ? getEntryAtWordKey(grid, node.iffyWordKey) : undefined,
         isFilteredOut: false,
     } as SectionCandidate;
 }
@@ -237,4 +204,57 @@ export function calculateSectionCandidateScore(grid: GridState, section: Section
     });
 
     return total / section.words.size;
+}
+
+const natoAlphabet = {
+    "A": "Alfa",   "B": "Bravo",   "C": "Charlie",
+    "D": "Delta",  "E": "Echo",    "F": "Foxtrot",
+    "G": "Golf",   "H": "Hotel",   "I": "India",
+    "J": "Juliett","K": "Kilo",    "L": "Lima",
+    "M": "Mike",   "N": "November","O": "Oscar",
+    "P": "Papa",   "Q": "Quebec",  "R": "Romeo",
+    "S": "Sierra", "T": "Tango",   "U": "Uniform",
+    "V": "Victor", "W": "Whiskey", "X": "X-ray",
+    "Y": "Yankee", "Z": "Zulu"
+} as any;
+
+export function getPhoneticName(n: number): string {
+    if (n === 0) return "Full Grid";
+    return n <= 26 ? natoAlphabet[String.fromCharCode(n+65)] : "Section " + n.toString();
+}
+
+export function sectionCandidateKey(section: Section, grid: GridState): string {
+    let keys = mapKeys(section.squares).sort();
+    return keys.map(k => getSquareAtKey(grid, k).content!).join("");
+}
+
+export function makeNewSection(id: number): Section {
+    return {
+        id: id,
+        openSquareCount: 0,
+        squares: new Map<string, boolean>(),
+        words: new Map<string, boolean>(),
+        stackWords: new Map<string, boolean>(),
+        unfilledCrosses: new Map<string, boolean>(),
+        triedComboPerms: new Map<string, Map<string, boolean>>(),
+        triedComboSquares: new Map<string, boolean>(),
+        candidates: new Map<string, SectionCandidate>(),
+        fillQueues: new Map<string, PriorityQueue<FillNode>>(),
+    } as Section;
+}
+
+export function getLongestStackWord(section: Section): GridWord {
+    function getLongest(wordKeys: string[]): GridWord {
+        return wordKeys.map(w => grid.words.get(w)!).sort((a, b) => wordLength(b) - wordLength(a))[0];
+    }
+
+    let grid = getGrid();
+    if (section.stackWords.size > 0)
+        return getLongest(mapKeys(section.stackWords))
+    else
+        return getLongest(mapKeys(section.words));
+}
+
+export function getSelectedSectionsKey(): string {
+    return mapKeys(Globals.selectedSectionIds!).sort().map(i => i.toString()).join(",");
 }

@@ -8,12 +8,12 @@ function Square(props: SquareProps) {
 }
 
 function getSquareElement(props: SquareProps) {
-    let content = props.userContent ? props.userContent : props.chosenFillContent ? props.chosenFillContent : props.fillContent || "";
+    let content = props.content || "";
     if (props.type === SquareType.White) {
         return <div 
                     className={"grid-square" + 
                         (props.isSelected ? " grid-square-selected" : props.isInSelectedWord ? " grid-square-selected-word" : "") +
-                        (props.fillContent ? "" :
+                        (props.content ? "" :
                         props.constraintSum === 0 ? " grid-square-error-word" :
                         between(props.constraintSum, 1, 1) ? " grid-square-constrained-5" : 
                         between(props.constraintSum, 1, 3) ? " grid-square-constrained-4" : 
@@ -28,8 +28,7 @@ function getSquareElement(props: SquareProps) {
             <div className="grid-number">{props.number ?? ""}</div>
             <div className={"grid-content" + 
                         (content.length > 1 ? " grid-content-rebus" : "") +
-                        (props.userContent ? "" :
-                         props.chosenFillContent ? " grid-content-chosen-fill" : 
+                        (props.content ? "" :
                          props.qualityClass === QualityClass.Lively ? " grid-content-lively" :
                          props.qualityClass === QualityClass.Normal ? " grid-content-normal" :
                          props.qualityClass === QualityClass.Crosswordese ? " grid-content-crosswordese" :

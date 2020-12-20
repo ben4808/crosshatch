@@ -1,4 +1,3 @@
-import { GridSquare } from "./GridSquare";
 
 export interface EntryCandidate {
     word: string;
@@ -7,4 +6,5 @@ export interface EntryCandidate {
     hasBeenChained: boolean;
     wasChainFailure: boolean;
     madeUpSqKey?: string;
+    madeUpWord?: string;
 }

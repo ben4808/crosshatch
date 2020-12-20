@@ -1,7 +1,6 @@
 export enum FillStatus {
     Ready,
     Running,
-    Success,
+    Complete,
     Failed,
-    Paused,
 }
