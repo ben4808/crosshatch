@@ -13,6 +13,7 @@ export interface SquareProps {
     qualityClass?: QualityClass;
     isSelected: boolean;
     isInSelectedWord: boolean;
+    isInSelectedSection: boolean;
     constraintSum: number;
     isCircled: boolean;
 }

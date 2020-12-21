@@ -6,15 +6,17 @@ import Square from '../Square/Square';
 import { GridState } from '../../models/GridState';
 import { WordDirection } from '../../models/WordDirection';
 import Globals from '../../lib/windowService';
-import { compareTuples, doesWordContainSquare, getGrid, getSelectedWord, getWordAtSquare, otherDir, wordKey } from '../../lib/util';
+import { compareTuples, doesWordContainSquare, getGrid, getSection, getSelectedWord, getWordAtSquare, otherDir, squareKey, wordKey } from '../../lib/util';
 import { getSymmetrySquares, getUncheckedSquareDir, populateWords, updateGridConstraintInfo } from '../../lib/grid';
 import { GridWord } from '../../models/GridWord';
 import { AppContext } from '../../AppContext';
 import { ContentType } from '../../models/ContentType';
 import { generateGridSections, updateSectionFilters } from '../../lib/section';
 import { QualityClass } from '../../models/QualityClass';
+import { GridSquare } from '../../models/GridSquare';
+import { makeNewNode, populateAndScoreEntryCandidates } from '../../lib/fill';
 
-function Grid() {
+function Grid(props: any) {
     const [selectedSquare, setSelectedSquare] = useState([-1, -1] as [number, number]);
     // eslint-disable-next-line
     const [ignored, forceUpdate] = useReducer(x => x + 1, 0);
@@ -61,7 +63,7 @@ function Grid() {
         let col = +target.attributes["data-col"].value;
         let grid = getGrid();
         
-        let newDirection = Globals.selectedWordDir!;
+        let newDirection = Globals.selectedWordDir || WordDirection.Across;
 
         let uncheckedSquareDir = getUncheckedSquareDir(grid, row, col);
         if (uncheckedSquareDir !== undefined) {
@@ -77,6 +79,16 @@ function Grid() {
 
         Globals.selectedWordDir = newDirection;
         setSelWordAtSelSquare([row, col]);
+
+        if (Globals.selectedWordKey) {
+            let node = makeNewNode(grid, 0, false, undefined);
+            node.fillWord = grid.words.get(Globals.selectedWordKey!);
+            populateAndScoreEntryCandidates(node, true);
+            Globals.selectedWordNode = node;
+        }
+        else 
+            Globals.selectedWordNode = undefined;
+
         appContext.triggerUpdate();
     }
     
@@ -184,6 +196,11 @@ function Grid() {
         return !!getSelectedWord();
     }
 
+    function isSquareInSelectedSection(sq: GridSquare): boolean {
+        let section = getSection();
+        return section.squares.has(squareKey(sq));
+    }
+
     function setSelWordAtSelSquare(newSelSquare: [number, number]) {
         let grid = getGrid();
         let word = getWordAtSquare(grid, newSelSquare[0], newSelSquare[1], Globals.selectedWordDir!);
@@ -205,7 +222,8 @@ function Grid() {
             qualityClass: QualityClass.Normal,
             isSelected: isSquareSelected() && compareTuples(selectedSquare, [row, col]),
             isInSelectedWord: isWordSelected() && doesWordContainSquare(selectedWord!, row, col),
-            constraintSum: square.constraintInfo ? square.constraintInfo.sumTotal : 1000,
+            isInSelectedSection: isSquareInSelectedSection(square),
+            constraintSum: (square.constraintInfo && square.constraintInfo!.isCalculated) ? square.constraintInfo.sumTotal : 1000,
             isCircled: square.isCircled,
         };
     }
@@ -256,7 +274,7 @@ function Grid() {
     }
 
     let puzzle = Globals.puzzle!;
-    let grid = puzzle.grid!;
+    let grid = Globals.hoverGrid ? Globals.hoverGrid! : getGrid();
 
     let squareElements = [];
     for (let row = 0; row < grid.height; row++) {
@@ -272,6 +290,7 @@ function Grid() {
 
     return (
         <>
+            <div style={{display: "none"}}>{props.updateSemaphoreProp}</div>
             <div className="puzzle-author-by">&nbsp;</div>
             <div id="puzzleTitle" className="puzzle-title editable" contentEditable={true} suppressContentEditableWarning={true}
                 onKeyDown={suppressEnterKey} onBlur={setTitle} onFocusCapture={handleFocus}>{puzzle.title || "(title)"}</div>

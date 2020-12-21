@@ -61,11 +61,11 @@ export function otherDir(dir: WordDirection): WordDirection {
 
 export function indexedWordListLookup(grid: GridState, word: GridWord): string[] {
     let squares = getSquaresForWord(grid, word);
-    return indexedWordListLookupSquares(grid, squares);
+    return indexedWordListLookupSquares(squares);
 }
 
-export function indexedWordListLookupSquares(grid: GridState, squares: GridSquare[]): string[] {
-    let pattern = squares.map(sq => sq.content ? sq.content! : ".").join("");
+export function indexedWordListLookupSquares(squares: GridSquare[]): string[] {
+    let pattern = getLettersFromSquares(squares);
     return queryIndexedWordList(pattern);
 }
 
@@ -201,6 +201,7 @@ export function gridSquareAtKey(grid: GridState, sqKey: string): GridSquare {
 }
 
 export function isPartOfMadeUpWord(sq: GridSquare): boolean {
+    if (!sq.constraintInfo) return false;
     return sq.constraintInfo!.isCalculated && sq.constraintInfo!.sumTotal === 0;
 }
 

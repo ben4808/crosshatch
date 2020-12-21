@@ -36,6 +36,11 @@
     .grid-content { padding-top: 1px; }
     .grid-number { left: -1px; top: -3px }
 }
+.grid-square-selected-section {
+    border: 2px solid lighten(palegoldenrod, 10%);
+    .grid-content { padding-top: 1px; }
+    .grid-number { left: -1px; top: -3px }
+}
 .grid-square-error-word {
     background-color: lighten(indianred, 20%);
 }

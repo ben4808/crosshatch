@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useContext } from 'react';
 import { SymmetryType } from '../../models/SymmetryType';
 import "./FillView.scss";
 import Globals from '../../lib/windowService';
@@ -8,10 +8,13 @@ import { getLongestStackWord, getPhoneticName, insertSectionCandidateIntoGrid, m
 import { getLettersFromSquares, insertEntryIntoGrid } from '../../lib/grid';
 import { makeNewNode } from '../../lib/fill';
 import { FillNode } from '../../models/FillNode';
+import { AppContext } from '../../AppContext';
 
-function FillView() {
+function FillView(props: any) {
+    const appContext = useContext(AppContext);
+
     function triggerUpdate() {
-
+        appContext.triggerUpdate();
     }
 
     function handleToggleFill() {
@@ -50,9 +53,7 @@ function FillView() {
     }
 
     function getManualEntryNode(entry: string): FillNode {
-        let grid = getGrid();
-
-        let node = makeNewNode(grid, 0, false, undefined);
+        let node = Globals.selectedWordNode!;
         let wordKey = Globals.selectedWordKey!;
         insertEntryIntoGrid(node, wordKey, entry);
         return node;
@@ -80,7 +81,7 @@ function FillView() {
         let entry = target.attributes["data-word"].value as string;
         let node = getManualEntryNode(entry);
 
-        Globals.hoverGrid = node.endGrid;
+        Globals.activeGrid = node.endGrid;
         updateSectionFilters();
         triggerUpdate();
     }
@@ -157,6 +158,10 @@ function FillView() {
         triggerUpdate();
     }
 
+    function doNothing(event: any) {
+
+    }
+
     let grid = getGrid();
     let selectedSymmetry = SymmetryType[Globals.gridSymmetry!];
     let symmetryOptions = (!grid || grid.width === grid.height) ?
@@ -184,6 +189,7 @@ function FillView() {
 
     return (
         <div id="FillView" className="fill-container">
+            <div style={{display: "none"}}>{props.updateSemaphoreProp}</div>
             <div className="custom-control custom-switch fill-switch">
                 <input type="checkbox" className="custom-control-input" id="fillSwitch" onClick={handleToggleFill} />
                 <label className="custom-control-label" htmlFor="fillSwitch">Fill</label>
@@ -206,7 +212,7 @@ function FillView() {
 
                     </div>
                 </div>
-                <div className="fill-list-box">
+                <div className="fill-list-box" onMouseOut={handleEntryCandidateBlur}>
                     <div className="fill-list-title">Entry Candidates</div>
                     <div className="fill-list" style={entryCandidatesStyle}>
                         <div className="fill-list-header">Entry</div>
@@ -214,10 +220,9 @@ function FillView() {
                         <div className="fill-list-header">Iffy</div>
                         { entryCandidates.map(ec => (
                             <div className="fill-list-row-wrapper" key={ec.word} data-word={ec.word}
-                                onClick={handleEntryCandidateClick} onMouseOver={handleEntryCandidateHover} 
-                                onMouseOut={handleEntryCandidateBlur}>
+                                onClick={handleEntryCandidateClick} onMouseOver={handleEntryCandidateHover}>
                                 <div>{ec.word}</div>
-                                <div>{ec.score.toFixed(2)}</div>
+                                <div>{ec.score.toFixed(0)}</div>
                                 <div>{ec.madeUpWord || ""}</div>
                             </div>
                         ))}
@@ -232,14 +237,14 @@ function FillView() {
                         { sections.map(sec => (
                             <div className="fill-list-row-wrapper" key={sec.id} data-id={sec.id} onClick={handleSectionClick}>
                                 <div><input type="checkbox" className="section-checkbox"
-                                    defaultChecked={Globals.selectedSectionIds!.has(sec.id)} /></div>
+                                    checked={Globals.selectedSectionIds!.has(sec.id)} onChange={doNothing} /></div>
                                 <div>{getPhoneticName(sec.id)}</div>
                                 <div>{sec.squares.size}</div>
                             </div>
                         ))}
                     </div>
                 </div>
-                <div className="fill-list-box">
+                <div className="fill-list-box" onMouseOut={handleSectionCandidateBlur}>
                     <div className="fill-list-title">Completed Options</div>
                     <div className="fill-list" style={completedOptionsStyle}>
                         <div className="fill-list-header">Longest</div>
@@ -251,8 +256,7 @@ function FillView() {
 
                             return (
                             <div className="fill-list-row-wrapper" key={candidateKey} data-candidate-key={candidateKey}
-                                onClick={handleSectionCandidateClick} onMouseOver={handleSectionCandidateHover}
-                                onMouseOut={handleSectionCandidateBlur}>
+                                onClick={handleSectionCandidateClick} onMouseOver={handleSectionCandidateHover}>
                                 <div>{entry}</div>
                                 <div>{sc.score}</div>
                                 <div>{sc.iffyEntry || ""}</div>

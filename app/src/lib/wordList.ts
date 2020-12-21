@@ -60,7 +60,7 @@ function parse5sMainList(lines: string[]): string[] {
                            score >= 40 ? QualityClass.Crosswordese : QualityClass.Iffy;
         let word = tokens[0];
         if (qualityClass !== QualityClass.Iffy //&& qualityClass !== QualityClass.Crosswordese // && qualityClass !== QualityClass.Iffy && qualityClass !== QualityClass.Normal
-                && word.length >= 2 && word.length <= 15 && word.match(/^[A-Z]+$/)) {
+                && word.length >= 2 && word.length <= 15 && word.match(/^[A-Z]+$/) && !map.has(tokens[0])) {
                     map.set(tokens[0], qualityClass);
                     words.push(tokens[0]);
                 }
@@ -83,7 +83,7 @@ function parsePeterBrodaWordlist(lines: string[]): string[] {
                            score >= 40 ? QualityClass.Iffy : QualityClass.NotAThing;
         let word = tokens[0];
         if (qualityClass !== QualityClass.NotAThing// && qualityClass !== QualityClass.Iffy && qualityClass !== QualityClass.Normal
-                && word.length >= 2 && word.length <= 15 && word.match(/^[A-Z]+$/)) {
+                && word.length >= 2 && word.length <= 15 && word.match(/^[A-Z]+$/) && !map.has(tokens[0])) {
                     map.set(tokens[0], qualityClass);
                     words.push(tokens[0]);
                 }
@@ -137,7 +137,7 @@ export function queryIndexedWordList(pattern: string): string[] {
         words = wl.buckets.twoVal[length-2][pos1-1][pos2-(pos1+1)][val1.charCodeAt(0)-65][val2.charCodeAt(0)-65];
 
         for (let i = 2; i < letters.length; i++) {
-            words = words.filter(w => w[letters[i][0]] === letters[i][1]);
+            words = words.filter(w => w[letters[i][0]-1] === letters[i][1]);
         }
     }
 

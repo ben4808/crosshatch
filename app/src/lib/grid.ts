@@ -108,7 +108,7 @@ export function generateConstraintInfoForSquares(grid: GridState, squares: GridS
         }
         else {
             sq.constraintInfo = {
-                isCalculated: true,
+                isCalculated: false,
                 sumTotal: 0,
                 viableLetters: new Map<string, number>(),
             }
@@ -116,7 +116,7 @@ export function generateConstraintInfoForSquares(grid: GridState, squares: GridS
     });
     if (isWordEmpty(squares) || isWordFull(squares)) return;
 
-    let entryOptions = indexedWordListLookupSquares(grid, squares);
+    let entryOptions = indexedWordListLookupSquares(squares);
     if (entryOptions.length > 200) {
         squares.forEach(sq => { sq.constraintInfo!.isCalculated = false; });
         return;
@@ -132,18 +132,26 @@ export function generateConstraintInfoForSquares(grid: GridState, squares: GridS
 
         let sumTotal = 0;
         let existingViableLetters = sq.constraintInfo!.viableLetters;
-        newViableLetters.forEach((v, k) => {
-            if (!existingViableLetters.has(k))
-            newViableLetters.delete(k);
-        });
-        newViableLetters.forEach((v, k) => {
-            let oldVal = existingViableLetters.get(k) || 0;
-            let newVal = Math.min(v, oldVal);
-            if (newVal > 0) newViableLetters.set(k, newVal);
-            else newViableLetters.delete(k);
-            sumTotal += newVal;
-        });
+        if (sq.constraintInfo!.isCalculated) {
+            newViableLetters.forEach((_, k) => {
+                if (!existingViableLetters.has(k))
+                newViableLetters.delete(k);
+            });
+            newViableLetters.forEach((v, k) => {
+                let oldVal = existingViableLetters.get(k) || 0;
+                let newVal = Math.min(v, oldVal);
+                if (newVal > 0) newViableLetters.set(k, newVal);
+                else newViableLetters.delete(k);
+                sumTotal += newVal;
+            });
+        }
+        else {
+            newViableLetters.forEach((v, k) => {
+                sumTotal += v;
+            });
+        }
 
+        sq.constraintInfo!.isCalculated = true;
         sq.constraintInfo!.viableLetters = newViableLetters;
         sq.constraintInfo!.sumTotal = sumTotal;
     }

@@ -223,7 +223,7 @@ const natoAlphabet = {
 
 export function getPhoneticName(n: number): string {
     if (n === 0) return "Full Grid";
-    return n <= 26 ? natoAlphabet[String.fromCharCode(n+65)] : "Section " + n.toString();
+    return n <= 26 ? natoAlphabet[String.fromCharCode(n+64)] : "Section " + n.toString();
 }
 
 export function sectionCandidateKey(section: Section, grid: GridState): string {

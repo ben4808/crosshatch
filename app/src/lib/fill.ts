@@ -10,7 +10,7 @@ import { generateConstraintInfoForSquares, getLettersFromSquares } from './grid'
 import { PriorityQueue, priorityQueue } from './priorityQueue';
 import { getSectionString, getSelectedSectionsKey, insertSectionCandidateIntoGrid, newSectionCandidate } from './section';
 import { deepClone, getSquaresForWord, wordLength, mapKeys, isWordFull, isUserFilled, 
-    getWordAtSquare, otherDir, squareKey, isPartOfMadeUpWord, shuffle, wordKey, mapValues } from './util';
+    getWordAtSquare, otherDir, squareKey, isPartOfMadeUpWord, wordKey, mapValues } from './util';
 import Globals from './windowService';
 import { queryIndexedWordList } from './wordList';
 
@@ -172,7 +172,7 @@ export function processSectionNode(node: FillNode, section: Section): boolean {
     node.fillWord = selectWordToFill(node, section);
 
     while (true) {
-        populateAndScoreEntryCandidates(node);
+        populateAndScoreEntryCandidates(node, false);
 
         let eligibleCandidates = getEligibleCandidates(node);
         if(eligibleCandidates.length === 0) return false;
@@ -186,6 +186,8 @@ export function processSectionNode(node: FillNode, section: Section): boolean {
 }
 
 export function processAndInsertChosenEntry(node: FillNode): boolean {
+    if (!node.chosenEntry) return false;
+
     let grid = deepClone(node.startGrid) as GridState;
     let word = node.fillWord!;
     let chosenEntry = node.chosenEntry!;
@@ -223,13 +225,15 @@ export function processAndInsertChosenEntry(node: FillNode): boolean {
         let crossSquares = getSquaresForWord(grid, cross);
         let newSquares = newCrossSquares[i];
         for(let j = 0; j < crossSquares.length; j++) {
-            crossSquares[j] = newSquares[j];
+            let crossSquare = crossSquares[j];
+            grid.squares[crossSquare.row][crossSquare.col] = newSquares[j];
         }
         if (isWordFull(crossSquares)) {
             grid.usedWords.set(getLettersFromSquares(crossSquares), true);
         }
     });
 
+    wordSquares = getSquaresForWord(grid, word);
     grid.usedWords.set(getLettersFromSquares(wordSquares), true);
     node.endGrid = grid;
     node.iffyWordKey = zeroCrossKey;
@@ -301,15 +305,16 @@ function getWordConstraintScore(squares: GridSquare[]): number {
     return foundZero ? 0 : total / unfilledSquareCount;
 }
 
-function populateAndScoreEntryCandidates(node: FillNode) {
+export function populateAndScoreEntryCandidates(node: FillNode, processAllCandidates: boolean) {
     if (node.anchorSquareKeys.length === 0)
         populateFillWordAnchors(node);
 
-    let oldLength = node.entryCandidates.length;
     while(true) {
         processAnchorCombo(node);
         let eligibleCandidates = getEligibleCandidates(node);
-        if(eligibleCandidates.length >= 20 || node.entryCandidates.length === oldLength) break;
+        if (node.anchorCombosLeft.length === 0) break;
+        if (!processAllCandidates && eligibleCandidates.length >= 20) break;
+        if (processAllCandidates && eligibleCandidates.length >= 250) break;
     }
 
     node.entryCandidates.sort((a, b) => b.score! - a.score!);
@@ -329,6 +334,7 @@ function populateFillWordAnchors(node: FillNode) {
     let anchorKeyCounts = [] as [string, number][];
 
     filledSquares.forEach(sq => {
+        node.viableLetterCounts.set(squareKey(sq), new Map<string, number>([[sq.content!, 1]]),);
         if (anchorKeyCounts.length < 2)
             anchorKeyCounts.push([squareKey(sq), 1]);
     });
@@ -361,9 +367,11 @@ function populateFillWordAnchors(node: FillNode) {
         }
 
         node.viableLetterCounts.set(squareKey(sq), crossCounts);
-        node.anchorSquareKeys = [anchorKeyCounts[0][0], anchorKeyCounts[1][0]];
-        generateAnchorCombos(node);
     });
+
+    if (anchorKeyCounts.length < 2) return;
+    node.anchorSquareKeys = [anchorKeyCounts[0][0], anchorKeyCounts[1][0]];
+    generateAnchorCombos(node);
 }
 
 function getPositionOfCross(wordSquares: GridSquare[], crossSquares: GridSquare[], dir: WordDirection): number {
@@ -373,14 +381,22 @@ function getPositionOfCross(wordSquares: GridSquare[], crossSquares: GridSquare[
 }
 
 function generateAnchorCombos(node: FillNode) {
-    let anchor1Letters = mapKeys(node.viableLetterCounts.get(node.anchorSquareKeys[0])!);
-    let anchor2Letters = mapKeys(node.viableLetterCounts.get(node.anchorSquareKeys[1])!);
+    let counts1 = node.viableLetterCounts.get(node.anchorSquareKeys[0])!;
+    let counts2 = node.viableLetterCounts.get(node.anchorSquareKeys[1])!;
+    let anchor1Letters = mapKeys(counts1);
+    let anchor2Letters = mapKeys(counts2);
     for (var key1 of anchor1Letters) {
         for (var key2 of anchor2Letters) {
             node.anchorCombosLeft.push([key1, key2]);
         }
     }
-    shuffle(node.anchorCombosLeft);
+    node.anchorCombosLeft = node.anchorCombosLeft.sort((a, b) => {
+        let countA1 = counts1.get(a[0])!;
+        let countA2 = counts2.get(a[1])!;
+        let countB1 = counts1.get(b[0])!;
+        let countB2 = counts2.get(b[1])!;
+        return (countA1 * countA2) - (countB1 * countB2);
+    });
 }
 
 function processAnchorCombo(node: FillNode) {
@@ -402,36 +418,42 @@ function processAnchorCombo(node: FillNode) {
         let containsZeroSquare = false;
         let isUnviable = false;
         let madeUpSqKey = existingMadeUpSqKey;
+        let madeUpWord = undefined as string | undefined;
         wordSquares.forEach((sq, i) => {
             let sqKey = squareKey(sq);
             let letterCounts = node.viableLetterCounts.get(sqKey)!;
+            let cross = getWordAtSquare(grid, sq.row, sq.col, otherDir(node.fillWord!.direction))!;
 
             if (!letterCounts.has(entry[i])) {
                 containsZeroSquare = true;
-                if (!madeUpSqKey) madeUpSqKey = sqKey;
-                if (wordSquares.length >= 5 || (madeUpSqKey && sqKey !== madeUpSqKey)) isUnviable = true;
+                if (wordLength(cross) < 5 && (!madeUpSqKey || sqKey === madeUpSqKey)) {
+                    madeUpSqKey = sqKey;
+                    let crossSquares = getSquaresForWord(grid, cross);
+                    let crossPos = getPositionOfCross(wordSquares, crossSquares, node.fillWord!.direction);
+                    let crossPattern = getLettersFromSquares(crossSquares);
+                    madeUpWord = crossPattern.substring(0, crossPos) + entry[i] + crossPattern.substring(crossPos + 1);
+                }
+                else isUnviable = true;
             }
             else {
                 letterCountsTotal += letterCounts.get(entry[i])!;
             }
         });
 
-        if (!isUnviable) {
-            node.entryCandidates.push({
-                word: entry,
-                score: calculateEntryCandidateScore(entry, letterCountsTotal, containsZeroSquare),
-                isViable: true,
-                hasBeenChained: false,
-                wasChainFailure: false,
-                madeUpSqKey: madeUpSqKey,
-            } as EntryCandidate);
-        }
+        node.entryCandidates.push({
+            word: entry,
+            score: isUnviable ? 0 : calculateEntryCandidateScore(entry, letterCountsTotal, containsZeroSquare),
+            isViable: !isUnviable,
+            hasBeenChained: false,
+            wasChainFailure: false,
+            madeUpSqKey: madeUpSqKey,
+            madeUpWord: madeUpWord,
+        } as EntryCandidate);
     });
 }
 
 function calculateEntryCandidateScore(entry: string, letterCountsTotal: number, containsZeroSquare: boolean): number {
-    let ret = letterCountsTotal * getWordScore(entry);
-    if (containsZeroSquare) ret += 10000;
+    let ret = letterCountsTotal * (!containsZeroSquare ? getWordScore(entry) : 1);
     return ret;
 }
 

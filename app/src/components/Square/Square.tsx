@@ -12,7 +12,9 @@ function getSquareElement(props: SquareProps) {
     if (props.type === SquareType.White) {
         return <div 
                     className={"grid-square" + 
-                        (props.isSelected ? " grid-square-selected" : props.isInSelectedWord ? " grid-square-selected-word" : "") +
+                        (props.isSelected ? " grid-square-selected" : 
+                        props.isInSelectedWord ? " grid-square-selected-word" : 
+                        props.isInSelectedSection ? " grid-square-selected-section" : "") +
                         (props.content ? "" :
                         props.constraintSum === 0 ? " grid-square-error-word" :
                         between(props.constraintSum, 1, 1) ? " grid-square-constrained-5" : 

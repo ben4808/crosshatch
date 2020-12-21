@@ -98,7 +98,7 @@ function App(props: AppProps) {
             <CluesView updateSemaphore={updateSemaphore}></CluesView>
         }
         {activeView === "Fill" && 
-            <FillView></FillView>
+            <FillView updateSemaphoreProp={updateSemaphore}></FillView>
         }
       </div>
       
