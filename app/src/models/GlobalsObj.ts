@@ -19,12 +19,14 @@ export interface GlobalsObj {
     isFillComplete: boolean;
     fillStatus?: FillStatus;
     selectedWordNode?: FillNode;
+    userFilledWordKeys?: Map<string, boolean>;
 
     sections?: Map<number, Section>;
     activeSectionId?: number;
     hoverSectionId?: number;
     selectedSectionIds?: Map<number, boolean>;
     selectedSectionCandidate?: string;
+    userFilledSectionCandidates?: Map<string, boolean>;
 
     wordList?: IndexedWordList;
     qualityClasses?: Map<string, QualityClass>;

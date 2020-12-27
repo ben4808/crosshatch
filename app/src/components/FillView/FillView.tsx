@@ -124,6 +124,23 @@ function FillView(props: any) {
         triggerUpdate();
     }
 
+    function handleSectionHover(event: any) {
+        let target = event.target;
+        while (target.classList.length < 1 || target.classList[0] !== "fill-list-row-wrapper") {
+            target = target.parentElement;
+            if (!target) return;
+        }
+
+        let sectionId = +target.attributes["data-id"].value;
+        Globals.hoverSectionId = sectionId;
+        triggerUpdate();
+    }
+
+    function handleSectionBlur() {
+        Globals.hoverSectionId = undefined;
+        triggerUpdate();
+    }
+
     function handleSectionCandidateClick(event: any) {
         let target = event.target;
         while (target.classList.length < 1 || target.classList[0] !== "fill-list-row-wrapper") {
@@ -228,14 +245,15 @@ function FillView(props: any) {
                         ))}
                     </div>
                 </div>
-                <div className="fill-list-box">
+                <div className="fill-list-box" onMouseOut={handleSectionBlur}>
                     <div className="fill-list-title">Sections</div>
                     <div className="fill-list" style={sectionsStyle}>
                         <div className="fill-list-header">Active</div>
                         <div className="fill-list-header">ID</div>
                         <div className="fill-list-header">Size</div>
                         { sections.map(sec => (
-                            <div className="fill-list-row-wrapper" key={sec.id} data-id={sec.id} onClick={handleSectionClick}>
+                            <div className="fill-list-row-wrapper" key={sec.id} data-id={sec.id} 
+                                onClick={handleSectionClick} onMouseOver={handleSectionHover}>
                                 <div><input type="checkbox" className="section-checkbox"
                                     checked={Globals.selectedSectionIds!.has(sec.id)} onChange={doNothing} /></div>
                                 <div>{getPhoneticName(sec.id)}</div>

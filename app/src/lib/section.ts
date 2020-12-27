@@ -71,20 +71,20 @@ export function insertSectionCandidateIntoGrid(grid: GridState, candidate: Secti
 export function generateGridSections(grid: GridState): Map<number, Section> {
     function iterateSection(section: Section, grid: GridState, sq: GridSquare, usedSquares: Map<string, boolean>) {
         section.openSquareCount++;
-        usedSquares.set(`${sq.row},${sq.col}`, true);
+        usedSquares.set(squareKey(sq), true);
 
         getNeighboringSquares(grid, sq).forEach(neighbor => {
-            if (!usedSquares.has(`${neighbor.row},${neighbor.col}`) && isOpenSquare(grid, neighbor)) {
+            if (!usedSquares.has(squareKey(neighbor)) && isOpenSquare(grid, neighbor)) {
                 iterateSection(section, grid, neighbor, usedSquares);
             }
 
             [WordDirection.Across, WordDirection.Down].forEach(dir => {
                 let word = getWordAtSquare(grid, neighbor.row, neighbor.col, dir)!;
-                if (!section.words.has(wordKey(word))) {
+                if (word !== undefined && !section.words.has(wordKey(word))) {
                     section.words.set(wordKey(word), true);
                     let squares = getSquaresForWord(grid, word);
                     squares.forEach(wsq => {
-                        section.squares.set(`${wsq.row},${wsq.col}`, true);
+                        section.squares.set(squareKey(wsq), true);
                     });
                 }
             });
@@ -107,7 +107,7 @@ export function generateGridSections(grid: GridState): Map<number, Section> {
 
     // populate sections
     forAllGridSquares(grid, sq => {
-        if (!usedSquares.has(`${sq.row},${sq.col}`) && isOpenSquare(grid, sq)) {
+        if (!usedSquares.has(squareKey(sq)) && isOpenSquare(grid, sq)) {
             let newSection = makeNewSection(nextSectionId);
             iterateSection(newSection, grid, sq, usedSquares);
             if (newSection.openSquareCount === 1) return;

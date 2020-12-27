@@ -6,7 +6,7 @@ import Square from '../Square/Square';
 import { GridState } from '../../models/GridState';
 import { WordDirection } from '../../models/WordDirection';
 import Globals from '../../lib/windowService';
-import { compareTuples, doesWordContainSquare, getGrid, getSection, getSelectedWord, getWordAtSquare, otherDir, squareKey, wordKey } from '../../lib/util';
+import { compareTuples, doesWordContainSquare, getGrid, getSelectedWord, getWordAtSquare, mapKeys, otherDir, squareKey, wordKey } from '../../lib/util';
 import { getSymmetrySquares, getUncheckedSquareDir, populateWords, updateGridConstraintInfo } from '../../lib/grid';
 import { GridWord } from '../../models/GridWord';
 import { AppContext } from '../../AppContext';
@@ -151,6 +151,7 @@ function Grid(props: any) {
         if (blackSquareChanged) {
             populateWords(grid);
             Globals.sections = generateGridSections(grid);
+            Globals.selectedWordNode = undefined;
             updateGridConstraintInfo(grid);
         }
         else if (letterChanged)  {
@@ -197,8 +198,7 @@ function Grid(props: any) {
     }
 
     function isSquareInSelectedSection(sq: GridSquare): boolean {
-        let section = getSection();
-        return section.squares.has(squareKey(sq));
+        return !!sections.find(s => s.squares.has(squareKey(sq)))
     }
 
     function setSelWordAtSelSquare(newSelSquare: [number, number]) {
@@ -275,6 +275,8 @@ function Grid(props: any) {
 
     let puzzle = Globals.puzzle!;
     let grid = Globals.hoverGrid ? Globals.hoverGrid! : getGrid();
+    let sections = Globals.hoverSectionId !== undefined ? [Globals.sections!.get(Globals.hoverSectionId!)!] 
+        : mapKeys(Globals.selectedSectionIds!).map(k => Globals.sections!.get(k)!);
 
     let squareElements = [];
     for (let row = 0; row < grid.height; row++) {

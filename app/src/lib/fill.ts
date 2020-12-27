@@ -198,6 +198,13 @@ export function processAndInsertChosenEntry(node: FillNode): boolean {
     let foundZero = !!node.iffyWordKey;
     let zeroCrossKey = undefined as string | undefined;
 
+    wordSquares.forEach((sq, i) => {
+        if ((word.direction === WordDirection.Across && !crosses.find(c => c.start[1] === sq.col)) ||
+            (word.direction === WordDirection.Down && !crosses.find(c => c.start[0] === sq.row))) {
+            sq.content = chosenEntry.word[i];
+        }
+    });
+
     crosses.forEach(cross => {
         let crossKey = wordKey(cross);
         let crossSquares = getSquaresForWord(grid, cross);
@@ -341,8 +348,9 @@ function populateFillWordAnchors(node: FillNode) {
 
     unfilledSquares.forEach(sq => {
         let crossCounts = new Map<string, number>();
-        let viableLetterCount = 0;
+        let viableLetterScore = 0;
         let cross = getWordAtSquare(grid, sq.row, sq.col, otherDir(dir))!;
+        if (cross === undefined) return;
         let crossSquares = getSquaresForWord(grid, cross);
         let pattern = getLettersFromSquares(crossSquares);
         let pos = getPositionOfCross(wordSquares, crossSquares, dir);
@@ -352,16 +360,21 @@ function populateFillWordAnchors(node: FillNode) {
             let newPattern = pattern.substring(0, pos) + newChar + pattern.substring(pos + 1);
             let queryResults = queryIndexedWordList(newPattern);
             if (queryResults.length > 0) {
-                crossCounts.set(newChar, queryResults.length);
-                viableLetterCount++;
+                let letterScore = 0;
+                let scoreCount = Math.min(25, queryResults.length);
+                for (let j = 0; j < scoreCount; j++) {
+                    letterScore += getWordScore(queryResults[j]);
+                }
+                viableLetterScore += letterScore * (queryResults.length / scoreCount) / scoreCount / 9;
+                crossCounts.set(newChar, letterScore);
             }
         }
 
-        if (viableLetterCount > 0) {
+        if (viableLetterScore > 0) {
             if (anchorKeyCounts.length < 2)
-                anchorKeyCounts.push([squareKey(sq), viableLetterCount]);
-            else if (viableLetterCount < anchorKeyCounts[1][1]) {
-                anchorKeyCounts[1] = [squareKey(sq), viableLetterCount];
+                anchorKeyCounts.push([squareKey(sq), viableLetterScore]);
+            else if (viableLetterScore < anchorKeyCounts[1][1]) {
+                anchorKeyCounts[1] = [squareKey(sq), viableLetterScore];
                 anchorKeyCounts = anchorKeyCounts.sort((a, b) => a[1] - b[1]);
             }
         }
@@ -422,6 +435,7 @@ function processAnchorCombo(node: FillNode) {
         wordSquares.forEach((sq, i) => {
             let sqKey = squareKey(sq);
             let letterCounts = node.viableLetterCounts.get(sqKey)!;
+            if (!letterCounts) return;
             let cross = getWordAtSquare(grid, sq.row, sq.col, otherDir(node.fillWord!.direction))!;
 
             if (!letterCounts.has(entry[i])) {

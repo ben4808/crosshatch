@@ -124,10 +124,10 @@ export function generateConstraintInfoForSquares(grid: GridState, squares: GridS
 
     for (let i = 0; i < squares.length; i++) {
         let sq = squares[i];
-        let letters = entryOptions.map(x => x[i]);
+        let lettersAndWords = entryOptions.map(x => [x[i], x]);
         let newViableLetters = new Map<string, number>();
-        letters.forEach(ltr => {
-            newViableLetters.set(ltr, (newViableLetters.get(ltr) || 0) + 1);
+        lettersAndWords.forEach(law => {
+            newViableLetters.set(law[1], (newViableLetters.get(law[0]) || 0) + 1);
         });
 
         let sumTotal = 0;

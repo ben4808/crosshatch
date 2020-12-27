@@ -1,4 +1,5 @@
 import React from 'react';
+import { ContentType } from '../../models/ContentType';
 import { QualityClass } from '../../models/QualityClass';
 import { SquareType } from '../../models/SquareType';
 import { SquareProps } from './SquareProps';
@@ -30,7 +31,9 @@ function getSquareElement(props: SquareProps) {
             <div className="grid-number">{props.number ?? ""}</div>
             <div className={"grid-content" + 
                         (content.length > 1 ? " grid-content-rebus" : "") +
-                        (props.content ? "" :
+                        (props.content && props.contentType === ContentType.User ? "" :
+                         props.content && props.contentType === ContentType.ChosenWord ? " grid-content-chosen-word" :
+                         props.content && props.contentType === ContentType.ChosenSection ? " grid-content-chosen-section" :
                          props.qualityClass === QualityClass.Lively ? " grid-content-lively" :
                          props.qualityClass === QualityClass.Normal ? " grid-content-normal" :
                          props.qualityClass === QualityClass.Crosswordese ? " grid-content-crosswordese" :

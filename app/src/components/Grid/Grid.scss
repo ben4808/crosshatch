@@ -37,7 +37,7 @@
     .grid-number { left: -1px; top: -3px }
 }
 .grid-square-selected-section {
-    border: 2px solid lighten(palegoldenrod, 10%);
+    border: 2px solid palegoldenrod;
     .grid-content { padding-top: 1px; }
     .grid-number { left: -1px; top: -3px }
 }
@@ -75,17 +75,17 @@
     padding-top: 3px;
     color: black;
 }
-.grid-content-chosen-fill {
+.grid-content-chosen-word {
     color: steelblue;
+}
+.grid-content-chosen-section {
+    color: darkgoldenrod;
 }
 .grid-content-lively {
     color: seagreen;
 }
 .grid-content-normal {
     color: lighten(black, 50%);
-}
-.grid-content-crosswordese {
-    color: darkgoldenrod;
 }
 .grid-content-iffy {
     color: sienna
