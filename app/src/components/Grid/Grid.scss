@@ -78,8 +78,14 @@
 .grid-content-chosen-word {
     color: steelblue;
 }
+.grid-content-chosen-word-hover {
+    color: lighten(steelblue, 10%);
+}
 .grid-content-chosen-section {
     color: darkgoldenrod;
+}
+.grid-content-chosen-section-hover {
+    color: lighten(darkgoldenrod, 10%);
 }
 .grid-content-lively {
     color: seagreen;

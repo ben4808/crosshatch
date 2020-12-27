@@ -9,6 +9,7 @@ import { getLettersFromSquares, insertEntryIntoGrid } from '../../lib/grid';
 import { makeNewNode } from '../../lib/fill';
 import { FillNode } from '../../models/FillNode';
 import { AppContext } from '../../AppContext';
+import { ContentType } from '../../models/ContentType';
 
 function FillView(props: any) {
     const appContext = useContext(AppContext);
@@ -52,10 +53,10 @@ function FillView(props: any) {
         }
     }
 
-    function getManualEntryNode(entry: string): FillNode {
+    function getManualEntryNode(entry: string, isHover: boolean): FillNode {
         let node = Globals.selectedWordNode!;
         let wordKey = Globals.selectedWordKey!;
-        insertEntryIntoGrid(node, wordKey, entry);
+        insertEntryIntoGrid(node, wordKey, entry, isHover ? ContentType.HoverChosenWord : ContentType.ChosenWord);
         return node;
     }
 
@@ -79,7 +80,7 @@ function FillView(props: any) {
         if (!Globals.selectedWordKey) return;
 
         let entry = target.attributes["data-word"].value as string;
-        let node = getManualEntryNode(entry);
+        let node = getManualEntryNode(entry, false);
 
         Globals.activeGrid = node.endGrid;
         updateSectionFilters();
@@ -96,7 +97,7 @@ function FillView(props: any) {
         if (!Globals.selectedWordKey) return;
 
         let entry = target.attributes["data-word"].value as string;
-        let node = getManualEntryNode(entry);
+        let node = getManualEntryNode(entry, true);
 
         Globals.hoverGrid = node.endGrid;
         triggerUpdate();

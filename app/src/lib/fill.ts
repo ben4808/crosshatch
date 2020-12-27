@@ -1,3 +1,5 @@
+import Square from '../components/Square/Square';
+import { ContentType } from '../models/ContentType';
 import { EntryCandidate } from '../models/EntryCandidate';
 import { FillNode } from '../models/FillNode';
 import { GridSquare } from '../models/GridSquare';
@@ -5,12 +7,13 @@ import { GridState } from '../models/GridState';
 import { GridWord } from '../models/GridWord';
 import { QualityClass } from '../models/QualityClass';
 import { Section } from '../models/Section';
+import { SectionCandidate } from '../models/SectionCandidate';
 import { WordDirection } from '../models/WordDirection';
 import { generateConstraintInfoForSquares, getLettersFromSquares } from './grid';
 import { PriorityQueue, priorityQueue } from './priorityQueue';
-import { getSectionString, getSelectedSectionsKey, insertSectionCandidateIntoGrid, newSectionCandidate } from './section';
+import { getSectionString, getSelectedSectionsKey, insertSectionCandidateIntoGrid, newSectionCandidate, sectionCandidateKey } from './section';
 import { deepClone, getSquaresForWord, wordLength, mapKeys, isWordFull, isUserFilled, 
-    getWordAtSquare, otherDir, squareKey, isPartOfMadeUpWord, wordKey, mapValues } from './util';
+    getWordAtSquare, otherDir, squareKey, isPartOfMadeUpWord, wordKey, mapValues, getSectionCandidatesFromKeys } from './util';
 import Globals from './windowService';
 import { queryIndexedWordList } from './wordList';
 
@@ -185,7 +188,8 @@ export function processSectionNode(node: FillNode, section: Section): boolean {
     return true;
 }
 
-export function processAndInsertChosenEntry(node: FillNode): boolean {
+export function processAndInsertChosenEntry(node: FillNode, contentType?: ContentType): boolean {
+    if (contentType === undefined) contentType = ContentType.Autofill;
     if (!node.chosenEntry) return false;
 
     let grid = deepClone(node.startGrid) as GridState;
@@ -194,10 +198,21 @@ export function processAndInsertChosenEntry(node: FillNode): boolean {
     let wordSquares = getSquaresForWord(grid, word);
     let newCrossSquares = [] as GridSquare[][];
     let crosses = getUnfilledCrosses(grid, word);
+    crosses.concat(getChangedCrosses(grid, word, node.chosenEntry!.word));
+
+    let sectionCandidates = getSectionCandidatesFromKeys(mapKeys(grid.userFilledSectionCandidates));
+    sectionCandidates.forEach(sc => {
+        let section = Globals.sections!.get(sc.sectionId)!;
+        wordSquares.forEach((sq, i) => {
+            if (sc.grid.squares[sq.row][sq.col].content !== node.chosenEntry!.word[i])
+                grid.userFilledSectionCandidates.delete(sectionCandidateKey(section, grid));
+        });
+    });
 
     let foundZero = !!node.iffyWordKey;
     let zeroCrossKey = undefined as string | undefined;
 
+    // unchecked squares
     wordSquares.forEach((sq, i) => {
         if ((word.direction === WordDirection.Across && !crosses.find(c => c.start[1] === sq.col)) ||
             (word.direction === WordDirection.Down && !crosses.find(c => c.start[0] === sq.row))) {
@@ -213,7 +228,11 @@ export function processAndInsertChosenEntry(node: FillNode): boolean {
         let newCharPos = word.direction === WordDirection.Across ?
             wordSquares.findIndex(sq => sq.col === cross.start[1])! :
             wordSquares.findIndex(sq => sq.row === cross.start[0])!;
+        if (contentType !== ContentType.Autofill)
+            removeNonmatchingUserWords(grid, newSquares[crossPos], chosenEntry.word[newCharPos], 
+                word.direction, sectionCandidates.length > 0 ? sectionCandidates[0] : undefined, contentType!);
         newSquares[crossPos].content = chosenEntry.word[newCharPos];
+        newSquares[crossPos].contentType = contentType!;
         generateConstraintInfoForSquares(grid, newSquares);
         newCrossSquares.push(newSquares);
 
@@ -245,6 +264,28 @@ export function processAndInsertChosenEntry(node: FillNode): boolean {
     node.endGrid = grid;
     node.iffyWordKey = zeroCrossKey;
     return true;
+}
+
+function removeNonmatchingUserWords(grid: GridState, sq: GridSquare, newContent: string, 
+        fillDir: WordDirection, sc: SectionCandidate | undefined, contentType: ContentType) {
+    if (!sq.content || sq.content === newContent) return;
+    
+    if (sq.contentType === ContentType.ChosenWord) {
+        let cross = getWordAtSquare(grid, sq.row, sq.col, otherDir(fillDir))!;
+        let crossSquares = getSquaresForWord(grid, cross);
+        crossSquares.forEach(crossSq => {
+            if (crossSq === sq) return;
+
+            let crossCross = getWordAtSquare(grid, crossSq.row, crossSq.col, fillDir);
+            if (!crossCross || !grid.userFilledWordKeys.has(wordKey(crossCross))) {
+                if (sc)
+                    sq.content = sc.grid.squares[sq.row][sq.col].content;
+                else
+                    sq.content = undefined;
+                sq.contentType = contentType;
+            }
+        });
+    }
 }
 
 export function makeNewNode(grid: GridState, depth: number, isChainNode: boolean, parent: FillNode | undefined): FillNode {
@@ -332,8 +373,8 @@ function populateFillWordAnchors(node: FillNode) {
     let wordSquares = getSquaresForWord(grid, node.fillWord!);
     let dir = node.fillWord!.direction;
 
-    let filledSquares = wordSquares.filter(sq => sq.content);
-    let unfilledSquares = wordSquares.filter(sq => !sq.content);
+    let filledSquares = wordSquares.filter(sq => sq.content && !sq.isEmptyForManualFill);
+    let unfilledSquares = wordSquares.filter(sq => !sq.content || sq.isEmptyForManualFill);
     // <squareKey, <letter, count>>
     node.viableLetterCounts = new Map<string, Map<string, number>>();
     node.anchorSquareKeys = [];
@@ -350,7 +391,7 @@ function populateFillWordAnchors(node: FillNode) {
         let crossCounts = new Map<string, number>();
         let viableLetterScore = 0;
         let cross = getWordAtSquare(grid, sq.row, sq.col, otherDir(dir))!;
-        if (cross === undefined) return;
+        if (cross === undefined) return; // unchecked square
         let crossSquares = getSquaresForWord(grid, cross);
         let pattern = getLettersFromSquares(crossSquares);
         let pos = getPositionOfCross(wordSquares, crossSquares, dir);
@@ -361,11 +402,16 @@ function populateFillWordAnchors(node: FillNode) {
             let queryResults = queryIndexedWordList(newPattern);
             if (queryResults.length > 0) {
                 let letterScore = 0;
-                let scoreCount = Math.min(25, queryResults.length);
-                for (let j = 0; j < scoreCount; j++) {
-                    letterScore += getWordScore(queryResults[j]);
+                if (queryResults.length > 10) {
+                    letterScore = queryResults.length * 0.7;
                 }
-                viableLetterScore += letterScore * (queryResults.length / scoreCount) / scoreCount / 9;
+                else {
+                    for (let j = 0; j < queryResults.length; j++) {
+                        letterScore += getWordScore(queryResults[j]);
+                    }
+                }
+               
+                viableLetterScore += letterScore / queryResults.length / 9;
                 crossCounts.set(newChar, letterScore);
             }
         }
@@ -476,6 +522,15 @@ export function getUnfilledCrosses(grid: GridState, word: GridWord): GridWord[] 
     let crosses = squares
         .map(sq => getWordAtSquare(grid, sq.row, sq.col, otherDir(word.direction)))
         .filter(w => w && !isWordFull(getSquaresForWord(grid, w)))
+        .map(w => w!);
+    return crosses.length > 0 ? crosses : [];
+}
+
+export function getChangedCrosses(grid: GridState, word: GridWord, newEntry: string): GridWord[] {
+    let squares = getSquaresForWord(grid, word);
+    let crosses = squares
+        .filter((sq, i) => sq.content && sq.content !== newEntry[i])
+        .map(sq => getWordAtSquare(grid, sq.row, sq.col, otherDir(word.direction)))
         .map(w => w!);
     return crosses.length > 0 ? crosses : [];
 }

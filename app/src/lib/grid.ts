@@ -167,10 +167,11 @@ export function getConstraintSquareSum(squares: GridSquare[]): number {
 
 export function getLettersFromSquares(squares: GridSquare[], includeFillContent?: boolean): string {
     if (includeFillContent === undefined) includeFillContent = true;
-    let ret = "";
-    squares.forEach(sq => {
-        ret += (includeFillContent ? sq.content : sq.content) || "-";
-    });
+    let ret = squares.map(sq => {
+        if (sq.isEmptyForManualFill) return "-";
+        if (!sq.content || (!includeFillContent && !isUserFilled(sq))) return "-";
+        return sq.content!;
+    }).join("");
     return ret;
 }
 
@@ -204,6 +205,8 @@ export function createNewGrid(width: number, height: number): GridState {
         squares: squares,
         words: new Map<string, GridWord>(),
         usedWords: new Map<string, boolean>(),
+        userFilledWordKeys: new Map<string, boolean>(),
+        userFilledSectionCandidates: new Map<string, boolean>(),
     };
 
     populateWords(grid);
@@ -272,9 +275,37 @@ export function getSquareAtKey(grid: GridState, squareKey: string): GridSquare {
     return grid.squares[+tokens[0]][+tokens[1]];
 }
 
-export function insertEntryIntoGrid(node: FillNode, wordKey: string, entry: string) {
+export function insertEntryIntoGrid(node: FillNode, wordKey: string, entry: string, contentType?: ContentType) {
     let grid = node.startGrid;
     node.fillWord = grid.words.get(wordKey)!;
     node.chosenEntry = node.entryCandidates.find(ec => ec.word === entry);
-    processAndInsertChosenEntry(node);
+    processAndInsertChosenEntry(node, contentType);
+}
+
+export function setSquaresEmptyForManualFill(node: FillNode) {
+    let grid = node.startGrid;
+    let fillWord = node.fillWord!;
+    let wordSquares = getSquaresForWord(grid, fillWord);
+    
+    if (grid.userFilledWordKeys!.has(wordKey(fillWord))) {
+        wordSquares.forEach(sq => {
+            if (sq.contentType === ContentType.ChosenWord)
+                sq.isEmptyForManualFill = true;
+        });
+    }
+
+    wordSquares.forEach(sq => {
+        if (sq.contentType === ContentType.ChosenSection)
+            sq.isEmptyForManualFill = true;
+    });
+}
+
+export function unsetSquaresEmptyForManualFill(node: FillNode) {
+    let grid = node.startGrid;
+    let fillWord = node.fillWord!;
+    let wordSquares = getSquaresForWord(grid, fillWord);
+
+    wordSquares.forEach(sq => {
+        sq.isEmptyForManualFill = false;
+    });
 }

@@ -8,4 +8,6 @@ export interface GridState {
     squares: GridSquare[][];
     words: Map<string, GridWord>;
     usedWords: Map<string, boolean>;
+    userFilledWordKeys: Map<string, boolean>;
+    userFilledSectionCandidates: Map<string, boolean>;
 }

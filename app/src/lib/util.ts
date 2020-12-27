@@ -9,6 +9,7 @@ import { Puzzle } from "../models/Puzzle";
 import { createNewGrid, getLettersFromSquares } from "./grid";
 import { ContentType } from "../models/ContentType";
 import { Section } from "../models/Section";
+import { SectionCandidate } from "../models/SectionCandidate";
 
 export function average(arr: number[]): number {
     return arr.reduce((a,b) => a + b, 0) / arr.length;
@@ -215,4 +216,11 @@ export function shuffle(array: any[]) {
 
 export function getEntryAtWordKey(grid: GridState, wordKey: string): string {
     return getLettersFromSquares(getSquaresForWord(grid, grid.words.get(wordKey)!));
+}
+
+export function getSectionCandidatesFromKeys(keys: string[]): SectionCandidate[] {
+    return keys
+        .map(sck => mapValues(Globals.sections!).find(sec => sec.candidates.has(sck))?.candidates.get(sck))
+        .filter(sck => sck !== undefined)
+        .map(sck => sck!);
 }

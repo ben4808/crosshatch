@@ -7,7 +7,7 @@ import { GridState } from '../../models/GridState';
 import { WordDirection } from '../../models/WordDirection';
 import Globals from '../../lib/windowService';
 import { compareTuples, doesWordContainSquare, getGrid, getSelectedWord, getWordAtSquare, mapKeys, otherDir, squareKey, wordKey } from '../../lib/util';
-import { getSymmetrySquares, getUncheckedSquareDir, populateWords, updateGridConstraintInfo } from '../../lib/grid';
+import { getSymmetrySquares, getUncheckedSquareDir, populateWords, setSquaresEmptyForManualFill, unsetSquaresEmptyForManualFill, updateGridConstraintInfo } from '../../lib/grid';
 import { GridWord } from '../../models/GridWord';
 import { AppContext } from '../../AppContext';
 import { ContentType } from '../../models/ContentType';
@@ -83,7 +83,9 @@ function Grid(props: any) {
         if (Globals.selectedWordKey) {
             let node = makeNewNode(grid, 0, false, undefined);
             node.fillWord = grid.words.get(Globals.selectedWordKey!);
+            setSquaresEmptyForManualFill(node);
             populateAndScoreEntryCandidates(node, true);
+            unsetSquaresEmptyForManualFill(node);
             Globals.selectedWordNode = node;
         }
         else 
