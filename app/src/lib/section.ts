@@ -32,10 +32,10 @@ export function updateSectionFilters() {
 
 export function getSectionString(grid: GridState, section: Section): string {
     let ret = [] as string[];
-    mapKeys(section.squares).forEach(sq => {
-        let rowCol = sq.split(",").map(x => +x);
-        let content = grid.squares[rowCol[0]][rowCol[1]].content;
-        ret.push(content ? content! : ".");
+    mapKeys(section.squares).forEach(sqKey => {
+        let sq = getSquareAtKey(grid, sqKey);
+        let content = sq.content;
+        ret.push(content ? content! : "-");
     });
     return ret.join("");
 }
@@ -190,6 +190,7 @@ function getNeighboringSquares(grid: GridState, sq: GridSquare): GridSquare[] {
 export function newSectionCandidate(node: FillNode, section: Section): SectionCandidate {
     let grid = node.endGrid;
     return {
+        sectionId: section.id,
         grid: grid,
         score: calculateSectionCandidateScore(grid, section),
         iffyEntry: node.iffyWordKey ? getEntryAtWordKey(grid, node.iffyWordKey) : undefined,
@@ -259,5 +260,6 @@ export function getLongestStackWord(section: Section): GridWord {
 }
 
 export function getSelectedSectionsKey(): string {
+    if (Globals.selectedSectionIds!.size === 0) return "0";
     return mapKeys(Globals.selectedSectionIds!).sort().map(i => i.toString()).join(",");
 }

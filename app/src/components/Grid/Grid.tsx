@@ -1,4 +1,4 @@
-import React, { useContext, useReducer, useState } from 'react';
+import React, { useContext, useState } from 'react';
 import { SquareType } from '../../models/SquareType';
 import { SquareProps } from '../Square/SquareProps';
 import "./Grid.scss";
@@ -6,8 +6,10 @@ import Square from '../Square/Square';
 import { GridState } from '../../models/GridState';
 import { WordDirection } from '../../models/WordDirection';
 import Globals from '../../lib/windowService';
-import { compareTuples, doesWordContainSquare, getGrid, getSelectedWord, getWordAtSquare, mapKeys, otherDir, squareKey, wordKey } from '../../lib/util';
-import { getSymmetrySquares, getUncheckedSquareDir, populateWords, setSquaresEmptyForManualFill, unsetSquaresEmptyForManualFill, updateGridConstraintInfo } from '../../lib/grid';
+import { compareTuples, doesWordContainSquare, getGrid, getSelectedWord, getSquaresForWord, 
+    getWordAtSquare, isWordFull, mapKeys, mapValues, otherDir, squareKey, wordKey } from '../../lib/util';
+import { getLettersFromSquares, getSymmetrySquares, getUncheckedSquareDir, populateWords, 
+    setSquaresEmptyForManualFill, unsetSquaresEmptyForManualFill, updateGridConstraintInfo } from '../../lib/grid';
 import { GridWord } from '../../models/GridWord';
 import { AppContext } from '../../AppContext';
 import { ContentType } from '../../models/ContentType';
@@ -18,39 +20,7 @@ import { makeNewNode, populateAndScoreEntryCandidates } from '../../lib/fill';
 
 function Grid(props: any) {
     const [selectedSquare, setSelectedSquare] = useState([-1, -1] as [number, number]);
-    // eslint-disable-next-line
-    const [ignored, forceUpdate] = useReducer(x => x + 1, 0);
     const appContext = useContext(AppContext);
-
-    // useEffect(() => {
-    //     Globals.fillWord = handleFillWord;
-    //     Globals.fillGrid = handleFillGrid;
-    //     Globals.pauseFill = handlePauseFill;
-    //     // eslint-disable-next-line react-hooks/exhaustive-deps
-    // }, []);
-
-    // function handleFillWord() {
-    //     fillWord();
-    //     forceUpdate();
-    // }
-
-    // function handleFillGrid() {
-    //     Globals.isFillRunning = true;
-    //     doFillGrid();
-    // }
-
-    // function doFillGrid() {
-    //     if (!Globals.isFillRunning) return;
-
-    //     fillWord();
-    //     forceUpdate();
-    //     setTimeout(() => doFillGrid(), 5);
-    // }
-
-    // function handlePauseFill() {
-    //     Globals.isFillRunning = false;
-    //     forceUpdate();
-    // }
 
     function handleClick(event: any) {
         let target = event.target;
@@ -221,7 +191,7 @@ function Grid(props: any) {
             type: square.type,
             content: square.content,
             contentType: square.contentType,
-            qualityClass: QualityClass.Normal,
+            qualityClass: qualityClassMap.get(squareKey(square)) || QualityClass.Normal,
             isSelected: isSquareSelected() && compareTuples(selectedSquare, [row, col]),
             isInSelectedWord: isWordSelected() && doesWordContainSquare(selectedWord!, row, col),
             isInSelectedSection: isSquareInSelectedSection(square),
@@ -275,10 +245,46 @@ function Grid(props: any) {
         Globals.puzzle!.notes = newNotes === "(notes)" ? "" : newNotes;
     }
 
+    function generateQualityClassMap(grid: GridState): Map<string, QualityClass> {
+        let ret = new Map<string, QualityClass>();
+
+        let acrossWords = mapValues(grid.words).filter(w => w.direction === WordDirection.Across);
+        acrossWords.forEach(w => {
+            let squares = getSquaresForWord(grid, w);
+            if (isWordFull(squares)) {
+                let letters = getLettersFromSquares(squares);
+                let qc = Globals.qualityClasses!.get(letters)!;
+                squares.forEach(sq => {
+                    if (sq.contentType === ContentType.Autofill)
+                        ret.set(squareKey(sq), qc);
+                });
+            }
+        });
+
+        let downWords = mapValues(grid.words).filter(w => w.direction === WordDirection.Down);
+        downWords.forEach(w => {
+            let squares = getSquaresForWord(grid, w);
+            if (isWordFull(squares)) {
+                let letters = getLettersFromSquares(squares);
+                let qc = Globals.qualityClasses!.get(letters)!;
+                squares.forEach(sq => {
+                    if (sq.contentType === ContentType.Autofill) {
+                        let curQc = ret.get(squareKey(sq))!;
+                        if (qc < curQc)
+                            ret.set(squareKey(sq), qc);
+                    }
+                });
+            }
+        });
+
+        return ret;
+    }
+
     let puzzle = Globals.puzzle!;
     let grid = Globals.hoverGrid ? Globals.hoverGrid! : getGrid();
     let sections = Globals.hoverSectionId !== undefined ? [Globals.sections!.get(Globals.hoverSectionId!)!] 
         : mapKeys(Globals.selectedSectionIds!).map(k => Globals.sections!.get(k)!);
+    let qualityClassMap = generateQualityClassMap(grid);
 
     let squareElements = [];
     for (let row = 0; row < grid.height; row++) {

@@ -30,4 +30,5 @@ export interface GlobalsObj {
     qualityClasses?: Map<string, QualityClass>;
 
     handleToggleFill?: () => void;
+    handleFillWord?: () => void;
 }

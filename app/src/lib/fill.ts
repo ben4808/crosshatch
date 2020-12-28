@@ -1,4 +1,3 @@
-import Square from '../components/Square/Square';
 import { ContentType } from '../models/ContentType';
 import { EntryCandidate } from '../models/EntryCandidate';
 import { FillNode } from '../models/FillNode';
@@ -13,12 +12,12 @@ import { generateConstraintInfoForSquares, getLettersFromSquares } from './grid'
 import { PriorityQueue, priorityQueue } from './priorityQueue';
 import { getSectionString, getSelectedSectionsKey, insertSectionCandidateIntoGrid, newSectionCandidate, sectionCandidateKey } from './section';
 import { deepClone, getSquaresForWord, wordLength, mapKeys, isWordFull, isUserFilled, 
-    getWordAtSquare, otherDir, squareKey, isPartOfMadeUpWord, wordKey, mapValues, getSectionCandidatesFromKeys } from './util';
+    getWordAtSquare, otherDir, squareKey, isPartOfMadeUpWord, wordKey, mapValues, getSectionCandidatesFromKeys, getSection, getGrid } from './util';
 import Globals from './windowService';
 import { queryIndexedWordList } from './wordList';
 
 export function fillSectionWord(): boolean {
-    let section = Globals.sections!.get(Globals.activeSectionId!)!;
+    let section = getSection();
     let selectedSectionsKey = getSelectedSectionsKey();
     let fillQueue = section.fillQueues.get(selectedSectionsKey);
     if (!fillQueue) {
@@ -29,21 +28,20 @@ export function fillSectionWord(): boolean {
     }
 
     let node = fillQueue.peek()!;
-    if (!node) {
-        return false;
-    }
+    if (!node) return false;
     while (node.needsNewPriority) {
         node.needsNewPriority = false;
         fillQueue.pop();
         fillQueue.insert(node, calculateNodePriority(node));
         node = fillQueue.peek()!;
+        if (!node) return false;
     }
 
     let success = processSectionNode(node, section);
     if (success) {
         let sectionString = getSectionString(node.endGrid, section);
         // is section filled?
-        if (!sectionString.includes(".") && !section.candidates.has(sectionString)) {
+        if (!sectionString.includes("-") && !section.candidates.has(sectionString)) {
             let newCandidate = newSectionCandidate(node, section);
             section.candidates.set(sectionString, newCandidate);
             invalidateChainNode(node);
@@ -51,6 +49,7 @@ export function fillSectionWord(): boolean {
             return fillSectionWord();
         }
 
+        Globals.activeGrid = node.endGrid;
         let newNode = makeNewNode(node.endGrid, node.depth + 1, true, node);
         fillQueue.insert(newNode, calculateNodePriority(newNode));
     }
@@ -65,6 +64,8 @@ export function fillSectionWord(): boolean {
 
 function invalidateChainNode(node: FillNode) {
     let parent = node.parent!;
+    if (!parent) return;
+
     let prevCandidate = parent.chosenEntry!;
     if (parent.isChainNode) {
         prevCandidate.wasChainFailure = true;
@@ -101,10 +102,11 @@ function calculateNodePriority(node: FillNode): number {
 }
 
 function populateSeedNodes(fillQueue: PriorityQueue<FillNode>) {
+    let grid = getGrid();
     let selectedSectionIds = mapKeys(Globals.selectedSectionIds!);
     let intersectingSectionIds = [] as number[];
     let activeSectionId = Globals.activeSectionId!;
-    let activeSection = Globals.sections!.get(activeSectionId)!;
+    let activeSection = getSection();
     selectedSectionIds.forEach(sid => {
         let otherSection = Globals.sections!.get(sid)!;
         if (sid !== activeSectionId && otherSection.candidates.size > 0 && doSectionsIntersect(sid, activeSectionId)) {
@@ -114,13 +116,12 @@ function populateSeedNodes(fillQueue: PriorityQueue<FillNode>) {
     intersectingSectionIds.sort();
 
     if (intersectingSectionIds.length === 0) {
-        fillQueue.insert(makeNewNode(Globals.puzzle!.grid, 0, false, undefined), 0);
+        fillQueue.insert(makeNewNode(grid, 0, false, undefined), 0);
         return;
     }
 
     let comboKey = intersectingSectionIds.map(x => x.toString()).join(",");
     let candidateCounts = intersectingSectionIds.map(i => Globals.sections!.get(i)!.candidates.size);
-    let grid = Globals.puzzle!.grid;
     let newPermutations = getNewPermutations(candidateCounts, comboKey, activeSection);
     newPermutations.forEach(perm => {
         let node = makeNewNode(grid, 0, false, undefined);
@@ -261,6 +262,8 @@ export function processAndInsertChosenEntry(node: FillNode, contentType?: Conten
 
     wordSquares = getSquaresForWord(grid, word);
     grid.usedWords.set(getLettersFromSquares(wordSquares), true);
+    if (contentType === ContentType.ChosenWord)
+        grid.userFilledWordKeys.set(wordKey(word), true);
     node.endGrid = grid;
     node.iffyWordKey = zeroCrossKey;
     return true;
@@ -323,7 +326,7 @@ function selectWordToFill(node: FillNode, section: Section): GridWord | undefine
     mapKeys(section.words).forEach(key => {
         wordScores.set(key, priorityScore(key));
     });
-    let prioritizedWordList = mapKeys(section.words).sort((a, b) => wordScores.get(a)! - wordScores.get(b)!);
+    let prioritizedWordList = mapKeys(section.words).sort((a, b) => wordScores.get(b)! - wordScores.get(a)!);
 
     for (let key of prioritizedWordList) {
         let word = grid.words.get(key)!;
@@ -341,7 +344,7 @@ function getWordConstraintScore(squares: GridSquare[]): number {
     let foundZero = false;
     squares.forEach(sq => {
         if (isUserFilled(sq)) return;
-        let sum = sq.constraintInfo!.isCalculated ? sq.constraintInfo!.sumTotal : 1000;
+        let sum = (sq.constraintInfo && sq.constraintInfo.isCalculated) ? sq.constraintInfo!.sumTotal : 1000;
         if (sum === 0) {
             foundZero = true;
             return;
@@ -498,6 +501,9 @@ function processAnchorCombo(node: FillNode) {
             else {
                 letterCountsTotal += letterCounts.get(entry[i])!;
             }
+
+            if (grid.usedWords.has(entry))
+                isUnviable = true;
         });
 
         node.entryCandidates.push({

@@ -106,7 +106,7 @@ export function generateConstraintInfoForSquares(grid: GridState, squares: GridS
                 viableLetters: new Map<string, number>([[sq.content!, 1]]),
             };
         }
-        else {
+        else if (!sq.constraintInfo) {
             sq.constraintInfo = {
                 isCalculated: false,
                 sumTotal: 0,
@@ -117,7 +117,8 @@ export function generateConstraintInfoForSquares(grid: GridState, squares: GridS
     if (isWordEmpty(squares) || isWordFull(squares)) return;
 
     let entryOptions = indexedWordListLookupSquares(squares);
-    if (entryOptions.length > 200) {
+    let squaresCalculated = !!squares.find(sq => !sq.content && sq.constraintInfo!.isCalculated);
+    if (entryOptions.length > (squaresCalculated ? 500 : 200)) {
         squares.forEach(sq => { sq.constraintInfo!.isCalculated = false; });
         return;
     }

@@ -4,9 +4,10 @@ import "./FillView.scss";
 import Globals from '../../lib/windowService';
 import { FillStatus } from '../../models/FillStatus';
 import { getGrid, getSection, getSquaresForWord, mapValues } from '../../lib/util';
-import { getLongestStackWord, getPhoneticName, insertSectionCandidateIntoGrid, makeNewSection, sectionCandidateKey, updateSectionFilters } from '../../lib/section';
+import { getLongestStackWord, getPhoneticName, insertSectionCandidateIntoGrid, 
+    makeNewSection, sectionCandidateKey, updateSectionFilters } from '../../lib/section';
 import { getLettersFromSquares, insertEntryIntoGrid } from '../../lib/grid';
-import { makeNewNode } from '../../lib/fill';
+import { fillSectionWord, makeNewNode } from '../../lib/fill';
 import { FillNode } from '../../models/FillNode';
 import { AppContext } from '../../AppContext';
 import { ContentType } from '../../models/ContentType';
@@ -84,6 +85,7 @@ function FillView(props: any) {
 
         Globals.activeGrid = node.endGrid;
         updateSectionFilters();
+        Globals.hoverGrid = undefined;
         triggerUpdate();
     }
 
@@ -122,6 +124,7 @@ function FillView(props: any) {
             Globals.selectedSectionIds!.set(sectionId, true);
 
         updateSectionFilters();
+        Globals.hoverGrid = undefined;
         triggerUpdate();
     }
 
@@ -180,6 +183,11 @@ function FillView(props: any) {
 
     }
 
+    function handleFillWordClick(event: any) {
+        fillSectionWord();
+        triggerUpdate();
+    }
+
     let grid = getGrid();
     let selectedSymmetry = SymmetryType[Globals.gridSymmetry!];
     let symmetryOptions = (!grid || grid.width === grid.height) ?
@@ -189,6 +197,8 @@ function FillView(props: any) {
     let fillStatus = getFillStatusString(Globals.fillStatus!);
 
     let entryCandidates = Globals.selectedWordNode ? Globals.selectedWordNode.entryCandidates : [];
+    entryCandidates = entryCandidates.filter(ec => ec.score > 0);
+    let isNoEntryCandidates = Globals.selectedWordNode && entryCandidates.length === 0;
     let sections = Globals.sections ? mapValues(Globals.sections!).sort((a, b) => b.squares.size - a.squares.size) : [];
     let activeSection = Globals.sections ? Globals.sections!.get(Globals.activeSectionId!)! : makeNewSection(-1);
     let sectionCandidates = mapValues(activeSection.candidates).sort((a, b) => b.score - a.score);
@@ -220,6 +230,8 @@ function FillView(props: any) {
                     <option value={type} key={type}>{getSymmetryTypeString(type.toString())}</option>
                 ))}
             </select>
+            <br /><br />
+            <button className="btn btn-primary" onClick={handleFillWordClick}>Fill Word</button>
 
             <div className="fill-lists">
                 <div className="fill-list-box">
@@ -236,6 +248,11 @@ function FillView(props: any) {
                         <div className="fill-list-header">Entry</div>
                         <div className="fill-list-header">Score</div>
                         <div className="fill-list-header">Iffy</div>
+                        { isNoEntryCandidates && (
+                            <div className="fill-list-row-wrapper">
+                                <div><i>No viable entries</i></div><div></div><div></div>
+                            </div>
+                        )}
                         { entryCandidates.map(ec => (
                             <div className="fill-list-row-wrapper" key={ec.word} data-word={ec.word}
                                 onClick={handleEntryCandidateClick} onMouseOver={handleEntryCandidateHover}>

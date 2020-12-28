@@ -80,7 +80,6 @@ function App(props: AppProps) {
     Globals.sections = generateGridSections(grid);
     Globals.activeSectionId = 0;
     Globals.selectedSectionIds = new Map<number, boolean>();
-    Globals.selectedSectionIds.set(0, true);
   }
 
   if (!Globals.puzzle) {
