@@ -8,3 +8,4 @@ export const AppContext = React.createContext({
     createNewPuzzle: (w: number, h: number) => {},
     exportPuz: () => {},
   });
+  
