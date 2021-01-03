@@ -37,7 +37,7 @@
     .grid-number { left: -1px; top: -3px }
 }
 .grid-square-selected-section {
-    border: 2px solid palegoldenrod;
+    border: 2px solid lighten(darkgoldenrod, 10%);
     .grid-content { padding-top: 1px; }
     .grid-number { left: -1px; top: -3px }
 }

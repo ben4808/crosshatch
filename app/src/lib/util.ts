@@ -192,13 +192,17 @@ export function isUserFilled(sq: GridSquare): boolean {
         || sq.contentType === ContentType.ChosenSection;
 }
 
+export function isUserOrWordFilled(sq: GridSquare): boolean {
+    return sq.contentType === ContentType.User || sq.contentType === ContentType.ChosenWord;
+}
+
 export function isAcross(word: GridWord): boolean {
     return word.direction === WordDirection.Across;
 }
 
-export function gridSquareAtKey(grid: GridState, sqKey: string): GridSquare {
-    let rowCol = sqKey.split(",").map(x => +x);
-    return grid.squares[rowCol[0]][rowCol[1]];
+export function getSquareAtKey(grid: GridState, squareKey: string): GridSquare {
+    let tokens = squareKey.substring(1, squareKey.length - 1).split(",");
+    return grid.squares[+tokens[0]][+tokens[1]];
 }
 
 export function isPartOfMadeUpWord(sq: GridSquare): boolean {

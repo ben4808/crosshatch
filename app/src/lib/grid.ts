@@ -6,10 +6,11 @@ import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
 import Globals from './windowService';
 import { getSquaresForWord, isBlackSquare, newWord, forAllGridSquares, 
-    indexedWordListLookupSquares, isWordFull, isWordEmpty, getGrid, isUserFilled, deepClone, wordKey } from "./util";
+    indexedWordListLookupSquares, isWordFull, isWordEmpty, getGrid, isUserFilled, deepClone, wordKey, getWordAtSquare, getSection, getSquareAtKey, otherDir } from "./util";
 import { SymmetryType } from "../models/SymmetryType";
 import { processAndInsertChosenEntry } from "./fill";
 import { ContentType } from "../models/ContentType";
+import { isWordInSelectedSections } from "./section";
 
 export function populateWords(grid: GridState) {
     function processSquare(grid: GridState, row: number, col: number, dir: WordDirection) {
@@ -60,7 +61,7 @@ export function updateGridConstraintInfo(grid: GridState) {
     grid.words.forEach(word => {
         let newSquares = deepClone(getSquaresForWord(grid, word)) as GridSquare[];
         let letters = getLettersFromSquares(newSquares);
-        if (!letters.includes(".")) grid.usedWords.set(letters, true);
+        if (!letters.includes("-")) grid.usedWords.set(letters, true);
         generateConstraintInfoForSquares(grid, newSquares);
         if (newSquares !== undefined && newSquares.length > 0) {
             newSquares.forEach(ns => {
@@ -98,13 +99,23 @@ function numberizeGrid(grid: GridState) {
 }
 
 export function generateConstraintInfoForSquares(grid: GridState, squares: GridSquare[]) {
-    squares.forEach(sq => {
+    let justCalculated = new Map<number, boolean>();
+    let isIffy = false;
+
+    if (isWordFull(squares) && squares.find(sq => !isUserFilled(sq))) {
+        let letters = getLettersFromSquares(squares);
+        if (!Globals.qualityClasses!.has(letters))
+            isIffy = true;
+    }
+
+    squares.forEach((sq, i) => {
         if (sq.content) {
             sq.constraintInfo = {
                 isCalculated: true,
-                sumTotal: 1,
-                viableLetters: new Map<string, number>([[sq.content!, 1]]),
+                sumTotal: isIffy ? 0 : 1,
+                viableLetters: new Map<string, number>([[sq.content!, isIffy ? 0 : 1]]),
             };
+            justCalculated.set(i, true);
         }
         else if (!sq.constraintInfo) {
             sq.constraintInfo = {
@@ -124,6 +135,8 @@ export function generateConstraintInfoForSquares(grid: GridState, squares: GridS
     }
 
     for (let i = 0; i < squares.length; i++) {
+        if (justCalculated.has(i)) continue;
+
         let sq = squares[i];
         let lettersAndWords = entryOptions.map(x => [x[i], x]);
         let newViableLetters = new Map<string, number>();
@@ -227,16 +240,6 @@ export function getUncheckedSquareDir(grid: GridState, row: number, col: number)
     return undefined;
 }
 
-export function clearFill(grid: GridState) {
-    grid.squares.forEach(row => {
-        row.forEach(sq => {
-            if (!isUserFilled(sq)) {
-                sq.content = undefined;
-            }
-        });
-    });
-}
-
 export function getSymmetrySquares(initSquare: [number, number]): [number, number][] {
     let grid = getGrid();
     let w = grid.width - 1;
@@ -271,11 +274,6 @@ export function getSymmetrySquares(initSquare: [number, number]): [number, numbe
     return ret;
 }
 
-export function getSquareAtKey(grid: GridState, squareKey: string): GridSquare {
-    let tokens = squareKey.substring(1, squareKey.length - 1).split(",");
-    return grid.squares[+tokens[0]][+tokens[1]];
-}
-
 export function insertEntryIntoGrid(node: FillNode, wordKey: string, entry: string, contentType?: ContentType) {
     let grid = node.startGrid;
     node.fillWord = grid.words.get(wordKey)!;
@@ -308,5 +306,50 @@ export function unsetSquaresEmptyForManualFill(node: FillNode) {
 
     wordSquares.forEach(sq => {
         sq.isEmptyForManualFill = false;
+    });
+}
+
+export function eraseGridSquare(grid: GridState, sq: GridSquare, dir: WordDirection) {
+    let word = getWordAtSquare(grid, sq.row, sq.col, dir)!;
+    let squares = getSquaresForWord(grid, word);
+    let section = getSection();
+
+    if (squares.find(sq => sq.contentType === ContentType.Autofill)) {
+        return; // autofill is ephemeral, no need to explicitly delete
+    }
+    else if (squares.find(sq => sq.contentType === ContentType.ChosenSection)) {
+        section.squares.forEach((_, sqKey) => {
+            let sq = getSquareAtKey(grid, sqKey);
+            if (sq.contentType === ContentType.ChosenSection)
+                sq.contentType = ContentType.Autofill;
+        });
+    }
+    else if (squares.find(sq => sq.contentType === ContentType.ChosenWord)) {
+        let isInSection = isWordInSelectedSections(wordKey(word));
+
+        squares.forEach(sq => {
+            if (sq.contentType === ContentType.User) return;
+
+            let cross = getWordAtSquare(grid, sq.row, sq.col, otherDir(dir))!;
+            let crossSquares = getSquaresForWord(grid, cross);
+            if (crossSquares.find(csq => [ContentType.Autofill, ContentType.ChosenSection].includes(csq.contentType))) {
+                if (isInSection)
+                    sq.contentType = ContentType.ChosenSection;
+                else
+                    sq.contentType = ContentType.Autofill;
+            }
+        });
+    }
+
+    clearFill(grid);
+}
+
+export function clearFill(grid: GridState) {
+    grid.squares.forEach(row => {
+        row.forEach(sq => {
+            if (!isUserFilled(sq)) {
+                sq.content = undefined;
+            }
+        });
     });
 }

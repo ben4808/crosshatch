@@ -61,13 +61,14 @@ function FillView(props: any) {
         return node;
     }
 
-    function getManualSectionNode(sectionCandidateKey: string): FillNode {
+    function getManualSectionNode(sectionCandidateKey: string, isHover: boolean): FillNode {
         let grid = getGrid();
 
         let node = makeNewNode(grid, 0, false, undefined);
         let section = getSection();
         let candidate = section.candidates.get(sectionCandidateKey)!;
-        insertSectionCandidateIntoGrid(node.startGrid, candidate, section);
+        insertSectionCandidateIntoGrid(node.endGrid, candidate, section, 
+            isHover ? ContentType.HoverChosenSection : ContentType.ChosenSection);
         return node;
     }
 
@@ -153,10 +154,12 @@ function FillView(props: any) {
         }
 
         let candidateKey = target.attributes["data-candidate-key"].value as string;
-        let node = getManualSectionNode(candidateKey);
+        let node = getManualSectionNode(candidateKey, false);
+        Globals.selectedSectionCandidate = candidateKey;
 
-        Globals.hoverGrid = node.endGrid;
+        Globals.activeGrid = node.endGrid;
         updateSectionFilters();
+        Globals.hoverGrid = undefined;
         triggerUpdate();
     }
 
@@ -168,7 +171,7 @@ function FillView(props: any) {
         }
 
         let candidateKey = target.attributes["data-candidate-key"].value as string;
-        let node = getManualSectionNode(candidateKey);
+        let node = getManualSectionNode(candidateKey, true);
 
         Globals.hoverGrid = node.endGrid;
         triggerUpdate();
@@ -294,7 +297,7 @@ function FillView(props: any) {
                             <div className="fill-list-row-wrapper" key={candidateKey} data-candidate-key={candidateKey}
                                 onClick={handleSectionCandidateClick} onMouseOver={handleSectionCandidateHover}>
                                 <div>{entry}</div>
-                                <div>{sc.score}</div>
+                                <div>{sc.score.toFixed(2)}</div>
                                 <div>{sc.iffyEntry || ""}</div>
                             </div>
                             )})}

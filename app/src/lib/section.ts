@@ -1,4 +1,5 @@
 import { ContentType } from "../models/ContentType";
+import { EntryCandidate } from "../models/EntryCandidate";
 import { FillNode } from "../models/FillNode";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
@@ -7,10 +8,10 @@ import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
 import { WordDirection } from "../models/WordDirection";
 import { getUnfilledCrosses, getWordScore } from "./fill";
-import { generateConstraintInfoForSquares, getLettersFromSquares, getSquareAtKey } from "./grid";
+import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
 import { PriorityQueue } from "./priorityQueue";
-import { forAllGridSquares, getEntryAtWordKey, getGrid, getSquaresForWord, getWordAtSquare, gridSquareAtKey, isAcross, 
-    isBlackSquare, isUserFilled, mapKeys, squareKey, wordKey, wordLength } from "./util";
+import { forAllGridSquares, getEntryAtWordKey, getGrid, getSquaresForWord, getWordAtSquare, getSquareAtKey, isAcross, 
+    isBlackSquare, mapKeys, squareKey, wordKey, wordLength, mapValues, isUserOrWordFilled } from "./util";
 import Globals from './windowService';
 
 export function updateSectionFilters() {
@@ -23,7 +24,7 @@ export function updateSectionFilters() {
             for (let sqKey of sqKeys) {
                 let gridSq = getSquareAtKey(grid, sqKey);
                 let canSq = getSquareAtKey(can.grid, sqKey);
-                if (isUserFilled(gridSq) && canSq.content !== gridSq.content)
+                if (isUserOrWordFilled(gridSq) && canSq.content !== gridSq.content)
                     can.isFilteredOut = true;
             }
         });
@@ -32,7 +33,7 @@ export function updateSectionFilters() {
 
 export function getSectionString(grid: GridState, section: Section): string {
     let ret = [] as string[];
-    mapKeys(section.squares).forEach(sqKey => {
+    mapKeys(section.squares).sort().forEach(sqKey => {
         let sq = getSquareAtKey(grid, sqKey);
         let content = sq.content;
         ret.push(content ? content! : "-");
@@ -40,18 +41,19 @@ export function getSectionString(grid: GridState, section: Section): string {
     return ret.join("");
 }
 
-export function insertSectionCandidateIntoGrid(grid: GridState, candidate: SectionCandidate, section: Section) {
+export function insertSectionCandidateIntoGrid(grid: GridState, candidate: SectionCandidate, 
+    section: Section, contentType?: ContentType) {
     section.squares.forEach((_, sqKey) => {
-        let sq = gridSquareAtKey(grid, sqKey);
-        let candidateSq = gridSquareAtKey(candidate.grid, sqKey);
+        let sq = getSquareAtKey(grid, sqKey);
+        let candidateSq = getSquareAtKey(candidate.grid, sqKey);
         sq.content = candidateSq.content;
         sq.constraintInfo = {
             isCalculated: true,
             sumTotal: 1,
             viableLetters: new Map<string, number>([[sq.content!, 1]]),
         }
-        if (!isUserFilled(sq)) {
-            sq.contentType = ContentType.Autofill;
+        if (!isUserOrWordFilled(sq)) {
+            sq.contentType = contentType === ContentType.HoverChosenSection ? ContentType.Autofill : ContentType.ChosenSection;
         }
     });
 
@@ -200,13 +202,17 @@ export function newSectionCandidate(node: FillNode, section: Section): SectionCa
 
 export function calculateSectionCandidateScore(grid: GridState, section: Section): number {
     let total = 0;
+    let foundIffy = false;
     section.words.forEach((_, wordKey) => {
         let word = grid.words.get(wordKey)!;
         let squares = getSquaresForWord(grid, word);
         let str = getLettersFromSquares(squares);
-        total += getWordScore(str);
+        let score = getWordScore(str);
+        if (score < 3) foundIffy = true;
+        total += score;
     });
 
+    if (!foundIffy) total *= 10;
     return total / section.words.size;
 }
 
@@ -259,7 +265,62 @@ export function getLongestStackWord(section: Section): GridWord {
         return getLongest(mapKeys(section.words));
 }
 
+export function getSelectedSections(): Section[] {
+    if (Globals.selectedSectionIds!.size === 0) return [Globals.sections!.get(0)!];
+    return mapKeys(Globals.selectedSectionIds!).sort().map(id => Globals.sections!.get(id)!);
+}
+
 export function getSelectedSectionsKey(): string {
     if (Globals.selectedSectionIds!.size === 0) return "0";
     return mapKeys(Globals.selectedSectionIds!).sort().map(i => i.toString()).join(",");
+}
+
+export function isWordInSelectedSections(wordKey: string): boolean {
+    let found = false;
+    getSelectedSections().forEach((_, sid) => {
+        let section = Globals.sections!.get(sid)!;
+        if (section.words.get(wordKey)) found = true;
+    });
+    return found;
+}
+
+export function getUnfilteredSectionCandidates(section: Section): SectionCandidate[] {
+    return mapValues(section.candidates).filter(sc => !sc.isFilteredOut);
+}
+
+export function populateSectionManualEntryCandidates(node: FillNode) {
+    let wKey = wordKey(node.fillWord!);
+    let usedWords = new Map<string, boolean>();
+
+    getSelectedSections().forEach((_, sid) => {
+        let section = Globals.sections!.get(sid)!;
+        if (section.words.get(wKey)) {
+            getUnfilteredSectionCandidates(section).forEach(sc => {
+                let squares = getSquaresForWord(sc.grid, node.fillWord!);
+                let letters = getLettersFromSquares(squares);
+                if (usedWords.has(letters)) return;
+
+                usedWords.set(letters, true);
+                node.entryCandidates.push({
+                    word: letters,
+                    score: getWordScore(letters),
+                    isViable: true,
+                    hasBeenChained: false,
+                    wasChainFailure: false,
+                } as EntryCandidate);
+            });
+        }
+    });
+}
+
+export function populateManualEntryCandidate(node: FillNode) {
+    let squares = getSquaresForWord(node.startGrid, node.fillWord!);
+    let letters = getLettersFromSquares(squares);
+    node.entryCandidates.push({
+        word: letters,
+        score: getWordScore(letters),
+        isViable: true,
+        hasBeenChained: false,
+        wasChainFailure: false,
+    } as EntryCandidate);
 }
