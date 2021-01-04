@@ -2,8 +2,8 @@ import { GridWord } from "../models/GridWord";
 import { Puzzle } from "../models/Puzzle";
 import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
-import { populateWords } from "./grid";
-import { deepClone, mapValues, newPuzzle, wordKey } from "./util";
+import { createNewGrid, populateWords } from "./grid";
+import { deepClone, getGrid, mapValues, newPuzzle, wordKey } from "./util";
 
 export async function loadPuzFile(url: string): Promise<Puzzle | undefined> {
     let response = await fetch(url);
@@ -19,14 +19,15 @@ export async function processPuzData(data: Blob): Promise<Puzzle | undefined> {
     let width = new Uint8Array(await data.slice(0x2c, 0x2d).arrayBuffer())[0];
     let height = new Uint8Array(await data.slice(0x2d, 0x2e).arrayBuffer())[0];
 
-    let puzzle = newPuzzle(width, height);
+    let puzzle = newPuzzle();
     let restOfFile = await blobToText(await data.slice(0x34, data.size));
+    let grid = createNewGrid(width, height);
 
     let i = 0;
     for (let row = 0; row < height; row++) {
         for (let col = 0; col < width; col++) {
             let curChar = restOfFile[i];
-            let square = puzzle.grid.squares[row][col];
+            let square = grid.squares[row][col];
             if (curChar === ".")
                 square.type = SquareType.Black;
             if (curChar === "-") {} // no data entered
@@ -38,13 +39,13 @@ export async function processPuzData(data: Blob): Promise<Puzzle | undefined> {
     }
     i *= 2; // skip over user progress
 
-    populateWords(puzzle.grid);
+    populateWords(grid);
     
     [puzzle.title, i] = getNextString(restOfFile, i);
     [puzzle.author, i] = getNextString(restOfFile, i);
     [puzzle.copyright, i] = getNextString(restOfFile, i);
 
-    let sortedWords = sortWordsForPuz(mapValues(puzzle.grid.words));
+    let sortedWords = sortWordsForPuz(mapValues(grid.words));
     sortedWords.forEach(word => {
         let clue = "";
         [clue, i] = getNextString(restOfFile, i);
@@ -94,7 +95,7 @@ export async function processPuzData(data: Blob): Promise<Puzzle | undefined> {
                     let n = new Uint8Array(await data.slice(secI, secI + 1).arrayBuffer())[0];
                     secI++;
                     if (n & 0x80) {
-                        puzzle.grid.squares[row][col].isCircled = true;
+                        grid.squares[row][col].isCircled = true;
                     }
                 }
             }
@@ -106,7 +107,7 @@ export async function processPuzData(data: Blob): Promise<Puzzle | undefined> {
     if (rebusSquareMappings.size > 0) {
         rebusSquareMappings.forEach((v, k) => {
             let tokens = k.split(",");
-            let square = puzzle.grid.squares[+tokens[0]][+tokens[1]];
+            let square = grid.squares[+tokens[0]][+tokens[1]];
             square.content = rebusValues.get(v)!;
         });
     }
@@ -130,7 +131,7 @@ function getNextString(data: string, i: number): [string, number] {
 }
 
 export function generatePuzFile(puzzle: Puzzle): Blob {
-    let grid = puzzle.grid!;
+    let grid = getGrid();
     let bytes = new Uint8Array(128_000);
     insertString(bytes, "ACROSS&DOWN\0", 0x02);
     insertString(bytes, "1.3\0", 0x18);
@@ -172,7 +173,7 @@ export function generatePuzFile(puzzle: Puzzle): Blob {
     pos += puzzle.copyright.length + 1;
 
     let orderedClues = [] as string[];
-    let sortedWords = sortWordsForPuz(mapValues(puzzle.grid.words));
+    let sortedWords = sortWordsForPuz(mapValues(grid.words));
     sortedWords.forEach(word => {
         let key = wordKey(word);
         orderedClues.push(puzzle.clues.get(key)! || "");

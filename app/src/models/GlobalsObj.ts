@@ -28,6 +28,4 @@ export interface GlobalsObj {
 
     wordList?: IndexedWordList;
     qualityClasses?: Map<string, QualityClass>;
-
-    handleToggleFill?: () => void;
 }

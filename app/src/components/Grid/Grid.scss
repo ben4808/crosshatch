@@ -37,7 +37,7 @@
     .grid-number { left: -1px; top: -3px }
 }
 .grid-square-selected-section {
-    border: 2px solid lighten(darkgoldenrod, 10%);
+    border: 2px solid lighten(darkgoldenrod, 40%);
     .grid-content { padding-top: 1px; }
     .grid-number { left: -1px; top: -3px }
 }
@@ -146,4 +146,22 @@
 
 .editable:hover {
     background-color: #ddd;
+}
+
+.entry-color {
+    color: darken(steelblue, 10%);
+}
+.section-color {
+    color: darkgoldenrod;
+}
+
+.show-zeros-box {
+    float: right;
+    font-size: 12px;
+    margin-top: 5px;
+}
+.show-zeros-box > label {
+    margin-left: 5px;
+    margin-bottom: 0;
+    cursor: pointer;
 }

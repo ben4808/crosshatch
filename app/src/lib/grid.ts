@@ -6,11 +6,11 @@ import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
 import Globals from './windowService';
 import { getSquaresForWord, isBlackSquare, newWord, forAllGridSquares, 
-    indexedWordListLookupSquares, isWordFull, isWordEmpty, getGrid, isUserFilled, deepClone, wordKey, getWordAtSquare, getSection, getSquareAtKey, otherDir } from "./util";
+    indexedWordListLookupSquares, isWordFull, isWordEmpty, getGrid, isUserFilled, deepClone, wordKey, getWordAtSquare, getSection, getSquareAtKey, otherDir, isUserOrWordFilled } from "./util";
 import { SymmetryType } from "../models/SymmetryType";
-import { processAndInsertChosenEntry } from "./fill";
+import { makeNewNode, populateAndScoreEntryCandidates, processAndInsertChosenEntry } from "./fill";
 import { ContentType } from "../models/ContentType";
-import { isWordInSelectedSections } from "./section";
+import { isWordInSelectedSections, populateSectionManualEntryCandidates } from "./section";
 
 export function populateWords(grid: GridState) {
     function processSquare(grid: GridState, row: number, col: number, dir: WordDirection) {
@@ -179,10 +179,11 @@ export function getConstraintSquareSum(squares: GridSquare[]): number {
     return total;
 }
 
-export function getLettersFromSquares(squares: GridSquare[], includeFillContent?: boolean): string {
+export function getLettersFromSquares(squares: GridSquare[], includeFillContent?: boolean, considerManualFill?: boolean): string {
     if (includeFillContent === undefined) includeFillContent = true;
+    if (considerManualFill === undefined) considerManualFill = true;
     let ret = squares.map(sq => {
-        if (sq.isEmptyForManualFill) return "-";
+        if (considerManualFill && sq.isEmptyForManualFill) return "-";
         if (!sq.content || (!includeFillContent && !isUserFilled(sq))) return "-";
         return sq.content!;
     }).join("");
@@ -219,7 +220,6 @@ export function createNewGrid(width: number, height: number): GridState {
         squares: squares,
         words: new Map<string, GridWord>(),
         usedWords: new Map<string, boolean>(),
-        userFilledWordKeys: new Map<string, boolean>(),
         userFilledSectionCandidates: new Map<string, boolean>(),
     };
 
@@ -286,7 +286,7 @@ export function setSquaresEmptyForManualFill(node: FillNode) {
     let fillWord = node.fillWord!;
     let wordSquares = getSquaresForWord(grid, fillWord);
     
-    if (grid.userFilledWordKeys!.has(wordKey(fillWord))) {
+    if (!wordSquares.find(sq => !isUserOrWordFilled(sq))) {
         wordSquares.forEach(sq => {
             if (sq.contentType === ContentType.ChosenWord)
                 sq.isEmptyForManualFill = true;
@@ -294,7 +294,7 @@ export function setSquaresEmptyForManualFill(node: FillNode) {
     }
 
     wordSquares.forEach(sq => {
-        if (sq.contentType === ContentType.ChosenSection)
+        if ([ContentType.ChosenSection, ContentType.Autofill].includes(sq.contentType))
             sq.isEmptyForManualFill = true;
     });
 }
@@ -315,7 +315,7 @@ export function eraseGridSquare(grid: GridState, sq: GridSquare, dir: WordDirect
     let section = getSection();
 
     if (squares.find(sq => sq.contentType === ContentType.Autofill)) {
-        return; // autofill is ephemeral, no need to explicitly delete
+        ; // autofill is ephemeral, no need to explicitly delete
     }
     else if (squares.find(sq => sq.contentType === ContentType.ChosenSection)) {
         section.squares.forEach((_, sqKey) => {
@@ -327,29 +327,55 @@ export function eraseGridSquare(grid: GridState, sq: GridSquare, dir: WordDirect
     else if (squares.find(sq => sq.contentType === ContentType.ChosenWord)) {
         let isInSection = isWordInSelectedSections(wordKey(word));
 
-        squares.forEach(sq => {
-            if (sq.contentType === ContentType.User) return;
+        squares.forEach(wsq => {
+            if (wsq.contentType === ContentType.User) return;
 
-            let cross = getWordAtSquare(grid, sq.row, sq.col, otherDir(dir))!;
+            let cross = getWordAtSquare(grid, wsq.row, wsq.col, otherDir(dir))!;
             let crossSquares = getSquaresForWord(grid, cross);
             if (crossSquares.find(csq => [ContentType.Autofill, ContentType.ChosenSection].includes(csq.contentType))) {
-                if (isInSection)
-                    sq.contentType = ContentType.ChosenSection;
-                else
-                    sq.contentType = ContentType.Autofill;
+                //if (isInSection)
+                //    wsq.contentType = ContentType.ChosenSection;
+                //else
+                    wsq.contentType = ContentType.Autofill;
             }
         });
     }
 
+    if (sq.contentType === ContentType.User)
+        sq.contentType = ContentType.Autofill;
+        
+    sq.content = undefined;
     clearFill(grid);
 }
 
 export function clearFill(grid: GridState) {
-    grid.squares.forEach(row => {
-        row.forEach(sq => {
-            if (!isUserFilled(sq)) {
-                sq.content = undefined;
-            }
-        });
+    forAllGridSquares(grid, sq => {
+        if (!isUserFilled(sq)) {
+            sq.content = undefined;
+        }
     });
+}
+
+export function updateManualEntryCandidates(grid: GridState) {
+    if (Globals.selectedWordKey) {
+        let node = makeNewNode(grid, 0, false, undefined);
+        node.fillWord = grid.words.get(Globals.selectedWordKey!);
+        let squares = getSquaresForWord(grid, node.fillWord!);
+        if (!squares.find(sq => !isUserOrWordFilled(sq))) {
+            setSquaresEmptyForManualFill(node);
+            populateAndScoreEntryCandidates(node, true);
+            unsetSquaresEmptyForManualFill(node);
+        }
+        else if (isWordInSelectedSections(wordKey(node.fillWord!)) && Globals.selectedSectionCandidate) {
+            populateSectionManualEntryCandidates(node);
+        }
+        else {
+            setSquaresEmptyForManualFill(node);
+            populateAndScoreEntryCandidates(node, true);
+            unsetSquaresEmptyForManualFill(node);
+        }
+        Globals.selectedWordNode = node;
+    }
+    else 
+        Globals.selectedWordNode = undefined;
 }

@@ -311,16 +311,8 @@ export function populateSectionManualEntryCandidates(node: FillNode) {
             });
         }
     });
-}
 
-export function populateManualEntryCandidate(node: FillNode) {
-    let squares = getSquaresForWord(node.startGrid, node.fillWord!);
-    let letters = getLettersFromSquares(squares);
-    node.entryCandidates.push({
-        word: letters,
-        score: getWordScore(letters),
-        isViable: true,
-        hasBeenChained: false,
-        wasChainFailure: false,
-    } as EntryCandidate);
+    node.entryCandidates = node.entryCandidates.sort((a, b) => a.score === b.score ? 
+        (a.word < b.word ? -1 : 1) : 
+        b.score - a.score);
 }

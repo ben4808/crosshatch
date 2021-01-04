@@ -13,11 +13,13 @@ import { generatePuzFile } from './lib/puzFiles';
 import { SymmetryType } from './models/SymmetryType';
 import { FillStatus } from './models/FillStatus';
 import { generateGridSections } from './lib/section';
+import { createNewGrid } from './lib/grid';
+import { fillSectionWord } from './lib/fill';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
-  const [gridWidth, setGridWidth] = useState(15);
-  const [gridHeight, setGridHeight] = useState(4);
+  const [gridWidth, setGridWidth] = useState(5);
+  const [gridHeight, setGridHeight] = useState(5);
   const [updateSemaphore, setUpdateSemaphore] = useState(0);
   // eslint-disable-next-line
   const [ignored, forceUpdate] = useReducer(x => x + 1, 0);
@@ -35,7 +37,23 @@ function App(props: AppProps) {
       setPuzzle: setPuzzle,
       createNewPuzzle: createNewPuzzle,
       exportPuz: exportPuz,
+      toggleFill: toggleFill,
     }
+  }
+
+  function toggleFill() {
+    if (Globals.isFillEnabled) {
+      doFillWord();
+      triggerUpdate();
+    }
+  }
+
+  function doFillWord() {
+    if (!Globals.isFillEnabled) return;
+
+    fillSectionWord();
+    setTimeout(() => doFillWord(), 5);
+    triggerUpdate();
   }
 
   function triggerUpdate() {
@@ -48,15 +66,16 @@ function App(props: AppProps) {
   }
 
   function createNewPuzzle(width: number, height: number) {
-    setPuzzle(newPuzzle(width, height));
+    setPuzzle(newPuzzle());
     setGridWidth(width);
     setGridHeight(height);
+    initializeGlobals(width, height);
   }
 
   function setPuzzle(puzzle: Puzzle) {
     Globals.puzzle = puzzle;
     Globals.selectedWordKey = "";
-    Globals.gridSymmetry = SymmetryType.MirrorHorizontal;
+    Globals.gridSymmetry = SymmetryType.Rotate180;
     triggerUpdate();
   }
 
@@ -72,18 +91,19 @@ function App(props: AppProps) {
     puzzleLink!.click();
   }
 
-  function initializeGlobals() {
-    createNewPuzzle(gridWidth, gridHeight);
-    Globals.activeGrid = Globals.puzzle!.grid;
+  function initializeGlobals(width: number, height: number) {
+    Globals.activeGrid = createNewGrid(width, height);
     Globals.fillStatus = FillStatus.Ready;
     let grid = getGrid();
     Globals.sections = generateGridSections(grid);
     Globals.activeSectionId = 0;
     Globals.selectedSectionIds = new Map<number, boolean>();
+    Globals.selectedWordNode = undefined;
+    Globals.selectedSectionCandidate = undefined;
   }
 
   if (!Globals.puzzle) {
-    initializeGlobals();
+    createNewPuzzle(gridWidth, gridHeight);
   }
 
   return (

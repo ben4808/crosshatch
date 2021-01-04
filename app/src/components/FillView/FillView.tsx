@@ -1,12 +1,12 @@
-import React, { useContext } from 'react';
+import React, { useContext, useState } from 'react';
 import { SymmetryType } from '../../models/SymmetryType';
 import "./FillView.scss";
 import Globals from '../../lib/windowService';
 import { FillStatus } from '../../models/FillStatus';
-import { getGrid, getSection, getSquaresForWord, mapValues } from '../../lib/util';
+import { getEntryAtWordKey, getGrid, getSection, getSquaresForWord, mapValues } from '../../lib/util';
 import { getLongestStackWord, getPhoneticName, insertSectionCandidateIntoGrid, 
     makeNewSection, sectionCandidateKey, updateSectionFilters } from '../../lib/section';
-import { getLettersFromSquares, insertEntryIntoGrid } from '../../lib/grid';
+import { getLettersFromSquares, insertEntryIntoGrid, updateManualEntryCandidates } from '../../lib/grid';
 import { fillSectionWord, makeNewNode } from '../../lib/fill';
 import { FillNode } from '../../models/FillNode';
 import { AppContext } from '../../AppContext';
@@ -14,13 +14,15 @@ import { ContentType } from '../../models/ContentType';
 
 function FillView(props: any) {
     const appContext = useContext(AppContext);
+    const [showZeroEntries, setShowZeroEntries] = useState(false);
 
     function triggerUpdate() {
         appContext.triggerUpdate();
     }
 
     function handleToggleFill() {
-        Globals.handleToggleFill!();
+        Globals.isFillEnabled = !Globals.isFillEnabled;
+        appContext.toggleFill();
     }
 
     function handleSymmetryChange(event: any) {
@@ -83,6 +85,8 @@ function FillView(props: any) {
 
         let entry = target.attributes["data-word"].value as string;
         let node = getManualEntryNode(entry, false);
+
+        updateManualEntryCandidates(node.endGrid);
 
         Globals.activeGrid = node.endGrid;
         updateSectionFilters();
@@ -157,6 +161,8 @@ function FillView(props: any) {
         let node = getManualSectionNode(candidateKey, false);
         Globals.selectedSectionCandidate = candidateKey;
 
+        updateManualEntryCandidates(node.endGrid);
+
         Globals.activeGrid = node.endGrid;
         updateSectionFilters();
         Globals.hoverGrid = undefined;
@@ -175,6 +181,10 @@ function FillView(props: any) {
 
         Globals.hoverGrid = node.endGrid;
         triggerUpdate();
+    }
+
+    function handleZerosBoxToggle() {
+        setShowZeroEntries(!showZeroEntries);
     }
 
     function handleSectionCandidateBlur() {
@@ -200,11 +210,14 @@ function FillView(props: any) {
     let fillStatus = getFillStatusString(Globals.fillStatus!);
 
     let entryCandidates = Globals.selectedWordNode ? Globals.selectedWordNode.entryCandidates : [];
-    entryCandidates = entryCandidates.filter(ec => ec.score > 0);
+    if (!showZeroEntries)
+        entryCandidates = entryCandidates.filter(ec => ec.score > 0);
     let isNoEntryCandidates = Globals.selectedWordNode && entryCandidates.length === 0;
     let sections = Globals.sections ? mapValues(Globals.sections!).sort((a, b) => b.squares.size - a.squares.size) : [];
     let activeSection = Globals.sections ? Globals.sections!.get(Globals.activeSectionId!)! : makeNewSection(-1);
     let sectionCandidates = mapValues(activeSection.candidates).sort((a, b) => b.score - a.score);
+    let selectedEntry = Globals.selectedWordKey ? getEntryAtWordKey(grid, Globals.selectedWordKey!) : "";
+    let isFillEnabled = Globals.isFillEnabled;
 
     let entryCandidatesStyle = {
         gridTemplateColumns: `4fr 1fr 2fr`
@@ -222,7 +235,8 @@ function FillView(props: any) {
         <div id="FillView" className="fill-container">
             <div style={{display: "none"}}>{props.updateSemaphoreProp}</div>
             <div className="custom-control custom-switch fill-switch">
-                <input type="checkbox" className="custom-control-input" id="fillSwitch" onClick={handleToggleFill} />
+                <input type="checkbox" className="custom-control-input" id="fillSwitch" 
+                    checked={isFillEnabled} onChange={handleToggleFill} />
                 <label className="custom-control-label" htmlFor="fillSwitch">Fill</label>
             </div>
             <div className="fill-status">{fillStatus}</div>
@@ -246,7 +260,12 @@ function FillView(props: any) {
                     </div>
                 </div>
                 <div className="fill-list-box" onMouseOut={handleEntryCandidateBlur}>
-                    <div className="fill-list-title">Entry Candidates</div>
+                    <div className="fill-list-title entry-color">Entry Candidates</div>
+                    <div className="show-zeros-box">
+                        <input type="checkbox" className="section-checkbox" id="zeros-box"
+                                    checked={showZeroEntries} onChange={handleZerosBoxToggle} />
+                        <label htmlFor="zeros-box">Show 0-score entries</label>
+                    </div>
                     <div className="fill-list" style={entryCandidatesStyle}>
                         <div className="fill-list-header">Entry</div>
                         <div className="fill-list-header">Score</div>
@@ -257,7 +276,8 @@ function FillView(props: any) {
                             </div>
                         )}
                         { entryCandidates.map(ec => (
-                            <div className="fill-list-row-wrapper" key={ec.word} data-word={ec.word}
+                            <div className={"fill-list-row-wrapper" + (selectedEntry === ec.word ? " fill-list-row-selected" : "")} 
+                                key={ec.word} data-word={ec.word}
                                 onClick={handleEntryCandidateClick} onMouseOver={handleEntryCandidateHover}>
                                 <div>{ec.word}</div>
                                 <div>{ec.score.toFixed(0)}</div>
@@ -267,7 +287,7 @@ function FillView(props: any) {
                     </div>
                 </div>
                 <div className="fill-list-box" onMouseOut={handleSectionBlur}>
-                    <div className="fill-list-title">Sections</div>
+                    <div className="fill-list-title section-color">Sections</div>
                     <div className="fill-list" style={sectionsStyle}>
                         <div className="fill-list-header">Active</div>
                         <div className="fill-list-header">ID</div>

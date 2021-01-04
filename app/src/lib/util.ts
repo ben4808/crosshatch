@@ -6,7 +6,7 @@ import { WordDirection } from "../models/WordDirection";
 import { queryIndexedWordList } from "./wordList";
 import Globals from './windowService';
 import { Puzzle } from "../models/Puzzle";
-import { createNewGrid, getLettersFromSquares } from "./grid";
+import { getLettersFromSquares } from "./grid";
 import { ContentType } from "../models/ContentType";
 import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
@@ -146,15 +146,14 @@ export function wordLength(word: GridWord): number {
         return word.end[0] - word.start[0];
 }
 
-export function newPuzzle(gridWidth: number, gridHeight: number): Puzzle {
+export function newPuzzle(): Puzzle {
     return {
         title: "",
         author: "",
         copyright: "",
-        grid: createNewGrid(gridWidth, gridHeight),
         clues: new Map<string, string>(),
         notes: "",
-    } as Puzzle;
+    } as Puzzle;    
 }
 
 export function wordKey(word: GridWord): string {

@@ -76,7 +76,10 @@
     padding: 0 2px;
 }
 .fill-list-row-wrapper:hover > div {
-    background-color: lightblue;
+    background-color: #ddd;
+}
+.fill-list-row-selected > div {
+    background-color: lightblue !important;
 }
 
 .fill-switch {
