@@ -529,7 +529,8 @@ function processAnchorCombo(node: FillNode) {
             let crossPatternWithEntry = crossPattern.substring(0, crossPos) + entry[i] + crossPattern.substring(crossPos+1);
             if ((grid.usedWords.has(entry) && entry !== existingPattern) || 
                 (!crossPatternWithEntry.includes("-") && 
-                    (grid.usedWords.has(crossPatternWithEntry) || completeCrosses.has(crossPatternWithEntry))))
+                    (grid.usedWords.has(crossPatternWithEntry) || completeCrosses.has(crossPatternWithEntry) ||
+                        crossPatternWithEntry === entry)))
                 isUnviable = true;
 
             if (!crossPatternWithEntry.includes("-"))

@@ -44,8 +44,8 @@ function App(props: AppProps) {
   function toggleFill() {
     if (Globals.isFillEnabled) {
       doFillWord();
-      triggerUpdate();
     }
+    triggerUpdate();
   }
 
   function doFillWord() {
