@@ -1,3 +1,4 @@
+import { GridSquare } from "./GridSquare";
 
 export interface EntryCandidate {
     word: string;
@@ -7,4 +8,5 @@ export interface EntryCandidate {
     wasChainFailure: boolean;
     madeUpSqKey?: string;
     madeUpWord?: string;
+    crossSquares: Map<string, GridSquare[]>;
 }

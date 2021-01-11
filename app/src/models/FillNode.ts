@@ -17,6 +17,4 @@ export interface FillNode {
     
     anchorSquareKeys: string[];
     anchorCombosLeft: [string, string][];
-    // <squareKey, <letter, count>>
-    viableLetterCounts: Map<string, Map<string, number>>;
 }

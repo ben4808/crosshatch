@@ -179,7 +179,7 @@ export function getConstraintSquareSum(squares: GridSquare[]): number {
     return total;
 }
 
-export function getLettersFromSquares(squares: GridSquare[], includeFillContent?: boolean, considerManualFill?: boolean): string {
+export function getLettersFromSquares(squares: GridSquare[]): string {
     if (includeFillContent === undefined) includeFillContent = true;
     if (considerManualFill === undefined) considerManualFill = true;
     let ret = squares.map(sq => {

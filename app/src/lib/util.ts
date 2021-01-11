@@ -11,6 +11,8 @@ import { ContentType } from "../models/ContentType";
 import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
 
+export const maxIffyLength = 7;
+
 export function average(arr: number[]): number {
     return arr.reduce((a,b) => a + b, 0) / arr.length;
 }
@@ -226,4 +228,10 @@ export function getSectionCandidatesFromKeys(keys: string[]): SectionCandidate[]
         .map(sck => mapValues(Globals.sections!).find(sec => sec.candidates.has(sck))?.candidates.get(sck))
         .filter(sck => sck !== undefined)
         .map(sck => sck!);
+}
+
+export function constraintLetterCount(sq: GridSquare): number {
+    if (!sq.constraintInfo || !sq.constraintInfo.isCalculated) return 1000;
+
+    return sq.constraintInfo!.viableLetters.size;
 }
