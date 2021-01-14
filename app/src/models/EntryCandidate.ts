@@ -6,7 +6,7 @@ export interface EntryCandidate {
     isViable: boolean;
     hasBeenChained: boolean;
     wasChainFailure: boolean;
-    madeUpSqKey?: string;
-    madeUpWord?: string;
+    iffyEntry?: string;
+    iffyWordKey?: string;
     crossSquares: Map<string, GridSquare[]>;
 }

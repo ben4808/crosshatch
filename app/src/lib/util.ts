@@ -206,9 +206,9 @@ export function getSquareAtKey(grid: GridState, squareKey: string): GridSquare {
     return grid.squares[+tokens[0]][+tokens[1]];
 }
 
-export function isPartOfMadeUpWord(sq: GridSquare): boolean {
+export function isPartOfIffyWord(sq: GridSquare): boolean {
     if (!sq.constraintInfo) return false;
-    return sq.constraintInfo!.isCalculated && sq.constraintInfo!.sumTotal === 0;
+    return sq.constraintInfo!.isCalculated && sq.constraintInfo!.viableLetters.size === 0;
 }
 
 // https://stackoverflow.com/questions/2450954/how-to-randomize-shuffle-a-javascript-array
@@ -234,4 +234,8 @@ export function constraintLetterCount(sq: GridSquare): number {
     if (!sq.constraintInfo || !sq.constraintInfo.isCalculated) return 1000;
 
     return sq.constraintInfo!.viableLetters.size;
+}
+
+export function isPatternFull(pattern: string): boolean {
+    return !pattern.includes("-");
 }

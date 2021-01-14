@@ -6,9 +6,10 @@ import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
 import Globals from './windowService';
 import { getSquaresForWord, isBlackSquare, newWord, forAllGridSquares, 
-    indexedWordListLookupSquares, isWordFull, isWordEmpty, getGrid, isUserFilled, deepClone, wordKey, getWordAtSquare, getSection, getSquareAtKey, otherDir, isUserOrWordFilled } from "./util";
+    indexedWordListLookupSquares, isWordFull, isWordEmpty, getGrid, isUserFilled, deepClone, 
+    wordKey, getWordAtSquare, getSection, getSquareAtKey, otherDir, isUserOrWordFilled } from "./util";
 import { SymmetryType } from "../models/SymmetryType";
-import { makeNewNode, populateAndScoreEntryCandidates, processAndInsertChosenEntry } from "./fill";
+import { makeNewNode } from "./fill";
 import { ContentType } from "../models/ContentType";
 import { isWordInSelectedSections, populateSectionManualEntryCandidates } from "./section";
 
