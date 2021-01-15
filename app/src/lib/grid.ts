@@ -6,12 +6,14 @@ import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
 import Globals from './windowService';
 import { getSquaresForWord, isBlackSquare, newWord, forAllGridSquares, 
-    indexedWordListLookupSquares, isWordFull, isWordEmpty, getGrid, isUserFilled, deepClone, 
+    isWordFull, isWordEmpty, getGrid, isUserFilled, deepClone, 
     wordKey, getWordAtSquare, getSection, getSquareAtKey, otherDir, isUserOrWordFilled } from "./util";
 import { SymmetryType } from "../models/SymmetryType";
 import { makeNewNode } from "./fill";
 import { ContentType } from "../models/ContentType";
 import { isWordInSelectedSections, populateSectionManualEntryCandidates } from "./section";
+import { processAndInsertChosenEntry } from "./insertEntry";
+import { queryIndexedWordList } from "./wordList";
 
 export function populateWords(grid: GridState) {
     function processSquare(grid: GridState, row: number, col: number, dir: WordDirection) {
@@ -63,7 +65,7 @@ export function updateGridConstraintInfo(grid: GridState) {
         let newSquares = deepClone(getSquaresForWord(grid, word)) as GridSquare[];
         let letters = getLettersFromSquares(newSquares);
         if (!letters.includes("-")) grid.usedWords.set(letters, true);
-        generateConstraintInfoForSquares(grid, newSquares);
+        generateConstraintInfoForSquares(newSquares);
         if (newSquares !== undefined && newSquares.length > 0) {
             newSquares.forEach(ns => {
                 grid.squares[ns.row][ns.col] = ns;
@@ -99,36 +101,25 @@ function numberizeGrid(grid: GridState) {
     }
 }
 
-export function generateConstraintInfoForSquares(grid: GridState, squares: GridSquare[]) {
-    let justCalculated = new Map<number, boolean>();
-    let isIffy = false;
-
-    if (isWordFull(squares) && squares.find(sq => !isUserFilled(sq))) {
-        let letters = getLettersFromSquares(squares);
-        if (!Globals.qualityClasses!.has(letters))
-            isIffy = true;
-    }
-
-    squares.forEach((sq, i) => {
+export function generateConstraintInfoForSquares(squares: GridSquare[]) {
+    squares.forEach(sq => {
         if (sq.content) {
             sq.constraintInfo = {
                 isCalculated: true,
-                sumTotal: isIffy ? 0 : 1,
-                viableLetters: new Map<string, number>([[sq.content!, isIffy ? 0 : 1]]),
+                viableLetters: new Map<string, boolean>([[sq.content!, true]]),
             };
-            justCalculated.set(i, true);
         }
         else if (!sq.constraintInfo) {
             sq.constraintInfo = {
                 isCalculated: false,
-                sumTotal: 0,
-                viableLetters: new Map<string, number>(),
+                viableLetters: new Map<string, boolean>(),
             }
         }
     });
     if (isWordEmpty(squares) || isWordFull(squares)) return;
 
-    let entryOptions = indexedWordListLookupSquares(squares);
+    let pattern = getLettersFromSquares(squares);
+    let entryOptions = queryIndexedWordList(pattern);
     let squaresCalculated = !!squares.find(sq => !sq.content && sq.constraintInfo!.isCalculated);
     if (entryOptions.length > (squaresCalculated ? 500 : 200)) {
         squares.forEach(sq => { sq.constraintInfo!.isCalculated = false; });
@@ -136,8 +127,6 @@ export function generateConstraintInfoForSquares(grid: GridState, squares: GridS
     }
 
     for (let i = 0; i < squares.length; i++) {
-        if (justCalculated.has(i)) continue;
-
         let sq = squares[i];
         let lettersAndWords = entryOptions.map(x => [x[i], x]);
         let newViableLetters = new Map<string, number>();

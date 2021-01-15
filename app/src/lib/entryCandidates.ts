@@ -102,6 +102,7 @@ function processAnchorCombo(node: FillNode) {
         let constraintSquares = new Map<string, GridSquare[]>();
         let crossCrossKeys = new Map<string, boolean>();
         let usedWords = new Map<string, boolean>();
+        usedWords.set(entry, true);
 
         // check crosses
         wordSquares.forEach((sq, i) => {
@@ -109,7 +110,7 @@ function processAnchorCombo(node: FillNode) {
             let cross = getWordAtSquare(grid, sq.row, sq.col, otherDir(node.fillWord!.direction));
             if (!cross) return;
             let crossKey = wordKey(cross);
-            let crossSquares = getSquaresForWord(grid, cross);
+            let crossSquares = deepClone(getSquaresForWord(grid, cross)) as GridSquare[];
             crossSquares = insertLetterIntoSquares(crossSquares, entry[i], sqKey);
             let crossPattern = getLettersFromSquares(crossSquares);
             if (grid.usedWords.has(crossPattern) || usedWords.has(crossPattern)) 
@@ -121,7 +122,7 @@ function processAnchorCombo(node: FillNode) {
             crossCountsTotal += crossCount;
 
             generateConstraintInfoForSquares(grid, crossSquares);
-            constraintSquares.set(sqKey, crossSquares);
+            constraintSquares.set(crossKey, crossSquares);
             crossCrossKeys.set(crossKey, true);
 
             crossSquares.forEach(csq => {

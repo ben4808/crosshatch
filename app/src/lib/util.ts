@@ -3,7 +3,6 @@ import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
-import { queryIndexedWordList } from "./wordList";
 import Globals from './windowService';
 import { Puzzle } from "../models/Puzzle";
 import { getLettersFromSquares } from "./grid";
@@ -60,16 +59,6 @@ export function isBlackSquare(sq: GridSquare): boolean {
 
 export function otherDir(dir: WordDirection): WordDirection {
     return dir === WordDirection.Across ? WordDirection.Down : WordDirection.Across;
-}
-
-export function indexedWordListLookup(grid: GridState, word: GridWord): string[] {
-    let squares = getSquaresForWord(grid, word);
-    return indexedWordListLookupSquares(squares);
-}
-
-export function indexedWordListLookupSquares(squares: GridSquare[]): string[] {
-    let pattern = getLettersFromSquares(squares);
-    return queryIndexedWordList(pattern);
 }
 
 export function getSquaresForWord(grid: GridState, word: GridWord): GridSquare[] {
@@ -238,4 +227,13 @@ export function constraintLetterCount(sq: GridSquare): number {
 
 export function isPatternFull(pattern: string): boolean {
     return !pattern.includes("-");
+}
+
+export function getUserFilledSections(grid: GridState): Section[] {
+    let sectionCandidates = getSectionCandidatesFromKeys(mapKeys(grid.userFilledSectionCandidates));
+    return sectionCandidates.map(sc => Globals.sections!.get(sc.sectionId)!);
+}
+
+export function getUserFilledSectionCandidates(grid: GridState): SectionCandidate[] {
+    return getSectionCandidatesFromKeys(mapKeys(grid.userFilledSectionCandidates));
 }

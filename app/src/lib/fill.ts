@@ -177,16 +177,13 @@ function doSectionsIntersect(id1: number, id2: number) {
 export function processSectionNode(node: FillNode, section: Section): boolean {
     node.fillWord = selectWordToFill(node, section);
 
-    while (true) {
-        populateAndScoreEntryCandidates(node, false);
+    populateAndScoreEntryCandidates(node, false);
 
-        let eligibleCandidates = getEligibleCandidates(node);
-        if(eligibleCandidates.length === 0) return false;
+    let eligibleCandidates = getEligibleCandidates(node);
+    if(eligibleCandidates.length === 0) return false;
 
-        node.chosenEntry = chooseEntryFromCandidates(eligibleCandidates);
-        if (processAndInsertChosenEntry(node))
-            break;
-    }
+    node.chosenEntry = chooseEntryFromCandidates(eligibleCandidates);
+    processAndInsertChosenEntry(node);
 
     return true;
 }
@@ -265,20 +262,19 @@ export function getPositionOfCross(wordSquares: GridSquare[], crossSquares: Grid
             wordSquares[0].col - crossSquares[0].col;
 }
 
+export function getAllCrosses(grid: GridState, word: GridWord): GridWord[] {
+    let squares = getSquaresForWord(grid, word);
+    let crosses = squares
+        .map(sq => getWordAtSquare(grid, sq.row, sq.col, otherDir(word.direction)))
+        .filter(w => w).map(w => w!);
+    return crosses.length > 0 ? crosses : [];
+}
+
 export function getUnfilledCrosses(grid: GridState, word: GridWord): GridWord[] {
     let squares = getSquaresForWord(grid, word);
     let crosses = squares
         .map(sq => getWordAtSquare(grid, sq.row, sq.col, otherDir(word.direction)))
         .filter(w => w && !isWordFull(getSquaresForWord(grid, w)))
-        .map(w => w!);
-    return crosses.length > 0 ? crosses : [];
-}
-
-export function getChangedCrosses(grid: GridState, word: GridWord, newEntry: string): GridWord[] {
-    let squares = getSquaresForWord(grid, word);
-    let crosses = squares
-        .filter((sq, i) => sq.content && sq.content !== newEntry[i])
-        .map(sq => getWordAtSquare(grid, sq.row, sq.col, otherDir(word.direction)))
         .map(w => w!);
     return crosses.length > 0 ? crosses : [];
 }
