@@ -199,7 +199,7 @@ function Grid(props: any) {
             isSelected: isSquareSelected() && compareTuples(selectedSquare, [row, col]),
             isInSelectedWord: isWordSelected() && doesWordContainSquare(selectedWord!, row, col),
             isInSelectedSection: isSquareInSelectedSection(square),
-            constraintSum: (square.constraintInfo && square.constraintInfo!.isCalculated) ? square.constraintInfo.sumTotal : 1000,
+            constraintSum: (square.constraintInfo && square.constraintInfo!.isCalculated) ? square.constraintInfo.letterFillCount : 26,
             isCircled: square.isCircled,
         };
     }

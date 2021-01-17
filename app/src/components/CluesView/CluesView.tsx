@@ -31,7 +31,7 @@ function CluesView(props: any) {
                 key: key,
                 direction: word.direction,
                 clue: clues.get(key)! || "",
-                entry: getLettersFromSquares(squares, false),
+                entry: getLettersFromSquares(squares),
                 isOpenForEditing: false,
             } as CluesViewProp;
             props.push(prop);

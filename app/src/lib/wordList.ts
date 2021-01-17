@@ -129,7 +129,10 @@ export function queryIndexedWordList(pattern: string): string[] {
     if (letters.length === 1) {
         words = wl.buckets.oneVal[length-2][letters[0][0]-1][letters[0][1].charCodeAt(0)-65];
     }
-    if (letters.length > 1) {
+    else if (letters.length === pattern.length) {
+        words = Globals.qualityClasses?.has(pattern) ? [pattern] : [];
+    }
+    else if (letters.length > 1) {
         let pos1 = letters[0][0];
         let pos2 = letters[1][0];
         let val1 = letters[0][1];

@@ -24,7 +24,7 @@ export interface GlobalsObj {
     activeSectionId?: number;
     hoverSectionId?: number;
     selectedSectionIds?: Map<number, boolean>;
-    selectedSectionCandidate?: string;
+    selectedSectionCandidateKeys?: Map<number, string>;
 
     wordList?: IndexedWordList;
     qualityClasses?: Map<string, QualityClass>;

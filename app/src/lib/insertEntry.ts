@@ -40,6 +40,7 @@ export function processAndInsertChosenEntry(node: FillNode, contentType?: Conten
 
     crosses.forEach(cross => {
         let newSquares = node.chosenEntry!.crossSquares.get(wordKey(cross))!;
+        if (!newSquares) return; // happens when previous node was iffy
         for(let i = 0; i < newSquares.length; i++) {
             let newSq = newSquares[i];
             grid.squares[newSq.row][newSq.col] = newSq;

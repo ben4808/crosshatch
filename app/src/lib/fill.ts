@@ -12,7 +12,7 @@ import { processAndInsertChosenEntry } from './insertEntry';
 import { PriorityQueue, priorityQueue } from './priorityQueue';
 import { getSectionString, getSelectedSectionsKey, insertSectionCandidateIntoGrid, newSectionCandidate } from './section';
 import { deepClone, getSquaresForWord, wordLength, mapKeys, isWordFull, isUserFilled, 
-    getWordAtSquare, otherDir, mapValues, getSection, getGrid } from './util';
+    getWordAtSquare, otherDir, mapValues, getSection, getGrid, wordKey } from './util';
 import Globals from './windowService';
 
 export function fillSectionWord(): boolean {
@@ -68,11 +68,13 @@ function invalidateChainNode(node: FillNode) {
 
     let prevCandidate = parent.chosenEntry!;
     if (parent.isChainNode) {
-        prevCandidate.wasChainFailure = true;
+        if (prevCandidate)
+            prevCandidate.wasChainFailure = true;
         parent.backtracks++;
     }
     else {
-        prevCandidate.hasBeenChained = true;
+        if (prevCandidate)
+            prevCandidate.hasBeenChained = true;
     }
 
     parent.chosenEntry = undefined;
@@ -175,16 +177,20 @@ function doSectionsIntersect(id1: number, id2: number) {
 }
 
 export function processSectionNode(node: FillNode, section: Section): boolean {
+    if (node.anchorSquareKeys.length > 0 && node.anchorCombosLeft.length === 0)
+        return false;
+
     node.fillWord = selectWordToFill(node, section);
 
-    populateAndScoreEntryCandidates(node, false);
+    let areEligibleCandidates = populateAndScoreEntryCandidates(node, false);
+    if (!areEligibleCandidates) return false;
 
     let eligibleCandidates = getEligibleCandidates(node);
-    if(eligibleCandidates.length === 0) return false;
-
-    node.chosenEntry = chooseEntryFromCandidates(eligibleCandidates);
-    processAndInsertChosenEntry(node);
-
+    if (eligibleCandidates.length > 0) {
+        node.chosenEntry = chooseEntryFromCandidates(eligibleCandidates);
+        processAndInsertChosenEntry(node);
+    }
+    
     return true;
 }
 
@@ -231,7 +237,7 @@ function selectWordToFill(node: FillNode, section: Section): GridWord | undefine
     for (let key of prioritizedWordList) {
         let word = grid.words.get(key)!;
         let squares = getSquaresForWord(grid, word);
-        if (!isWordFull(squares))
+        if (wordKey(word) !== node.iffyWordKey && !isWordFull(squares))
             return word;
     }
 
@@ -244,7 +250,7 @@ function getWordConstraintScore(squares: GridSquare[]): number {
     let foundZero = false;
     squares.forEach(sq => {
         if (isUserFilled(sq)) return;
-        let sum = (sq.constraintInfo && sq.constraintInfo.isCalculated) ? sq.constraintInfo!.viableLetters.size : 1000;
+        let sum = (sq.constraintInfo && sq.constraintInfo.isCalculated) ? sq.constraintInfo!.letterFillCount : 26;
         if (sum === 0) {
             foundZero = true;
             return;

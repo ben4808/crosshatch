@@ -99,7 +99,7 @@ function App(props: AppProps) {
     Globals.activeSectionId = 0;
     Globals.selectedSectionIds = new Map<number, boolean>();
     Globals.selectedWordNode = undefined;
-    Globals.selectedSectionCandidate = undefined;
+    Globals.selectedSectionCandidateKeys = new Map<number, string>();
   }
 
   if (!Globals.puzzle) {

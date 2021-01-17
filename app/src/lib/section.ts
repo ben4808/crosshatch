@@ -8,7 +8,7 @@ import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
 import { WordDirection } from "../models/WordDirection";
 import { getUnfilledCrosses, getWordScore } from "./fill";
-import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
+import { generateConstraintInfoForSquares, getLettersFromSquares, setLettersArrayVal } from "./grid";
 import { PriorityQueue } from "./priorityQueue";
 import { forAllGridSquares, getEntryAtWordKey, getGrid, getSquaresForWord, getWordAtSquare, getSquareAtKey, isAcross, 
     isBlackSquare, mapKeys, squareKey, wordKey, wordLength, mapValues, isUserOrWordFilled } from "./util";
@@ -47,11 +47,13 @@ export function insertSectionCandidateIntoGrid(grid: GridState, candidate: Secti
         let sq = getSquareAtKey(grid, sqKey);
         let candidateSq = getSquareAtKey(candidate.grid, sqKey);
         sq.content = candidateSq.content;
+        let newLettersArr = Array<boolean>(26).fill(false);
+        setLettersArrayVal(newLettersArr, sq.content!, true);
         sq.constraintInfo = {
             isCalculated: true,
-            sumTotal: 1,
-            viableLetters: new Map<string, number>([[sq.content!, 1]]),
-        }
+            letterFillCount: 1,
+            viableLetters: newLettersArr,
+        };
         if (!isUserOrWordFilled(sq)) {
             sq.contentType = contentType === ContentType.HoverChosenSection ? ContentType.Autofill : ContentType.ChosenSection;
         }
@@ -66,7 +68,7 @@ export function insertSectionCandidateIntoGrid(grid: GridState, candidate: Secti
     section.unfilledCrosses.forEach((_, key) => {
         let word = grid.words.get(key)!;
         let squares = getSquaresForWord(grid, word);
-        generateConstraintInfoForSquares(grid, squares);
+        generateConstraintInfoForSquares(squares);
     });
 }
 
@@ -275,13 +277,33 @@ export function getSelectedSectionsKey(): string {
     return mapKeys(Globals.selectedSectionIds!).sort().map(i => i.toString()).join(",");
 }
 
-export function isWordInSelectedSections(wordKey: string): boolean {
-    let found = false;
-    getSelectedSections().forEach((_, sid) => {
-        let section = Globals.sections!.get(sid)!;
-        if (section.words.get(wordKey)) found = true;
+export function getSelectedSectionCandidates(): SectionCandidate[] {
+    let ret = [] as SectionCandidate[];
+    Globals.sections!.forEach((section, _) => {
+        Globals.selectedSectionCandidateKeys!.forEach((scKey, _) => {
+            if (section.candidates.has(scKey))
+                ret.push(section.candidates.get(scKey)!);
+        });
     });
-    return found;
+    return ret;
+}
+
+export function getSelectedSectionCandidatesWithWord(wordKey: string): SectionCandidate[] {
+    let ret = [] as SectionCandidate[];
+    getSelectedSectionCandidates().forEach(sc => {
+        let section = Globals.sections!.get(sc.sectionId)!;
+        if (section.words.has(wordKey))
+            ret.push(sc);
+    });
+    return ret;
+}
+
+export function getSectionsWithSelectedCandidate(): Section[] {
+    return getSelectedSectionCandidates().map(sc => getSectionWithCandidate(sc));
+}
+
+export function getSectionWithCandidate(sc: SectionCandidate): Section {
+    return Globals.sections!.get(sc.sectionId)!;
 }
 
 export function getUnfilteredSectionCandidates(section: Section): SectionCandidate[] {

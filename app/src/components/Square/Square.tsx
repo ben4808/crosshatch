@@ -20,9 +20,9 @@ function getSquareElement(props: SquareProps) {
                         props.constraintSum === 0 ? " grid-square-error-word" :
                         between(props.constraintSum, 1, 1) ? " grid-square-constrained-5" : 
                         between(props.constraintSum, 1, 3) ? " grid-square-constrained-4" : 
-                        between(props.constraintSum, 1, 10) ? " grid-square-constrained-3" : 
-                        between(props.constraintSum, 1, 30) ? " grid-square-constrained-2" : 
-                        between(props.constraintSum, 1, 100) ? " grid-square-constrained-1" : ""
+                        between(props.constraintSum, 1, 5) ? " grid-square-constrained-3" : 
+                        between(props.constraintSum, 1, 10) ? " grid-square-constrained-2" : 
+                        between(props.constraintSum, 1, 15) ? " grid-square-constrained-1" : ""
                         )} 
                     data-row={props.row} data-col={props.col}>
             {props.isCircled && 

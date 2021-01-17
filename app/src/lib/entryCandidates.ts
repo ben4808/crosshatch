@@ -1,36 +1,45 @@
+import { ContentType } from "../models/ContentType";
 import { EntryCandidate } from "../models/EntryCandidate";
 import { FillNode } from "../models/FillNode";
 import { GridSquare } from "../models/GridSquare";
 import { getEligibleCandidates, getWordScore } from "./fill";
-import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
+import { generateConstraintInfoForSquares, getConstraintLetters, getLettersFromSquares } from "./grid";
 import { constraintLetterCount, deepClone, getSquareAtKey, getSquaresForWord, getWordAtSquare,
-    isPatternFull, isWordFull, mapKeys, maxIffyLength, otherDir, squareKey, wordKey, wordLength } from "./util";
+    isPatternFull, isWordFull, maxIffyLength, otherDir, squareKey, wordKey, wordLength } from "./util";
 import { queryIndexedWordList } from "./wordList";
 
-// returns false if no viable candidates were found (fill word has to be iffy and should skip to next fill word)
-export function populateAndScoreEntryCandidates(node: FillNode, processdMoreCandidates: boolean): boolean {
+// returns false if no viable candidates were found or iffy was set
+export function populateAndScoreEntryCandidates(node: FillNode, isForManualFill: boolean): boolean {
     if (node.anchorSquareKeys.length === 0)
-        populateFillWordAnchors(node);
-
-    if (node.anchorCombosLeft.length === 0) return false;
+        populateFillWordAnchors(node, isForManualFill);
 
     let eligibleCandidates = [] as EntryCandidate[];
     while(true) {
-        processAnchorCombo(node);
+        processAnchorCombo(node, isForManualFill);
         eligibleCandidates = getEligibleCandidates(node);
         if (node.anchorCombosLeft.length === 0) break;
-        if (!processdMoreCandidates && eligibleCandidates.length >= 20) break;
-        if (processdMoreCandidates && eligibleCandidates.length >= 250) break;
+        if (!isForManualFill && eligibleCandidates.length >= 20) break;
+        if (isForManualFill && eligibleCandidates.length >= 250) break;
+    }
+
+    if (eligibleCandidates.length === 0) {
+        if (node.iffyWordKey) return false;
+    
+        node.iffyWordKey = wordKey(node.fillWord!);
+        return true;
     }
 
     node.entryCandidates.sort((a, b) => b.score! - a.score!);
-    return eligibleCandidates.length > 0;
+    return true;
 }
 
-function populateFillWordAnchors(node: FillNode) {
+function populateFillWordAnchors(node: FillNode, isForManualFill: boolean) {
     let grid = node.startGrid;
     let wordSquares = getSquaresForWord(grid, node.fillWord!);
     let anchorKeyCounts = [] as [string, number][];
+
+    if (isForManualFill)
+        wordSquares = getManualEntrySquares(wordSquares);
 
     wordSquares.forEach(sq => {
         let count = constraintLetterCount(sq);
@@ -51,6 +60,23 @@ function populateFillWordAnchors(node: FillNode) {
     generateAnchorCombos(node);
 }
 
+function getManualEntrySquares(squares: GridSquare[]): GridSquare[] {
+    let newSquares = deepClone(squares) as GridSquare[];
+    newSquares.forEach(sq => {
+        if ([ContentType.ChosenSection, ContentType.Autofill].includes(sq.contentType)) {
+            sq.content = undefined;
+            sq.contentType = ContentType.Autofill;
+            sq.constraintInfo = {
+                isCalculated: false,
+                letterFillCount: 26,
+                viableLetters: Array<boolean>(26).fill(true),
+            }
+        }
+    });
+
+    return newSquares;
+}
+
 const letterFrequencies = {
     "A": 8.2, "B": 1.5, "C": 2.8, "D": 4.3,
     "E": 13, "F": 2.2, "G": 2, "H": 6.1,
@@ -65,7 +91,7 @@ function generateAnchorCombos(node: FillNode) {
     node.anchorCombosLeft = [];
     let grid = node.startGrid;
     let constraintLetters = node.anchorSquareKeys.map(sqKey => getSquareAtKey(grid, sqKey))
-        .map(sq => mapKeys(sq.constraintInfo!.viableLetters));
+        .map(sq => getConstraintLetters(sq));
 
     for (var letter1 of constraintLetters[0]) {
         for (var letter2 of constraintLetters[1]) {
@@ -79,10 +105,11 @@ function generateAnchorCombos(node: FillNode) {
     });
 }
 
-function processAnchorCombo(node: FillNode) {
+function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
     let grid = node.startGrid;
     let combo = node.anchorCombosLeft.pop()!;
 
+    let wKey = wordKey(node.fillWord!);
     let wordSquares = getSquaresForWord(grid, node.fillWord!);
     let patternWithAnchor = getLettersFromSquares(wordSquares);
     node.anchorSquareKeys.forEach((sqKey, i) => {
@@ -90,7 +117,6 @@ function processAnchorCombo(node: FillNode) {
     });
 
     let entries = queryIndexedWordList(patternWithAnchor);
-    let iffyWordKey = node.iffyWordKey;
 
     entries.forEach(entry => {
         if (grid.usedWords.has(entry)) return;
@@ -99,6 +125,7 @@ function processAnchorCombo(node: FillNode) {
         let containsZeroSquare = false;
         let isUnviable = false;
         let iffyEntry = undefined as string | undefined;
+        let iffyWordKey = node.iffyWordKey;
         let constraintSquares = new Map<string, GridSquare[]>();
         let crossCrossKeys = new Map<string, boolean>();
         let usedWords = new Map<string, boolean>();
@@ -111,32 +138,35 @@ function processAnchorCombo(node: FillNode) {
             if (!cross) return;
             let crossKey = wordKey(cross);
             let crossSquares = deepClone(getSquaresForWord(grid, cross)) as GridSquare[];
+            if (isForManualFill) crossSquares = getManualEntrySquares(crossSquares);
             crossSquares = insertLetterIntoSquares(crossSquares, entry[i], sqKey);
             let crossPattern = getLettersFromSquares(crossSquares);
-            if (grid.usedWords.has(crossPattern) || usedWords.has(crossPattern)) 
+            if (grid.usedWords.has(crossPattern) || usedWords.has(crossPattern)) {
+                isUnviable = true;
                 return;
+            }
+                
             if (isPatternFull(crossPattern))
                 usedWords.set(crossPattern, true);
 
             let crossCount = queryIndexedWordList(crossPattern).length;
             crossCountsTotal += crossCount;
 
-            generateConstraintInfoForSquares(grid, crossSquares);
+            generateConstraintInfoForSquares(crossSquares);
             constraintSquares.set(crossKey, crossSquares);
-            crossCrossKeys.set(crossKey, true);
 
             crossSquares.forEach(csq => {
                 let cc = getWordAtSquare(grid, csq.row, csq.col, node.fillWord!.direction);
                 if (!cc) return;
                 let ccKey = wordKey(cc);
-                if (crossCrossKeys.has(ccKey)) return;
+                if (ccKey === wKey || crossCrossKeys.has(ccKey)) return;
 
                 crossCrossKeys.set(ccKey, true);
             });
 
             if (crossCount === 0) {
                 containsZeroSquare = true;
-                if (!iffyWordKey && wordLength(cross) <= maxIffyLength) {
+                if (crossKey === iffyWordKey || (!iffyWordKey && wordLength(cross) <= maxIffyLength)) {
                     iffyEntry = crossPattern;
                     iffyWordKey = crossKey;
                 }
@@ -144,57 +174,64 @@ function processAnchorCombo(node: FillNode) {
             }
         });
 
-        // check that crosscrosses have something workable
-        let isAlreadyIffy = !!iffyEntry;
-        crossCrossKeys.forEach((_, ccKey) => {
-            let ccWord = grid.words.get(ccKey)!;
-            let ccSquares = getSquaresForWord(grid, ccWord);
-            if (isWordFull(ccSquares)) return;
+        if (!isUnviable) {
+            // check that crosscrosses have something workable
+            let isAlreadyIffy = !!iffyEntry;
+            crossCrossKeys.forEach((_, ccKey) => {
+                let ccWord = grid.words.get(ccKey)!;
+                if (wordKey(ccWord) === node.iffyWordKey) return;
+                let ccSquares = getSquaresForWord(grid, ccWord);
+                if (isForManualFill) ccSquares = getManualEntrySquares(ccSquares);
+                if (isWordFull(ccSquares)) return;
 
-            let ccPattern = getLettersFromSquares(ccSquares);
-            let ccConstraintCounts = ccSquares.map((ccsq, i) => [i, ccsq.constraintInfo!.viableLetters.size])
-                .filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
-            let curPatterns = [ccPattern];
-            while(ccConstraintCounts.length > 0 && curPatterns.length < 12) {
-                let index = ccConstraintCounts.pop()![0];
-                let viableLetters = ccSquares[index].constraintInfo!.viableLetters;
-                let newCurPatterns = [] as string[];
-                mapKeys(viableLetters).forEach(ltr => {
-                    curPatterns.forEach(pattern => {
-                        newCurPatterns.push(pattern.substring(0, index) + ltr + pattern.substring(index+1));
+                let ccPattern = getLettersFromSquares(ccSquares);
+                let ccConstraintCounts = ccSquares.map((ccsq, i) => [i, ccsq.constraintInfo ? ccsq.constraintInfo!.letterFillCount : 26])
+                    .filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+                if (ccConstraintCounts.length > 0 && ccConstraintCounts[ccConstraintCounts.length-1][1] > 12) return;
+
+                let curPatterns = [ccPattern];
+                while(ccConstraintCounts.length > 0 && curPatterns.length < 12) {
+                    let index = ccConstraintCounts.pop()![0];
+                    let viableLetters = getConstraintLetters(ccSquares[index]);
+                    let newCurPatterns = [] as string[];
+                    // eslint-disable-next-line
+                    viableLetters.forEach(ltr => {
+                        curPatterns.forEach(pattern => {
+                            newCurPatterns.push(pattern.substring(0, index) + ltr + pattern.substring(index+1));
+                        });
                     });
-                });
-                curPatterns = newCurPatterns;
-            }
+                    curPatterns = newCurPatterns;
+                }
 
-            let found = false;
-            let provEntry = "";
-            let provWordKey = "";
-            let iffyAdded = false;
-            for (let pattern of curPatterns) {
-                let ccEntries = queryIndexedWordList(pattern);
-                if (ccEntries.length === 0) {
-                    if (!iffyAdded && provEntry.length === 0 && wordLength(ccWord) <= maxIffyLength) {
-                        iffyAdded = true;
-                        provEntry = pattern;
-                        provWordKey = wordKey(ccWord);
+                let found = false;
+                let provEntry = "";
+                let provWordKey = "";
+                let iffyAdded = false;
+                for (let pattern of curPatterns) {
+                    let ccEntries = queryIndexedWordList(pattern);
+                    if (ccEntries.length === 0) {
+                        if (!iffyAdded && provEntry.length === 0 && wordLength(ccWord) <= maxIffyLength) {
+                            iffyAdded = true;
+                            provEntry = pattern;
+                            provWordKey = wordKey(ccWord);
+                        }
+                    }
+                    else {
+                        found = true;
+                        break;
+                    }
+                };
+                if (!found) {
+                    containsZeroSquare = true;
+                    if (!iffyAdded || isAlreadyIffy) isUnviable = true;
+                    if (!isAlreadyIffy) {
+                        isAlreadyIffy = true;
+                        iffyEntry = provEntry;
+                        iffyWordKey = provWordKey;
                     }
                 }
-                else {
-                    found = true;
-                    break;
-                }
-            };
-            if (!found) {
-                containsZeroSquare = true;
-                if (!iffyAdded || isAlreadyIffy) isUnviable = true;
-                if (!isAlreadyIffy) {
-                    isAlreadyIffy = true;
-                    iffyEntry = provEntry;
-                    iffyWordKey = provWordKey;
-                }
-            }
-        });
+            });
+        }
 
         node.entryCandidates.push({
             word: entry,

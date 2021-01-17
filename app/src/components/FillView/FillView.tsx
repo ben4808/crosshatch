@@ -157,9 +157,10 @@ function FillView(props: any) {
             if (!target) return;
         }
 
+        let section = getSection();
         let candidateKey = target.attributes["data-candidate-key"].value as string;
         let node = getManualSectionNode(candidateKey, false);
-        Globals.selectedSectionCandidate = candidateKey;
+        Globals.selectedSectionCandidateKeys!.set(section.id, candidateKey);
 
         updateManualEntryCandidates(node.endGrid);
 
@@ -281,7 +282,7 @@ function FillView(props: any) {
                                 onClick={handleEntryCandidateClick} onMouseOver={handleEntryCandidateHover}>
                                 <div>{ec.word}</div>
                                 <div>{ec.score.toFixed(0)}</div>
-                                <div>{ec.madeUpWord || ""}</div>
+                                <div>{ec.iffyEntry || ""}</div>
                             </div>
                         ))}
                     </div>
