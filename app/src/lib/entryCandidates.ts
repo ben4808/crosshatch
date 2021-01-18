@@ -23,7 +23,7 @@ export function populateAndScoreEntryCandidates(node: FillNode, isForManualFill:
     }
 
     if (eligibleCandidates.length === 0) {
-        if (node.iffyWordKey) return false;
+        if (node.iffyWordKey || wordLength(node.fillWord!) > maxIffyLength) return false;
     
         node.iffyWordKey = wordKey(node.fillWord!);
         return true;
@@ -47,6 +47,7 @@ function populateFillWordAnchors(node: FillNode, isForManualFill: boolean) {
 
         if (anchorKeyCounts.length < 2) {
             anchorKeyCounts.push([squareKey(sq), count]);
+            anchorKeyCounts.sort((a, b) => a[1] - b[1]);
             return;
         }
 
@@ -116,7 +117,10 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
         patternWithAnchor = insertLetterIntoPattern(patternWithAnchor, combo[i], wordSquares, sqKey);
     });
 
-    let entries = queryIndexedWordList(patternWithAnchor);
+    let entries = [] as string[];
+    broadenAnchorPatterns(wordSquares, patternWithAnchor).forEach(pattern => {
+        entries = entries.concat(queryIndexedWordList(pattern));
+    });
 
     entries.forEach(entry => {
         if (grid.usedWords.has(entry)) return;
@@ -138,6 +142,7 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
             if (!cross) return;
             let crossKey = wordKey(cross);
             let crossSquares = deepClone(getSquaresForWord(grid, cross)) as GridSquare[];
+            if (isWordFull(crossSquares)) return;
             if (isForManualFill) crossSquares = getManualEntrySquares(crossSquares);
             crossSquares = insertLetterIntoSquares(crossSquares, entry[i], sqKey);
             let crossPattern = getLettersFromSquares(crossSquares);
@@ -183,25 +188,11 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
                 let ccSquares = getSquaresForWord(grid, ccWord);
                 if (isForManualFill) ccSquares = getManualEntrySquares(ccSquares);
                 if (isWordFull(ccSquares)) return;
+                if (ccSquares.find(csq => !csq.constraintInfo || !csq.constraintInfo)) return;
 
-                let ccPattern = getLettersFromSquares(ccSquares);
-                let ccConstraintCounts = ccSquares.map((ccsq, i) => [i, ccsq.constraintInfo ? ccsq.constraintInfo!.letterFillCount : 26])
-                    .filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
-                if (ccConstraintCounts.length > 0 && ccConstraintCounts[ccConstraintCounts.length-1][1] > 12) return;
-
-                let curPatterns = [ccPattern];
-                while(ccConstraintCounts.length > 0 && curPatterns.length < 12) {
-                    let index = ccConstraintCounts.pop()![0];
-                    let viableLetters = getConstraintLetters(ccSquares[index]);
-                    let newCurPatterns = [] as string[];
-                    // eslint-disable-next-line
-                    viableLetters.forEach(ltr => {
-                        curPatterns.forEach(pattern => {
-                            newCurPatterns.push(pattern.substring(0, index) + ltr + pattern.substring(index+1));
-                        });
-                    });
-                    curPatterns = newCurPatterns;
-                }
+                let anchorPattern = getLettersFromSquares(ccSquares);
+                let curPatterns = broadenAnchorPatterns(ccSquares, anchorPattern);
+                if (!curPatterns[0].match(/[A-Z]/)) return;
 
                 let found = false;
                 let provEntry = "";
@@ -233,17 +224,44 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
             });
         }
 
-        node.entryCandidates.push({
-            word: entry,
-            score: isUnviable ? 0 : calculateEntryCandidateScore(entry, crossCountsTotal, containsZeroSquare),
-            isViable: !isUnviable,
-            hasBeenChained: false,
-            wasChainFailure: false,
-            iffyEntry: iffyEntry,
-            iffyWordKey: iffyWordKey,
-            crossSquares: constraintSquares,
-        } as EntryCandidate);
+        if (!isUnviable) {
+            node.entryCandidates.push({
+                word: entry,
+                score: calculateEntryCandidateScore(entry, crossCountsTotal, containsZeroSquare),
+                isViable: !isUnviable,
+                hasBeenChained: false,
+                wasChainFailure: false,
+                iffyEntry: iffyEntry,
+                iffyWordKey: iffyWordKey,
+                crossSquares: constraintSquares,
+            } as EntryCandidate);
+        }
     });
+}
+
+function broadenAnchorPatterns(squares: GridSquare[], anchorPattern: string): string[] {
+    let constraintCounts = squares.map((sq, i) => [i, anchorPattern[i] !== "-" ? 1 : sq.constraintInfo ? sq.constraintInfo!.letterFillCount : 26])
+        .filter(x => x[1] > 0).sort((a, b) => b[1] - a[1]);
+
+    let curPatterns = [anchorPattern];
+    while(constraintCounts.length > 0 && curPatterns.length < 12) {
+        let lowestCount = constraintCounts.pop()!;
+        if (lowestCount[1] > 6) 
+            return curPatterns;
+
+        let index = lowestCount[0];
+        let viableLetters = anchorPattern[index] !== "-" ? [anchorPattern[index]] : getConstraintLetters(squares[index]);
+        let newCurPatterns = [] as string[];
+        // eslint-disable-next-line
+        viableLetters.forEach(ltr => {
+            curPatterns.forEach(pattern => {
+                newCurPatterns.push(pattern.substring(0, index) + ltr + pattern.substring(index+1));
+            });
+        });
+        curPatterns = newCurPatterns;
+    }
+
+    return curPatterns;
 }
 
 function calculateEntryCandidateScore(entry: string, crossCountsTotal: number, containsZeroSquare: boolean): number {

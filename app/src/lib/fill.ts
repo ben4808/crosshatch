@@ -177,21 +177,22 @@ function doSectionsIntersect(id1: number, id2: number) {
 }
 
 export function processSectionNode(node: FillNode, section: Section): boolean {
-    if (node.anchorSquareKeys.length > 0 && node.anchorCombosLeft.length === 0)
-        return false;
+    if (!node.fillWord)
+        node.fillWord = selectWordToFill(node, section);
 
-    node.fillWord = selectWordToFill(node, section);
-
-    let areEligibleCandidates = populateAndScoreEntryCandidates(node, false);
-    if (!areEligibleCandidates) return false;
+    if (node.anchorSquareKeys.length === 0 || node.anchorCombosLeft.length > 0) {
+        let areEligibleCandidates = populateAndScoreEntryCandidates(node, false);
+        if (!areEligibleCandidates) return false;
+    }
 
     let eligibleCandidates = getEligibleCandidates(node);
     if (eligibleCandidates.length > 0) {
         node.chosenEntry = chooseEntryFromCandidates(eligibleCandidates);
         processAndInsertChosenEntry(node);
+        return true;
     }
     
-    return true;
+    return false;
 }
 
 export function makeNewNode(grid: GridState, depth: number, isChainNode: boolean, parent: FillNode | undefined): FillNode {
