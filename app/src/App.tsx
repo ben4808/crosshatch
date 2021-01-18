@@ -24,6 +24,7 @@ function App(props: AppProps) {
   // eslint-disable-next-line
   const [ignored, forceUpdate] = useReducer(x => x + 1, 0);
   const [appState, setAppState] = useState(getAppContext());
+  const [fillInterval, setFillInterval] = useState({} as any);
 
   useEffect(() => {
     setAppState(getAppContext());
@@ -43,16 +44,18 @@ function App(props: AppProps) {
 
   function toggleFill() {
     if (Globals.isFillEnabled) {
-      doFillWord();
+      let interval = setInterval(() => doFillWord(), 5);
+      setFillInterval(interval);
+    }
+    else {
+      if (fillInterval)
+        clearInterval(fillInterval);
     }
     triggerUpdate();
   }
 
   function doFillWord() {
-    if (!Globals.isFillEnabled) return;
-
     fillSectionWord();
-    setTimeout(() => doFillWord(), 5);
     triggerUpdate();
   }
 

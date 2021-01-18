@@ -40,10 +40,13 @@ export function fillSectionWord(): boolean {
     if (success) {
         let sectionString = getSectionString(node.endGrid, section);
         // is section filled?
-        if (!sectionString.includes("-") && !section.candidates.has(sectionString)) {
-            let newCandidate = newSectionCandidate(node, section);
-            section.candidates.set(sectionString, newCandidate);
-            Globals.activeGrid = node.endGrid;
+        if (!sectionString.includes("-")) {
+            if (!section.candidates.has(sectionString)) {
+                let newCandidate = newSectionCandidate(node, section);
+                section.candidates.set(sectionString, newCandidate);
+                Globals.activeGrid = node.endGrid;
+            }
+            
             invalidateChainNode(node);
             fillQueue.pop();
             return true;

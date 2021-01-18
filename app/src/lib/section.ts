@@ -298,6 +298,16 @@ export function getSelectedSectionCandidatesWithWord(wordKey: string): SectionCa
     return ret;
 }
 
+export function getSelectedSectionCandidatesWithSquare(squareKey: string): SectionCandidate[] {
+    let ret = [] as SectionCandidate[];
+    getSelectedSectionCandidates().forEach(sc => {
+        let section = Globals.sections!.get(sc.sectionId)!;
+        if (section.squares.has(squareKey))
+            ret.push(sc);
+    });
+    return ret;
+}
+
 export function getSectionsWithSelectedCandidate(): Section[] {
     return getSelectedSectionCandidates().map(sc => getSectionWithCandidate(sc));
 }

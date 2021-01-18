@@ -14,7 +14,8 @@ import { ContentType } from "../models/ContentType";
 import { processAndInsertChosenEntry } from "./insertEntry";
 import { queryIndexedWordList } from "./wordList";
 import { populateAndScoreEntryCandidates } from "./entryCandidates";
-import { getSectionsWithSelectedCandidate, getSectionWithCandidate, getSelectedSectionCandidatesWithWord } from "./section";
+import { getSectionsWithSelectedCandidate, getSectionWithCandidate, 
+    getSelectedSectionCandidatesWithSquare } from "./section";
 
 export function populateWords(grid: GridState) {
     function processSquare(grid: GridState, row: number, col: number, dir: WordDirection) {
@@ -264,13 +265,13 @@ export function insertEntryIntoGrid(node: FillNode, wordKey: string, entry: stri
 
 export function eraseGridSquare(grid: GridState, sq: GridSquare, dir: WordDirection) {
     let word = getWordAtSquare(grid, sq.row, sq.col, dir)!;
-    let squares = getSquaresForWord(grid, word);
+    let squares = word ? getSquaresForWord(grid, word) : [sq];
 
     if (squares.find(sq => sq.contentType === ContentType.Autofill)) {
         ; // autofill is ephemeral, no need to explicitly delete
     }
     else if (squares.find(sq => sq.contentType === ContentType.ChosenSection)) {
-        getSelectedSectionCandidatesWithWord(wordKey(word)).forEach(sc => {
+        getSelectedSectionCandidatesWithSquare(squareKey(sq)).forEach(sc => {
             let section = getSectionWithCandidate(sc);
             section.squares.forEach((_, sqKey) => {
                 let sq = getSquareAtKey(grid, sqKey);

@@ -155,7 +155,7 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
                 usedWords.set(crossPattern, true);
 
             let crossCount = queryIndexedWordList(crossPattern).length;
-            crossCountsTotal += crossCount;
+            crossCountsTotal += crossCount === 0 ? 0 : (Math.log2(crossCount) + 1);
 
             generateConstraintInfoForSquares(crossSquares);
             constraintSquares.set(crossKey, crossSquares);
@@ -266,8 +266,8 @@ function broadenAnchorPatterns(squares: GridSquare[], anchorPattern: string): st
 
 function calculateEntryCandidateScore(entry: string, crossCountsTotal: number, containsZeroSquare: boolean): number {
     let wordScore = getWordScore(entry);
-    let ret = crossCountsTotal * (!containsZeroSquare ? wordScore  : 1);
-    return ret * (wordScore > 3 ? 2 : 1);
+    let ret = crossCountsTotal * wordScore * (containsZeroSquare ? 1 : 10);
+    return ret;
 }
 
 function insertLetterIntoPattern(pattern: string, newLetter: string, squares: GridSquare[], sqKey: string): string {
