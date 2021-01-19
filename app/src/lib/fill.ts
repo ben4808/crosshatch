@@ -62,6 +62,7 @@ export function fillSectionWord(): boolean {
         fillSectionWord();
     }
 
+    Globals.selectedWordNode = undefined;
     return true;
 }
 
@@ -238,7 +239,18 @@ function selectWordToFill(node: FillNode, section: Section): GridWord | undefine
     });
     let prioritizedWordList = mapKeys(section.words).sort((a, b) => wordScores.get(b)! - wordScores.get(a)!);
 
-    for (let key of prioritizedWordList) {
+    let crossesList = [] as string[];
+    if (section.id === 0 && node.parent) {
+        let crossKeys = new Map<string, boolean>();
+        getUnfilledCrosses(grid, node.parent!.fillWord!).map(w => wordKey(w)).forEach(k => {
+            crossKeys.set(k, true);
+        });
+        prioritizedWordList.forEach(pk => {
+            if (crossKeys.has(pk)) crossesList.push(pk);
+        });
+    }
+
+    for (let key of crossesList.length > 0 ? crossesList : prioritizedWordList) {
         let word = grid.words.get(key)!;
         let squares = getSquaresForWord(grid, word);
         if (wordKey(word) !== node.iffyWordKey && !isWordFull(squares))

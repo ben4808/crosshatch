@@ -1,9 +1,11 @@
+import { ContentType } from "../models/ContentType";
 import { GridWord } from "../models/GridWord";
 import { Puzzle } from "../models/Puzzle";
 import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
 import { createNewGrid, populateWords } from "./grid";
 import { deepClone, getGrid, mapValues, newPuzzle, wordKey } from "./util";
+import Globals from '../lib/windowService';
 
 export async function loadPuzFile(url: string): Promise<Puzzle | undefined> {
     let response = await fetch(url);
@@ -33,6 +35,7 @@ export async function processPuzData(data: Blob): Promise<Puzzle | undefined> {
             if (curChar === "-") {} // no data entered
             if (curChar.match(/[A-Z]/)) {
                 square.content = curChar;
+                square.contentType = ContentType.User;
             }
             i++;
         }
@@ -109,9 +112,11 @@ export async function processPuzData(data: Blob): Promise<Puzzle | undefined> {
             let tokens = k.split(",");
             let square = grid.squares[+tokens[0]][+tokens[1]];
             square.content = rebusValues.get(v)!;
+            square.contentType = ContentType.User;
         });
     }
 
+    Globals.activeGrid = grid;
     return puzzle;
 }
 

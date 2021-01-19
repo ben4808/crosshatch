@@ -9,8 +9,9 @@ import { getLettersFromSquares } from "./grid";
 import { ContentType } from "../models/ContentType";
 import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
+import { generateGridSections } from "./section";
 
-export const maxIffyLength = 7;
+export const maxIffyLength = 1;
 export const fullAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 export function average(arr: number[]): number {
@@ -237,4 +238,13 @@ export function getUserFilledSections(grid: GridState): Section[] {
 
 export function getUserFilledSectionCandidates(grid: GridState): SectionCandidate[] {
     return getSectionCandidatesFromKeys(mapKeys(grid.userFilledSectionCandidates));
+}
+
+export function initializeSessionGlobals() {
+    let grid = getGrid();
+    Globals.sections = generateGridSections(grid);
+    Globals.activeSectionId = 0;
+    Globals.hoverSectionId = undefined;
+    Globals.selectedSectionIds = new Map<number, boolean>();
+    Globals.selectedSectionCandidateKeys = new Map<number, string>();
 }

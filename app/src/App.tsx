@@ -8,13 +8,13 @@ import Menu from './components/Menu/Menu';
 import Globals from './lib/windowService';
 import "./App.scss";
 import { Puzzle } from './models/Puzzle';
-import { getGrid, newPuzzle } from './lib/util';
+import { getGrid, initializeSessionGlobals, newPuzzle } from './lib/util';
 import { generatePuzFile } from './lib/puzFiles';
 import { SymmetryType } from './models/SymmetryType';
 import { FillStatus } from './models/FillStatus';
-import { generateGridSections } from './lib/section';
-import { createNewGrid } from './lib/grid';
+import { clearFill, createNewGrid } from './lib/grid';
 import { fillSectionWord } from './lib/fill';
+import { WordDirection } from './models/WordDirection';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
@@ -69,16 +69,13 @@ function App(props: AppProps) {
   }
 
   function createNewPuzzle(width: number, height: number) {
-    setPuzzle(newPuzzle());
-    setGridWidth(width);
-    setGridHeight(height);
-    initializeGlobals(width, height);
+    initializeGlobals(undefined, width, height);
+    triggerUpdate();
   }
 
   function setPuzzle(puzzle: Puzzle) {
-    Globals.puzzle = puzzle;
-    Globals.selectedWordKey = "";
-    Globals.gridSymmetry = SymmetryType.Rotate180;
+    let grid = getGrid();
+    initializeGlobals(puzzle, grid.width, grid.height);
     triggerUpdate();
   }
 
@@ -94,19 +91,30 @@ function App(props: AppProps) {
     puzzleLink!.click();
   }
 
-  function initializeGlobals(width: number, height: number) {
-    Globals.activeGrid = createNewGrid(width, height);
+  function initializeGlobals(puzzle?: Puzzle, width?: number, height?: number) {
+    Globals.puzzle = puzzle || newPuzzle();
+    if (width === undefined) width = gridWidth;
+    if (height === undefined) height = gridHeight;
+    setGridWidth(width);
+    setGridHeight(height);
+    if (!Globals.activeGrid)
+      Globals.activeGrid = createNewGrid(width, height);
+    Globals.hoverGrid = undefined;
+    Globals.selectedWordKey = "";
+    Globals.selectedWordDir = WordDirection.Across;
+    Globals.gridSymmetry = SymmetryType.Rotate180;
+    Globals.isFillEnabled = false;
+    Globals.isFillComplete = false;
     Globals.fillStatus = FillStatus.Ready;
-    let grid = getGrid();
-    Globals.sections = generateGridSections(grid);
-    Globals.activeSectionId = 0;
-    Globals.selectedSectionIds = new Map<number, boolean>();
     Globals.selectedWordNode = undefined;
-    Globals.selectedSectionCandidateKeys = new Map<number, string>();
+
+    initializeSessionGlobals();
+    clearFill(Globals.activeGrid!);
   }
 
   if (!Globals.puzzle) {
-    createNewPuzzle(gridWidth, gridHeight);
+    initializeGlobals();
+    triggerUpdate();
   }
 
   return (

@@ -7,7 +7,7 @@ import { WordDirection } from "../models/WordDirection";
 import Globals from './windowService';
 import { getSquaresForWord, isBlackSquare, newWord, forAllGridSquares, 
     isWordFull, isWordEmpty, getGrid, isUserFilled, deepClone, 
-    wordKey, getWordAtSquare, getSquareAtKey, otherDir, squareKey, fullAlphabet } from "./util";
+    wordKey, getWordAtSquare, getSquareAtKey, otherDir, squareKey, fullAlphabet, getSection, mapKeys } from "./util";
 import { SymmetryType } from "../models/SymmetryType";
 import { makeNewNode } from "./fill";
 import { ContentType } from "../models/ContentType";
@@ -15,7 +15,7 @@ import { processAndInsertChosenEntry } from "./insertEntry";
 import { queryIndexedWordList } from "./wordList";
 import { populateAndScoreEntryCandidates } from "./entryCandidates";
 import { getSectionsWithSelectedCandidate, getSectionWithCandidate, 
-    getSelectedSectionCandidatesWithSquare } from "./section";
+    getSelectedSectionCandidatesWithSquare, getSelectedSectionsKey } from "./section";
 
 export function populateWords(grid: GridState) {
     function processSquare(grid: GridState, row: number, col: number, dir: WordDirection) {
@@ -63,7 +63,10 @@ export function updateGridConstraintInfo(grid: GridState) {
     grid.usedWords = new Map<string, boolean>();
     forAllGridSquares(grid, sq => { sq.constraintInfo = undefined; });
 
-    grid.words.forEach(word => {
+    let wordKeys = mapKeys(grid.words);
+    let sortedWordKeys = wordKeys.filter(k => k.includes("A")).concat(wordKeys.filter(k => k.includes("D")));
+    sortedWordKeys.forEach(wordKey => {
+        let word = grid.words.get(wordKey)!;
         let newSquares = deepClone(getSquaresForWord(grid, word)) as GridSquare[];
         let letters = getLettersFromSquares(newSquares);
         if (!letters.includes("-")) grid.usedWords.set(letters, true);
@@ -264,8 +267,15 @@ export function insertEntryIntoGrid(node: FillNode, wordKey: string, entry: stri
 }
 
 export function eraseGridSquare(grid: GridState, sq: GridSquare, dir: WordDirection) {
+    if (sq.content === undefined) return;
+
     let word = getWordAtSquare(grid, sq.row, sq.col, dir)!;
     let squares = word ? getSquaresForWord(grid, word) : [sq];
+
+    let otherDirWord = getWordAtSquare(grid, sq.row, sq.col, dir)!;
+    let otherDirSquares = otherDirWord ? getSquaresForWord(grid, otherDirWord) : [sq];
+    if (squares.length > 1 && isWordFull(squares)) grid.usedWords.delete(getLettersFromSquares(squares));
+    if (otherDirSquares.length > 1 && isWordFull(otherDirSquares)) grid.usedWords.delete(getLettersFromSquares(otherDirSquares));
 
     if (squares.find(sq => sq.contentType === ContentType.Autofill)) {
         ; // autofill is ephemeral, no need to explicitly delete
@@ -273,6 +283,7 @@ export function eraseGridSquare(grid: GridState, sq: GridSquare, dir: WordDirect
     else if (squares.find(sq => sq.contentType === ContentType.ChosenSection)) {
         getSelectedSectionCandidatesWithSquare(squareKey(sq)).forEach(sc => {
             let section = getSectionWithCandidate(sc);
+            Globals.selectedSectionCandidateKeys?.delete(section.id);
             section.squares.forEach((_, sqKey) => {
                 let sq = getSquareAtKey(grid, sqKey);
                 if (sq.contentType === ContentType.ChosenSection)
@@ -280,12 +291,10 @@ export function eraseGridSquare(grid: GridState, sq: GridSquare, dir: WordDirect
             });
         });
     }
-    else if (squares.find(sq => sq.contentType === ContentType.ChosenWord)) {
+    else if (squares.find(sq => [ContentType.User, ContentType.ChosenWord].includes(sq.contentType))) {
         let isInSection = getSectionsWithSelectedCandidate().find(sec => sec.squares.has(squareKey(sq)));
 
         squares.forEach(wsq => {
-            if (wsq.contentType === ContentType.User) return;
-
             let cross = getWordAtSquare(grid, wsq.row, wsq.col, otherDir(dir))!;
             let crossSquares = getSquaresForWord(grid, cross);
             if (crossSquares.find(csq => [ContentType.Autofill, ContentType.ChosenSection].includes(csq.contentType))) {
@@ -296,20 +305,23 @@ export function eraseGridSquare(grid: GridState, sq: GridSquare, dir: WordDirect
             }
         });
     }
-
-    if (sq.contentType === ContentType.User)
-        sq.contentType = ContentType.Autofill;
         
     sq.content = undefined;
     clearFill(grid);
 }
 
 export function clearFill(grid: GridState) {
+    Globals.selectedWordNode = undefined;
+    let selectedSecKey = getSelectedSectionsKey();
+    getSection().fillQueues.delete(selectedSecKey);
+
     forAllGridSquares(grid, sq => {
         if (!isUserFilled(sq)) {
             sq.content = undefined;
         }
     });
+
+    updateGridConstraintInfo(grid);
 }
 
 export function updateManualEntryCandidates(grid: GridState) {

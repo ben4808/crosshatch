@@ -116,6 +116,18 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
     node.anchorSquareKeys.forEach((sqKey, i) => {
         patternWithAnchor = insertLetterIntoPattern(patternWithAnchor, combo[i], wordSquares, sqKey);
     });
+    let isFull = isWordFull(wordSquares);
+    if (isForManualFill && isFull) {
+        node.entryCandidates.push({
+            word: patternWithAnchor,
+            score: 1,
+            isViable: true,
+            hasBeenChained: false,
+            wasChainFailure: false,
+            crossSquares: new Map<string, GridSquare[]>(),
+        } as EntryCandidate);
+        return;
+    }
 
     let entries = [] as string[];
     broadenAnchorPatterns(wordSquares, patternWithAnchor).forEach(pattern => {
@@ -163,20 +175,21 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
             crossSquares.forEach(csq => {
                 let cc = getWordAtSquare(grid, csq.row, csq.col, node.fillWord!.direction);
                 if (!cc) return;
+
+                if (csq.constraintInfo!.letterFillCount === 0 || crossCount === 0) {
+                    containsZeroSquare = true;
+                    if (crossKey === iffyWordKey || (!iffyWordKey && crossSquares.length <= maxIffyLength)) {
+                        iffyEntry = crossPattern;
+                        iffyWordKey = crossKey;
+                    }
+                    else isUnviable = true;
+                }
+
                 let ccKey = wordKey(cc);
                 if (ccKey === wKey || crossCrossKeys.has(ccKey)) return;
 
                 crossCrossKeys.set(ccKey, true);
             });
-
-            if (crossCount === 0) {
-                containsZeroSquare = true;
-                if (crossKey === iffyWordKey || (!iffyWordKey && wordLength(cross) <= maxIffyLength)) {
-                    iffyEntry = crossPattern;
-                    iffyWordKey = crossKey;
-                }
-                else isUnviable = true;
-            }
         });
 
         if (!isUnviable) {
@@ -224,10 +237,10 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
             });
         }
 
-        if (!isUnviable) {
+        if (isForManualFill || !isUnviable) {
             node.entryCandidates.push({
                 word: entry,
-                score: calculateEntryCandidateScore(entry, crossCountsTotal, containsZeroSquare),
+                score: isUnviable ? 0 : calculateEntryCandidateScore(entry, crossCountsTotal, containsZeroSquare),
                 isViable: !isUnviable,
                 hasBeenChained: false,
                 wasChainFailure: false,

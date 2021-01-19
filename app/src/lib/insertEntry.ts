@@ -2,13 +2,11 @@ import { ContentType } from "../models/ContentType";
 import { FillNode } from "../models/FillNode";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
-import { GridWord } from "../models/GridWord";
 import { WordDirection } from "../models/WordDirection";
 import { getAllCrosses } from "./fill";
 import { getLettersFromSquares } from "./grid";
 import { sectionCandidateKey } from "./section";
-import { deepClone, getSectionCandidatesFromKeys, getSquaresForWord, getUserFilledSectionCandidates, 
-    getWordAtSquare, isUserOrWordFilled, isWordFull, mapKeys, otherDir, squareKey, wordKey } from "./util";
+import { deepClone, getSectionCandidatesFromKeys, getSquaresForWord, isWordFull, mapKeys, wordKey } from "./util";
 import Globals from './windowService';
 
 export function processAndInsertChosenEntry(node: FillNode, contentType?: ContentType) {
@@ -25,10 +23,6 @@ export function processAndInsertChosenEntry(node: FillNode, contentType?: Conten
         let existingPattern = getLettersFromSquares(wordSquares);
         grid.usedWords.delete(existingPattern);
     }
-
-    removeNonmatchingSectionCandidates(grid, wordSquares, node.chosenEntry!.word);
-    if (contentType === ContentType.ChosenWord)
-        removeNonmatchingUserWords(grid, wordSquares, word, node.fillWord!.direction);
 
     // unchecked squares
     wordSquares.forEach((sq, i) => {
@@ -52,36 +46,16 @@ export function processAndInsertChosenEntry(node: FillNode, contentType?: Conten
 
     wordSquares = getSquaresForWord(grid, word);
     wordSquares.forEach(sq => {
-        if ([ContentType.Autofill, ContentType.ChosenSection].includes(sq.contentType))
+        if ([ContentType.Autofill, ContentType.ChosenSection, ContentType.HoverChosenWord].includes(sq.contentType))
             sq.contentType = contentType!;
     });
     grid.usedWords.set(getLettersFromSquares(wordSquares), true);
     node.endGrid = grid;
     node.iffyWordKey = node.chosenEntry!.iffyWordKey;
-}
 
-function removeNonmatchingUserWords(grid: GridState, newSquares: GridSquare[], chosenWord: GridWord, fillDir: WordDirection) {
-    let sc = getUserFilledSectionCandidates(grid)
-        .find(x => Globals.sections!.get(x.sectionId)!.squares.has(squareKey(newSquares[0])));
-
-    newSquares.forEach(sq => {
-        let cross = getWordAtSquare(grid, sq.row, sq.col, otherDir(fillDir))!;
-        let crossSquares = getSquaresForWord(grid, cross);
-        if (cross === chosenWord) return;
-        crossSquares.forEach(crossSq => {
-            let crossCross = getWordAtSquare(grid, crossSq.row, crossSq.col, fillDir);
-            if (!crossCross || crossSquares.find(csq => !isUserOrWordFilled(csq))) {
-                if (sc) {
-                    sq.content = sc.grid.squares[sq.row][sq.col].content;
-                    sq.contentType = ContentType.ChosenSection;
-                }
-                else {
-                    sq.content = undefined;
-                    sq.contentType = ContentType.Autofill;
-                }
-            }
-        });
-    });
+    if (contentType === ContentType.ChosenWord) {
+        removeNonmatchingSectionCandidates(grid, wordSquares, node.chosenEntry!.word);
+    }  
 }
 
 function removeNonmatchingSectionCandidates(grid: GridState, newSquares: GridSquare[], chosenEntry: string) {

@@ -40,7 +40,7 @@ export function load5sMainList() {
 }
 
 export function loadMainPlusBroda() {
-    loadWordList("Main Plus Broda", "http://localhost/classifier/mainPlusBroda.txt", parse5sMainList).then((wordList) => {
+    loadWordList("Main Plus Broda", "http://localhost/classifier/mainBrodaEntries.txt", parse5sMainList).then((wordList) => {
         Globals.wordList = wordList;
         console.log("Word List loaded");
     });

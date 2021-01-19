@@ -7,13 +7,13 @@ import { GridState } from '../../models/GridState';
 import { WordDirection } from '../../models/WordDirection';
 import Globals from '../../lib/windowService';
 import { compareTuples, doesWordContainSquare, getGrid, getSelectedWord, getSquaresForWord, 
-    getWordAtSquare, isWordFull, mapKeys, mapValues, otherDir, squareKey, wordKey } from '../../lib/util';
+    getWordAtSquare, initializeSessionGlobals, isWordFull, mapKeys, mapValues, otherDir, squareKey, wordKey } from '../../lib/util';
 import { eraseGridSquare, getLettersFromSquares, getSymmetrySquares, getUncheckedSquareDir, populateWords, 
     updateGridConstraintInfo, updateManualEntryCandidates } from '../../lib/grid';
 import { GridWord } from '../../models/GridWord';
 import { AppContext } from '../../AppContext';
 import { ContentType } from '../../models/ContentType';
-import { generateGridSections, updateSectionFilters } from '../../lib/section';
+import { updateSectionFilters } from '../../lib/section';
 import { QualityClass } from '../../models/QualityClass';
 import { GridSquare } from '../../models/GridSquare';
 
@@ -74,16 +74,21 @@ function Grid(props: any) {
             if (sq.content === key && sq.contentType === ContentType.User) return;
 
             letterChanged = true;
-            if (sq.content !== key)
+            if (sq.content !== key && sq.contentType !== ContentType.User)
                 eraseGridSquare(grid, sq, Globals.selectedWordDir!);
 
+            sq = grid.squares[row][col];
             sq.content = key;
             sq.contentType = ContentType.User;
         }
         if (key === "BACKSPACE") {
             newSelSq = backupCursor();
 
-            if (sq.content !== undefined && sq.contentType !== ContentType.Autofill) letterChanged = true;
+            if (sq.content !== undefined) {
+                eraseGridSquare(grid, sq, Globals.selectedWordDir!);
+                letterChanged = true;
+            }
+                
             if (sq.type === SquareType.Black) {
                 getSymmetrySquares([row, col]).forEach(res => {
                     let resSq = grid.squares[res[0]][res[1]];
@@ -92,9 +97,6 @@ function Grid(props: any) {
 
                 blackSquareChanged = true;
             }
-
-            if (letterChanged && sq.content !== undefined)
-                eraseGridSquare(grid, sq, Globals.selectedWordDir!);
         }
         // toggle black square
         if (key === ".") {
@@ -110,7 +112,7 @@ function Grid(props: any) {
 
             blackSquareChanged = true;
         }
-        // toggle cirlced square
+        // toggle circled square
         if (key === ",") {
             if (sq.type === SquareType.Black) return;
             sq.isCircled = !sq.isCircled;
@@ -120,9 +122,7 @@ function Grid(props: any) {
 
         if (blackSquareChanged) {
             populateWords(grid);
-            Globals.sections = generateGridSections(grid);
-            Globals.selectedWordNode = undefined;
-            Globals.selectedWordKey = undefined;
+            initializeSessionGlobals();
             setSelWordAtSelSquare(newSelSq);
             updateGridConstraintInfo(grid);
         }
@@ -273,7 +273,7 @@ function Grid(props: any) {
                 let qc = Globals.qualityClasses!.get(letters);
                 squares.forEach(sq => {
                     if (sq.contentType === ContentType.Autofill) {
-                        let curQc = ret.get(squareKey(sq))!;
+                        let curQc = ret.get(squareKey(sq)) || QualityClass.Normal;
                         if (!qc || qc < curQc)
                             ret.set(squareKey(sq), qc || QualityClass.Iffy);
                     }
