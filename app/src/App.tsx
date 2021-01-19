@@ -18,8 +18,8 @@ import { WordDirection } from './models/WordDirection';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
-  const [gridWidth, setGridWidth] = useState(5);
-  const [gridHeight, setGridHeight] = useState(5);
+  const [gridWidth, setGridWidth] = useState(7);
+  const [gridHeight, setGridHeight] = useState(7);
   const [updateSemaphore, setUpdateSemaphore] = useState(0);
   // eslint-disable-next-line
   const [ignored, forceUpdate] = useReducer(x => x + 1, 0);
@@ -97,7 +97,7 @@ function App(props: AppProps) {
     if (height === undefined) height = gridHeight;
     setGridWidth(width);
     setGridHeight(height);
-    if (!Globals.activeGrid)
+    if (!Globals.activeGrid || width !== gridWidth || height !== gridHeight)
       Globals.activeGrid = createNewGrid(width, height);
     Globals.hoverGrid = undefined;
     Globals.selectedWordKey = "";
