@@ -240,7 +240,7 @@ function selectWordToFill(node: FillNode, section: Section): GridWord | undefine
     let prioritizedWordList = mapKeys(section.words).sort((a, b) => wordScores.get(b)! - wordScores.get(a)!);
 
     let crossesList = [] as string[];
-    if (section.id === 0 && Globals.sections!.size > 0 && node.parent) {
+    if (section.id === 0 && Globals.sections!.size > 10 && node.parent) {
         let crossKeys = new Map<string, boolean>();
         getUnfilledCrosses(grid, node.parent!.fillWord!).map(w => wordKey(w)).forEach(k => {
             crossKeys.set(k, true);
@@ -314,13 +314,13 @@ function chooseEntryFromCandidates(candidates: EntryCandidate[]): EntryCandidate
     let topScore = candidates[0].score!;
     let total = 0;
     candidates.forEach(c => {
-        total += Math.pow(c.score / topScore, 4);
+        total += Math.pow(c.score / topScore, 8);
     });
 
     let roll = Math.random() * total;
     let runningTotal = 0;
     for (let can of candidates) {
-        runningTotal += Math.pow(can.score / topScore, 4);
+        runningTotal += Math.pow(can.score / topScore, 8);
         if (runningTotal >= roll)
             return can;
     }

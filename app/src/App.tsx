@@ -92,12 +92,13 @@ function App(props: AppProps) {
   }
 
   function initializeGlobals(puzzle?: Puzzle, width?: number, height?: number) {
+    let isNewPuzzle = !!puzzle;
     Globals.puzzle = puzzle || newPuzzle();
     if (width === undefined) width = gridWidth;
     if (height === undefined) height = gridHeight;
     setGridWidth(width);
     setGridHeight(height);
-    if (!Globals.activeGrid || width !== gridWidth || height !== gridHeight)
+    if (!Globals.activeGrid || !isNewPuzzle)
       Globals.activeGrid = createNewGrid(width, height);
     Globals.hoverGrid = undefined;
     Globals.selectedWordKey = "";
