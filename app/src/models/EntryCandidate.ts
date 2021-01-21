@@ -1,5 +1,3 @@
-import { GridSquare } from "./GridSquare";
-
 export interface EntryCandidate {
     word: string;
     score: number;
@@ -8,5 +6,8 @@ export interface EntryCandidate {
     wasChainFailure: boolean;
     iffyEntry?: string;
     iffyWordKey?: string;
-    crossSquares: Map<string, GridSquare[]>;
+    // <squareKey, letters>
+    calculatedSquares: Map<string, string[]>;
+    // <wordKey, entries>
+    calculatedEntries: Map<string, string[]>;
 }
