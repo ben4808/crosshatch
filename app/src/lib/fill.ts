@@ -214,6 +214,7 @@ export function makeNewNode(grid: GridState, depth: number, isChainNode: boolean
         anchorCombosLeft: [],
         viableLetterCounts: new Map<string, Map<string, number>>(),
         iffyWordKey: parent ? parent.iffyWordKey : undefined,
+        constraintMode: "One",
     } as FillNode;
 }
 
@@ -314,13 +315,13 @@ function chooseEntryFromCandidates(candidates: EntryCandidate[]): EntryCandidate
     let topScore = candidates[0].score!;
     let total = 0;
     candidates.forEach(c => {
-        total += Math.pow(c.score / topScore, 8);
+        total += Math.pow(c.score / topScore, 4);
     });
 
     let roll = Math.random() * total;
     let runningTotal = 0;
     for (let can of candidates) {
-        runningTotal += Math.pow(can.score / topScore, 8);
+        runningTotal += Math.pow(can.score / topScore, 4);
         if (runningTotal >= roll)
             return can;
     }

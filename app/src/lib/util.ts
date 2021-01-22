@@ -248,3 +248,15 @@ export function initializeSessionGlobals() {
     Globals.selectedSectionIds = new Map<number, boolean>();
     Globals.selectedSectionCandidateKeys = new Map<number, string>();
 }
+
+export function letterMatrixToLetterList(matrix: boolean[]): string[] {
+    return matrix.map((x, i) => x ? String.fromCharCode(i + 65) : "").filter(x => x);
+}
+
+export function letterListToLetterMatrix(list: string[]): boolean[] {
+    let matrix = Array<boolean>(26).fill(false);
+    list.forEach(ltr => {
+        matrix[ltr.charCodeAt(0)] = true;
+    });
+    return matrix;
+}

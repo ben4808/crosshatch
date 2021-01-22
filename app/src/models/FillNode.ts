@@ -14,6 +14,7 @@ export interface FillNode {
     backtracks: number;
     iffyWordKey?: string;
     needsNewPriority: boolean;
+    constraintMode: string;
     
     anchorSquareKeys: string[];
     anchorCombosLeft: [string, string][];
