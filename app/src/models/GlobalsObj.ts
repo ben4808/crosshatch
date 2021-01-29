@@ -19,6 +19,7 @@ export interface GlobalsObj {
     isFillComplete: boolean;
     fillStatus?: FillStatus;
     selectedWordNode?: FillNode;
+    curChainId?: number;
 
     sections?: Map<number, Section>;
     activeSectionId?: number;

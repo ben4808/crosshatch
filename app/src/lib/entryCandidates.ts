@@ -59,7 +59,7 @@ function populateFillWordAnchors(node?: FillNode, squares?: GridSquare[], calcul
     if (node) {
         node.anchorSquareKeys = anchorSquareKeys;
         node.anchorCombosLeft = combos;
-        node.constraintMode = combos.length <= 20 ? "Three" : combos.length <= 20 ? "Two" : "One";
+        node.constraintMode = combos.length <= 200 ? "Three" : combos.length <= 200 ? "Two" : "One";
     }
 
     return {
@@ -206,12 +206,17 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
         });
         if (!isViable) return;
 
-        if (mode !== "One") {
+        if (false && mode !== "One") {
             // check that crosscrosses have something workable
             //let isAlreadyIffy = !!iffyEntry;
 
-            for (let distillIndex = 1; distillIndex <= 3; distillIndex++) {
-                let wordKeys = distillIndex === 2 ? crossKeys : crossCrossKeys;
+            // if (entry === "BURNETT") {
+            //     let breakp = "hi";
+            // }
+
+            let iterations = grid.usedWords.size > 1 ? 25 : 3;
+            for (let distillIndex = 1; distillIndex <= iterations; distillIndex++) {
+                let wordKeys = distillIndex % 2 === 0  ? crossKeys : crossCrossKeys;
                 if (mode === "Two" && distillIndex > 1) break;
                 // eslint-disable-next-line
                 wordKeys.forEach((_, wKey) => {
@@ -223,7 +228,10 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
                     let entries = [] as string[];
                     let anchorInfo = populateFillWordAnchors(undefined, squares, calculatedSquares);
                     let anchorComboCount = anchorInfo.anchorCombosLeft.length;
-                    if (anchorComboCount === 0 || anchorComboCount > 12) return;
+                    // if (anchorComboCount > 120) {
+                    //     let breakp = "hi";
+                    // }
+                    if (anchorComboCount === 0 || anchorComboCount > 120) return;
                     anchorInfo.anchorCombosLeft.forEach(combo => {
                         let newPattern = wordPattern;
                         anchorInfo.anchorSquareKeys.forEach((sqKey, i) => {
@@ -233,8 +241,7 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
                             entries = entries.concat(queryIndexedWordList(pattern));
                         })
                     });
-
-                    if (entries.length > 500) return;
+        
                     if (entries.length === 0) {
                         isViable = false;
                         return;
@@ -257,6 +264,7 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
                         
                         return true;
                     });
+                    //if (filteredEntries.length > 500) return;
                     if (filteredEntries.length === 0) {
                         isViable = false;
                         return;
@@ -272,7 +280,7 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
                         calculatedSquares.set(squareKey(sq), letters);
                     });
 
-                    if (distillIndex > 1) {
+                    if (distillIndex > iterations - 2) {
                         crossCrossTotal += filteredEntries.length;
                         calculatedEntries.set(wKey, filteredEntries);
                     }
@@ -283,7 +291,7 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
         
         node.entryCandidates.push({
             word: entry,
-            score: calculateEntryCandidateScore(entry, crossCountsTotal || crossCrossTotal, containsZeroSquare),
+            score: calculateEntryCandidateScore(entry, crossCrossTotal || crossCountsTotal, containsZeroSquare),
             isViable: isViable,
             hasBeenChained: false,
             wasChainFailure: false,

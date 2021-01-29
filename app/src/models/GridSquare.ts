@@ -1,4 +1,3 @@
-import { ConstraintInfo } from "./ConstraintInfo";
 import { ContentType } from "./ContentType";
 import { SquareType } from "./SquareType";
 
@@ -8,10 +7,9 @@ export interface GridSquare {
     number?: number;
     type: SquareType;
     isCircled: boolean;
-    //isEmptyForManualFill: boolean;
 
     content?: string;
     contentType: ContentType;
 
-    constraintInfo?: ConstraintInfo;
+    viableLetters?: string[];
 }

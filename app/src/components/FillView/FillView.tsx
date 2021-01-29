@@ -225,7 +225,7 @@ function FillView(props: any) {
     } as React.CSSProperties;
 
     let sectionsStyle = {
-        gridTemplateColumns: `1fr 2fr 1fr`
+        gridTemplateColumns: `1fr 2fr 1fr 1fr 1fr`
     } as React.CSSProperties;
 
     let completedOptionsStyle = {
@@ -293,6 +293,8 @@ function FillView(props: any) {
                         <div className="fill-list-header">Active</div>
                         <div className="fill-list-header">ID</div>
                         <div className="fill-list-header">Size</div>
+                        <div className="fill-list-header">Conn</div>
+                        <div className="fill-list-header">Can</div>
                         { sections.map(sec => (
                             <div className="fill-list-row-wrapper" key={sec.id} data-id={sec.id} 
                                 onClick={handleSectionClick} onMouseOver={handleSectionHover}>
@@ -300,6 +302,8 @@ function FillView(props: any) {
                                     checked={Globals.selectedSectionIds!.has(sec.id)} onChange={doNothing} /></div>
                                 <div>{getPhoneticName(sec.id)}</div>
                                 <div>{sec.squares.size}</div>
+                                <div>{sec.connections.size}</div>
+                                <div>{sec.candidates.size}</div>
                             </div>
                         ))}
                     </div>

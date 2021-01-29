@@ -8,6 +8,4 @@ export interface EntryCandidate {
     iffyWordKey?: string;
     // <squareKey, letters>
     calculatedSquares: Map<string, string[]>;
-    // <wordKey, entries>
-    calculatedEntries: Map<string, string[]>;
 }

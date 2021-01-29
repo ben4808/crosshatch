@@ -1,5 +1,4 @@
 import { ContentType } from "../models/ContentType";
-import { EntryCandidate } from "../models/EntryCandidate";
 import { FillNode } from "../models/FillNode";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
@@ -8,8 +7,7 @@ import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
 import { WordDirection } from "../models/WordDirection";
 import { getUnfilledCrosses, getWordScore } from "./fill";
-import { generateConstraintInfoForSquares, getLettersFromSquares, setLettersArrayVal } from "./grid";
-import { PriorityQueue } from "./priorityQueue";
+import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
 import { forAllGridSquares, getEntryAtWordKey, getGrid, getSquaresForWord, getWordAtSquare, getSquareAtKey, isAcross, 
     isBlackSquare, mapKeys, squareKey, wordKey, wordLength, mapValues, isUserOrWordFilled } from "./util";
 import Globals from './windowService';
@@ -47,13 +45,7 @@ export function insertSectionCandidateIntoGrid(grid: GridState, candidate: Secti
         let sq = getSquareAtKey(grid, sqKey);
         let candidateSq = getSquareAtKey(candidate.grid, sqKey);
         sq.content = candidateSq.content;
-        let newLettersArr = Array<boolean>(26).fill(false);
-        setLettersArrayVal(newLettersArr, sq.content!, true);
-        sq.constraintInfo = {
-            isCalculated: true,
-            letterFillCount: 1,
-            viableLetters: newLettersArr,
-        };
+        sq.viableLetters = [sq.content!];
         if (!isUserOrWordFilled(sq)) {
             sq.contentType = contentType === ContentType.HoverChosenSection ? ContentType.Autofill : ContentType.ChosenSection;
         }
@@ -65,7 +57,7 @@ export function insertSectionCandidateIntoGrid(grid: GridState, candidate: Secti
         grid.usedWords.set(getLettersFromSquares(squares), true);
     });
 
-    section.unfilledCrosses.forEach((_, key) => {
+    section.neighboringCrosses.forEach((_, key) => {
         let word = grid.words.get(key)!;
         let squares = getSquaresForWord(grid, word);
         generateConstraintInfoForSquares(squares);
@@ -123,6 +115,8 @@ export function generateGridSections(grid: GridState): Map<number, Section> {
 
     // populate stackWords
     sections.forEach(section => {
+        section.stackWords = new Map<string, boolean>();
+
         section.words.forEach((_, key) => {
             if (section.stackWords.has(key)) return;
 
@@ -151,7 +145,7 @@ export function generateGridSections(grid: GridState): Map<number, Section> {
         });
     });
 
-    // populate unfilledCrosses
+    // populate neighboringCrosses
     sections.forEach(section => {
         section.words.forEach((_, key) => {
             let word = grid.words.get(key)!;
@@ -159,12 +153,114 @@ export function generateGridSections(grid: GridState): Map<number, Section> {
             crosses.forEach(cross => {
                 let crossKey = wordKey(cross);
                 if (!section.words.has(crossKey))
-                    section.unfilledCrosses.set(crossKey, true);
+                    section.neighboringCrosses.set(crossKey, true);
             });
         });
     });
 
+    // calculate word order
+    sections.forEach(section => {
+        if (section.id === 0) {
+            let wordOrder = [] as string[];
+            let usedWords = new Map<string, boolean>();
+            calculateSectionOrder(mapValues(sections)).forEach(id => {
+                let secOrder = calculateWordOrder(grid, sections.get(id)!);
+                wordOrder = wordOrder.concat(secOrder.filter(wk => !usedWords.has(wk)));
+                secOrder.forEach(wk => {usedWords.set(wk, true);});
+            });
+            section.wordOrder = wordOrder;
+            return;
+        }
+
+        section.wordOrder = calculateWordOrder(grid, section);
+    });
+
+    // calculate connections
+    sections.forEach(section => {
+        sections.forEach((sec, id) => {
+            if (id === section.id) return;
+            if (mapKeys(sec.words).find(wk => section.words.has(wk)))
+                section.connections.set(id, true);
+        });
+    });
+
     return sections;
+}
+
+export function calculateSectionOrder(sections: Section[]): number[] {
+    return sections.sort((a, b) => {
+        if (a.connections.size !== b.connections.size) return b.connections.size - a.connections.size;
+        return b.openSquareCount - a.openSquareCount;
+    }).map(sec => sec.id);
+}
+
+function calculateWordOrder(grid: GridState, section: Section): string[] {
+    function wordsSort(a: GridWord, b: GridWord): number {
+        if (wordLength(a) !== wordLength(b)) return wordLength(b) - wordLength(a);
+        return a.direction === WordDirection.Across ? a.start[0] - b.start[0] : a.start[1] - b.start[1];
+    }
+
+    function iterateWordGroup(group: GridWord[]) {
+        if (group.length === 0) return;
+        if (group.length === 1) {
+            wordOrder.push(wordKey(group[0]));
+            usedWords.set(wordKey(group[0]), true);
+            return;
+        }
+
+        let centerIndex = Math.floor((rowOrCol(group[group.length-1]) - rowOrCol(group[0])) / 2);
+        wordOrder.push(wordKey(group[centerIndex]));
+        usedWords.set(wordKey(group[centerIndex]), true);
+        iterateWordGroup(group.slice(0, centerIndex));
+        iterateWordGroup(group.slice(centerIndex + 1));
+    }
+
+    let wordOrder = [] as string[];
+    let usedWords = new Map<string, boolean>();
+
+    // stack words
+    if (section.stackWords.size > 0) {
+        let acrossSortedStackWords = mapKeys(section.stackWords).map(wKey => grid.words.get(wKey)!)
+            .filter(word => word.direction === WordDirection.Across).sort(wordsSort);
+        let downSortedStackWords = mapKeys(section.stackWords).map(wKey => grid.words.get(wKey)!)
+            .filter(word => word.direction === WordDirection.Down).sort(wordsSort);
+        let longestStack = downSortedStackWords.length === 0 ? acrossSortedStackWords :
+            acrossSortedStackWords.length === 0 ? downSortedStackWords :
+            wordLength(acrossSortedStackWords[0]) >= wordLength(downSortedStackWords[0]) ? acrossSortedStackWords :
+            downSortedStackWords;
+        let otherStack = longestStack === acrossSortedStackWords ? downSortedStackWords : acrossSortedStackWords;
+        [longestStack, otherStack].forEach(stack => {
+            for (let i = 0; i < stack.length; i++) {
+                let word = stack[i];
+                let curGroup = [word];
+                let prevRowOrCol = rowOrCol(word);
+                for (let j = i; wordLength(stack[j]) === length; j++) {
+                    let newWord = stack[j];
+                    let newRowOrCol = rowOrCol(newWord);
+                    if (newRowOrCol - prevRowOrCol === 1) {
+                        curGroup.push(newWord);
+                        i++;
+                    }
+                    else break;
+                }
+    
+                iterateWordGroup(curGroup);
+            }
+        });
+    }
+
+    // restOfWords
+    let remainingWords = mapKeys(section.words).filter(wKey => !usedWords.has(wKey))
+        .map(wKey => grid.words.get(wKey)!).sort(wordsSort);
+    remainingWords.forEach(word => {
+        wordOrder.push(wordKey(word));
+    });
+
+    return wordOrder;
+}
+
+function rowOrCol(word: GridWord): number {
+    return word.direction === WordDirection.Across ? word.start[0] : word.start[1];
 }
 
 function isOpenSquare(grid: GridState, sq: GridSquare): boolean {
@@ -247,11 +343,11 @@ export function makeNewSection(id: number): Section {
         squares: new Map<string, boolean>(),
         words: new Map<string, boolean>(),
         stackWords: new Map<string, boolean>(),
-        unfilledCrosses: new Map<string, boolean>(),
-        triedComboPerms: new Map<string, Map<string, boolean>>(),
-        triedComboSquares: new Map<string, boolean>(),
+        wordOrder: [],
+        neighboringCrosses: new Map<string, boolean>(),
         candidates: new Map<string, SectionCandidate>(),
-        fillQueues: new Map<string, PriorityQueue<FillNode>>(),
+        connections: new Map<number, boolean>(),
+        comboPermsQueue: [],
     } as Section;
 }
 
@@ -270,11 +366,6 @@ export function getLongestStackWord(section: Section): GridWord {
 export function getSelectedSections(): Section[] {
     if (Globals.selectedSectionIds!.size === 0) return [Globals.sections!.get(0)!];
     return mapKeys(Globals.selectedSectionIds!).sort().map(id => Globals.sections!.get(id)!);
-}
-
-export function getSelectedSectionsKey(): string {
-    if (Globals.selectedSectionIds!.size === 0) return "0";
-    return mapKeys(Globals.selectedSectionIds!).sort().map(i => i.toString()).join(",");
 }
 
 export function getSelectedSectionCandidates(): SectionCandidate[] {
@@ -318,33 +409,4 @@ export function getSectionWithCandidate(sc: SectionCandidate): Section {
 
 export function getUnfilteredSectionCandidates(section: Section): SectionCandidate[] {
     return mapValues(section.candidates).filter(sc => !sc.isFilteredOut);
-}
-
-export function populateSectionManualEntryCandidates(node: FillNode) {
-    let wKey = wordKey(node.fillWord!);
-    let usedWords = new Map<string, boolean>();
-
-    getSelectedSections().forEach((_, sid) => {
-        let section = Globals.sections!.get(sid)!;
-        if (section.words.get(wKey)) {
-            getUnfilteredSectionCandidates(section).forEach(sc => {
-                let squares = getSquaresForWord(sc.grid, node.fillWord!);
-                let letters = getLettersFromSquares(squares);
-                if (usedWords.has(letters)) return;
-
-                usedWords.set(letters, true);
-                node.entryCandidates.push({
-                    word: letters,
-                    score: getWordScore(letters),
-                    isViable: true,
-                    hasBeenChained: false,
-                    wasChainFailure: false,
-                } as EntryCandidate);
-            });
-        }
-    });
-
-    node.entryCandidates = node.entryCandidates.sort((a, b) => a.score === b.score ? 
-        (a.word < b.word ? -1 : 1) : 
-        b.score - a.score);
 }

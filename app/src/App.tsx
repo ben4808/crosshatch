@@ -108,6 +108,7 @@ function App(props: AppProps) {
     Globals.isFillComplete = false;
     Globals.fillStatus = FillStatus.Ready;
     Globals.selectedWordNode = undefined;
+    Globals.curChainId = 1;
 
     initializeSessionGlobals();
     clearFill(Globals.activeGrid!);

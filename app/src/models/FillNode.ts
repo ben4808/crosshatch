@@ -12,9 +12,12 @@ export interface FillNode {
     depth: number;
     isChainNode: boolean;
     backtracks: number;
+    chainGoodCandidates: number;
+    chainIffyCandidates: number;
     iffyWordKey?: string;
     needsNewPriority: boolean;
     constraintMode: string;
+    chainId?: number;
     
     anchorSquareKeys: string[];
     anchorCombosLeft: [string, string][];
