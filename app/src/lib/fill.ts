@@ -7,11 +7,10 @@ import { QualityClass } from '../models/QualityClass';
 import { Section } from '../models/Section';
 import { WordDirection } from '../models/WordDirection';
 import { populateAndScoreEntryCandidates } from './entryCandidates';
-import { getLettersFromSquares } from './grid';
 import { processAndInsertChosenEntry } from './insertEntry';
 import { PriorityQueue, priorityQueue } from './priorityQueue';
 import { getSectionString, insertSectionCandidateIntoGrid, newSectionCandidate } from './section';
-import { deepClone, getSquaresForWord, wordLength, mapKeys, isWordFull, 
+import { deepClone, getSquaresForWord, mapKeys, isWordFull, 
     getWordAtSquare, otherDir, mapValues, getSection, getGrid, wordKey } from './util';
 import Globals from './windowService';
 
@@ -26,7 +25,11 @@ export function fillSectionWord(): boolean {
     }
 
     let node = fillQueue.peek()!;
-    if (!node) return false;
+    if (!node) {
+        populateSeedNodes(fillQueue);
+        node = fillQueue.peek()!;
+        if (!node) return false;
+    }
     while (node.needsNewPriority) {
         node.needsNewPriority = false;
         fillQueue.pop();
@@ -153,47 +156,56 @@ function populateSeedNodes(fillQueue: PriorityQueue<FillNode>) {
         .filter(id => selectedSectionIds.includes(id) && Globals.sections!.get(id)!.candidates.size > 0)
         .sort();
     let candidateCounts = connectionIds.map(i => Globals.sections!.get(i)!.candidates.size);
-    let newPermutations = getNewPermutations(candidateCounts, comboKey, activeSection);
-    newPermutations.forEach(perm => {
+    getNewPermutations(candidateCounts, activeSection);
+    activeSection.comboPermsQueue.forEach(perm => {
         let node = makeNewNode(grid, 0, false, undefined);
+        let wasSuccess = true;
         for (let i = 0; i < perm.length; i++) {
             let candidate = mapValues(Globals.sections!.get(connectionIds[i])!.candidates)[perm[i]];
-            insertSectionCandidateIntoGrid(node.startGrid, candidate, activeSection);
+            if (!insertSectionCandidateIntoGrid(node.startGrid, candidate, activeSection))
+                wasSuccess = false;
         }
-        fillQueue.insert(node, calculateNodePriority(node));
+        if (wasSuccess)
+            fillQueue.insert(node, calculateNodePriority(node));
     });
 }
 
-function getNewPermutations(candidateCounts: number[], comboKey: string, section: Section): number[][] {
-    function processPerm() {
-        let perm = permsQueue.shift();
-        if (!perm || newPerms.length >= 50) return;
+function getNewPermutations(candidateCounts: number[], section: Section) {
+    function comboKey(perm: number[]): string {
+        return "[" + perm.map(n => n.toString()).join(",") + "]";
+    }
 
+    if (section.comboPermsUsed.size > 0 && section.comboPermsQueue.length === 0) return;
+
+    if (section.comboPermsUsed.size === 0) {
+        let allOnes = [] as number[];
+        for(let i = 0; i < candidateCounts.length; i++) allOnes.push(1);
+        section.comboPermsQueue = [allOnes];
+        section.comboPermsUsed.set(comboKey(allOnes), true);
+        return;
+    }
+
+    while(true) {
+        let perm = section.comboPermsQueue.pop()!;
+        if (!perm) break;
         let permKey = perm.map(i => i.toString()).join(",");
-        if (triedPerms.has(permKey)) return;
-
-        triedPerms.set(permKey, true);
-        newPerms.push(perm);
+        let foundNew = false;
 
         for(let i = 0; i < perm.length; i++) {
             if (perm[i] === candidateCounts[i] - 1) continue;
-
+    
             let newPerm = deepClone(perm);
             newPerm[i]++;
-            permsQueue.push(newPerm);
+            let newPermKey = comboKey(newPerm);
+            if (section.comboPermsUsed.has(permKey)) continue;
+
+            section.comboPermsUsed.set(newPermKey, true);
+            foundNew = true;
+            section.comboPermsQueue.push(newPerm);
         }
 
-        processPerm();
+        if (foundNew) break;
     }
-
-    let curIs = [] as number[];
-    let newPerms = [] as number[][];
-    for(let i = 0; i < candidateCounts.length; i++) curIs.push(1);
-    let triedPerms = section.triedComboPerms.get(comboKey)!;
-    let permsQueue = [curIs];
-
-    processPerm();
-    return newPerms;
 }
 
 export function processSectionNode(node: FillNode, section: Section): boolean {
@@ -238,39 +250,9 @@ export function makeNewNode(grid: GridState, depth: number, isChainNode: boolean
 }
 
 function selectWordToFill(node: FillNode, section: Section): GridWord | undefined {
-    function priorityScore(wordKey: string): number {
-        let word = grid.words.get(wordKey)!;
-        let squares = getSquaresForWord(grid, word);
-        let pattern = getLettersFromSquares(squares);
-        let openLetters = pattern.length - pattern.replaceAll("-", "").length;
-        let constraintScore = getWordConstraintScore(squares);
-        if (section.stackWords.has(wordKey)) {
-            return 1000 * wordLength(word) + 10*openLetters - constraintScore;
-        }
-        else {
-            return 100 * wordLength(word) + 10*openLetters - constraintScore;
-        }
-    }
-
     let grid = node.startGrid;
-    let wordScores = new Map<string, number>();
-    mapKeys(section.words).forEach(key => {
-        wordScores.set(key, priorityScore(key));
-    });
-    let prioritizedWordList = mapKeys(section.words).sort((a, b) => wordScores.get(b)! - wordScores.get(a)!);
 
-    let crossesList = [] as string[];
-    if (section.id === 0 && Globals.sections!.size > 10 && node.parent) {
-        let crossKeys = new Map<string, boolean>();
-        getUnfilledCrosses(grid, node.parent!.fillWord!).map(w => wordKey(w)).forEach(k => {
-            crossKeys.set(k, true);
-        });
-        prioritizedWordList.forEach(pk => {
-            if (crossKeys.has(pk)) crossesList.push(pk);
-        });
-    }
-
-    for (let key of crossesList.length > 0 ? crossesList : prioritizedWordList) {
+    for (let key of section.wordOrder) {
         let word = grid.words.get(key)!;
         let squares = getSquaresForWord(grid, word);
         if (wordKey(word) !== node.iffyWordKey && !isWordFull(squares))

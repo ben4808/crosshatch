@@ -9,7 +9,7 @@ import { WordDirection } from "../models/WordDirection";
 import { getUnfilledCrosses, getWordScore } from "./fill";
 import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
 import { forAllGridSquares, getEntryAtWordKey, getGrid, getSquaresForWord, getWordAtSquare, getSquareAtKey, isAcross, 
-    isBlackSquare, mapKeys, squareKey, wordKey, wordLength, mapValues, isUserOrWordFilled } from "./util";
+    isBlackSquare, mapKeys, squareKey, wordKey, wordLength, mapValues, isUserOrWordFilled, deepClone } from "./util";
 import Globals from './windowService';
 
 export function updateSectionFilters() {
@@ -39,17 +39,24 @@ export function getSectionString(grid: GridState, section: Section): string {
     return ret.join("");
 }
 
+// returns whether it was a success
 export function insertSectionCandidateIntoGrid(grid: GridState, candidate: SectionCandidate, 
-    section: Section, contentType?: ContentType) {
+    section: Section, contentType?: ContentType): boolean {
+    let newGrid = deepClone(grid) as GridState;
+    let foundDiscrepancy = false;
     section.squares.forEach((_, sqKey) => {
-        let sq = getSquareAtKey(grid, sqKey);
+        let sq = getSquareAtKey(newGrid, sqKey);
         let candidateSq = getSquareAtKey(candidate.grid, sqKey);
+        if (isUserOrWordFilled(sq) && sq.content! !== candidateSq.content!)
+            foundDiscrepancy = true;
         sq.content = candidateSq.content;
         sq.viableLetters = [sq.content!];
         if (!isUserOrWordFilled(sq)) {
             sq.contentType = contentType === ContentType.HoverChosenSection ? ContentType.Autofill : ContentType.ChosenSection;
         }
     });
+    if (foundDiscrepancy) return false;
+    else grid = newGrid;
 
     section.words.forEach((_, key) => {
         let word = grid.words.get(key)!;
@@ -62,6 +69,9 @@ export function insertSectionCandidateIntoGrid(grid: GridState, candidate: Secti
         let squares = getSquaresForWord(grid, word);
         generateConstraintInfoForSquares(squares);
     });
+
+    grid.userFilledSectionCandidates.set(sectionCandidateKey(section, grid), true);
+    return true;
 }
 
 export function generateGridSections(grid: GridState): Map<number, Section> {
@@ -348,6 +358,7 @@ export function makeNewSection(id: number): Section {
         candidates: new Map<string, SectionCandidate>(),
         connections: new Map<number, boolean>(),
         comboPermsQueue: [],
+        comboPermsUsed: new Map<string, boolean>(),
     } as Section;
 }
 

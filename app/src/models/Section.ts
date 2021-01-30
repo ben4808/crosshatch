@@ -11,7 +11,9 @@ export interface Section {
     wordOrder: string[];
     neighboringCrosses: Map<string, boolean>;
     candidates: Map<string, SectionCandidate>;
+    selectedCandidate?: string;
     connections: Map<number, boolean>;
     fillQueue?: PriorityQueue<FillNode>;
     comboPermsQueue: number[][];
+    comboPermsUsed: Map<string, boolean>;
 }

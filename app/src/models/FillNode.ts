@@ -16,7 +16,7 @@ export interface FillNode {
     chainIffyCandidates: number;
     iffyWordKey?: string;
     needsNewPriority: boolean;
-    constraintMode: string;
+    //constraintMode: string;
     chainId?: number;
     
     anchorSquareKeys: string[];

@@ -1,4 +1,3 @@
-import { FillStatus } from "./FillStatus";
 import { GridSquare } from "./GridSquare";
 import { GridWord } from "./GridWord";
 
