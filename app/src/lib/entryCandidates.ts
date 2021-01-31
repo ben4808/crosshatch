@@ -1,10 +1,13 @@
+import { ContentType } from "../models/ContentType";
 import { EntryCandidate } from "../models/EntryCandidate";
 import { FillNode } from "../models/FillNode";
 import { GridSquare } from "../models/GridSquare";
+import { GridWord } from "../models/GridWord";
 import { getAllCrosses, getEligibleCandidates, getWordScore } from "./fill";
 import { getLettersFromSquares } from "./grid";
-import { constraintLetterCount, fullAlphabet, getSquaresForWord, 
-    isWordFull, letterMatrixToLetterList, mapValues, squareKey, sum, wordKey } from "./util";
+import { constraintLetterCount, deepClone, fullAlphabet, getSquaresForWord, 
+    getWordAtSquare, 
+    isWordFull, letterMatrixToLetterList, mapValues, maxIffyLength, otherDir, squareKey, sum, wordKey } from "./util";
 import { queryIndexedWordList } from "./wordList";
 
 // returns false if no viable candidates were found or iffy was set
@@ -25,23 +28,17 @@ export function populateAndScoreEntryCandidates(node: FillNode, isForManualFill:
         if (eligibleCandidates.length > (isForManualFill ? 100 : 0)) break;
     }
 
-    // if (eligibleCandidates.length === 0) {
-    //     if (node.iffyWordKey || wordLength(node.fillWord!) > maxIffyLength) return false;
-    
-    //     node.iffyWordKey = wordKey(node.fillWord!);
-    //     return true;
-    // }
-
     node.entryCandidates.sort((a, b) => b.score! - a.score!);
     return true;
 }
 
-function populateFillWordAnchors(squares: GridSquare[], calculatedSquares?: Map<string, string[]>):
+function populateFillWordAnchors(squares: GridSquare[], calculatedSquares?: Map<string, string[]>, ignoredSquares?: string[]):
     { anchorSquareKeys: string[], anchorCombosLeft: [string, string][] } {
     let anchorKeyCounts = [] as [string, number][];
 
     squares.forEach(sq => {
-        let count = (calculatedSquares && calculatedSquares.has(squareKey(sq))) ? 
+        let count = (ignoredSquares && ignoredSquares.includes(squareKey(sq))) ? 26 :
+            (calculatedSquares && calculatedSquares.has(squareKey(sq))) ? 
             calculatedSquares!.get(squareKey(sq))!.length : constraintLetterCount(sq);
         if (count === 0) return; // don't anchor iffy
 
@@ -100,10 +97,8 @@ function generateAnchorCombos(squares: GridSquare[], anchorSquareKeys: string[],
 
 function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
     let grid = node.startGrid;
-    //let mode = node.constraintMode;
     let combo = node.anchorCombosLeft.pop()!;
 
-    let wKey = wordKey(node.fillWord!);
     let wordSquares = getSquaresForWord(grid, node.fillWord!);
     let patternWithAnchor = getLettersFromSquares(wordSquares);
     node.anchorSquareKeys.forEach((sqKey, i) => {
@@ -125,34 +120,33 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
     entries.forEach(entry => {
         let isViable = true;
         let distillIndex = 1;
-        let startKeyMap = new Map<string, boolean>([[entry, true]]);
         let crossKeys = new Map<string, boolean>();
         let crossCrossKeys = new Map<string, boolean>();
         let calculatedSquares = new Map<string, string[]>();
         let usedWords = new Map<string, boolean>();
         let unfilledTotal = 0;
         let unfilledCount = 0;
-        let containsZeroSquare = false;
-        let iffyEntry;
-        let iffyWordKey;
+        let iffyEntries = [] as string[];
+        let iffyWordKeys = [] as string[];
+
+        wordSquares.forEach((sq, i) => {
+            calculatedSquares.set(squareKey(sq), [entry[i]]);
+        });
+
+        getAllCrosses(grid, node.fillWord!).forEach(cross => {
+            crossKeys.set(wordKey(cross), true);
+            getAllCrosses(grid, cross).forEach(crossCross => {
+                crossCrossKeys.set(wordKey(crossCross), true);
+            });
+        });
 
         while(true) {
-            if (distillIndex === 1) {
-                getAllCrosses(grid, node.fillWord!).forEach(cross => {
-                    crossKeys.set(wordKey(cross), true);
-                    getAllCrosses(grid, cross).forEach(crossCross => {
-                        crossCrossKeys.set(wordKey(crossCross), true);
-                    });
-                });
-            }
-
-            let wordKeys = distillIndex === 1 ? startKeyMap : distillIndex % 2 === 0  ? crossKeys : crossCrossKeys;
+            let wordKeys = distillIndex % 2 === 1  ? crossKeys : crossCrossKeys;
             let foundCountReduction = false;
             let shortCircuited = false;
     
             // eslint-disable-next-line
             wordKeys.forEach((_, wKey) => {
-                if (!isViable) return;
                 let word = grid.words.get(wKey)!;
                 let squares = getSquaresForWord(grid, word);
                 if (isWordFull(squares)) return;
@@ -160,7 +154,8 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
                 let filteredEntries = [] as string[];
                 let anchorInfo = populateFillWordAnchors(squares, calculatedSquares);
                 let anchorComboCount = anchorInfo.anchorCombosLeft.length;
-                if (anchorComboCount > 120) shortCircuited = true;
+                if (distillIndex === 1 && anchorComboCount > 120) shortCircuited = true;
+                if (distillIndex > 1 && anchorComboCount > 120) return;
 
                 anchorInfo.anchorCombosLeft.forEach(combo => {
                     let newPattern = wordPattern;
@@ -172,7 +167,9 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
     
                 //if (filteredEntries.length > 500) shortCircuited = true;
                 if (filteredEntries.length === 0) {
-                    isViable = false;
+                    if (maxIffyLength < 2 || node.iffyWordKey || iffyWordKeys.length > 0 ||
+                        !populateIffies(node, entry, iffyEntries, iffyWordKeys, word, squares, calculatedSquares, usedWords)) 
+                        isViable = false;
                     return;
                 }
     
@@ -197,28 +194,85 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
 
             if (!foundCountReduction || shortCircuited) break;
             if (distillIndex === 1 && unfilledTotal/unfilledCount >= 18) break;
+            if (iffyEntries.length > 0) break;
+            if (!isViable) break;
 
             distillIndex++;
         }
 
         if (!isViable) return;
+
+        if (iffyEntries.length > 0) {
+            iffyEntries.forEach((iffyEntry, i) => {
+                node.entryCandidates.push({
+                    word: entry,
+                    score: calculateEntryCandidateScore(entry, calculatedSquares, true),
+                    isViable: isViable,
+                    hasBeenChained: false,
+                    wasChainFailure: false,
+                    iffyEntry: iffyEntry,
+                    iffyWordKey: iffyWordKeys[i],
+                    calculatedSquares: calculatedSquares,
+                } as EntryCandidate);
+            });
+            return;
+        }
+
         node.entryCandidates.push({
             word: entry,
-            score: calculateEntryCandidateScore(entry, calculatedSquares, containsZeroSquare),
+            score: calculateEntryCandidateScore(entry, calculatedSquares, false),
             isViable: isViable,
             hasBeenChained: false,
             wasChainFailure: false,
-            iffyEntry: iffyEntry,
-            iffyWordKey: iffyWordKey,
             calculatedSquares: calculatedSquares,
         } as EntryCandidate);
     });
 }
 
+function populateIffies(node: FillNode, entry: string, iffyEntries: string[], iffyWordKeys: string[], word: GridWord, squares: GridSquare[], 
+    calculatedSquares: Map<string, string[]>, usedWords: Map<string, boolean>): boolean {
+    let grid = node.startGrid;
+    let unviableCrosses = [] as string[];
+    let wordPattern = getLettersFromSquares(squares);
+    squares.forEach((sq, i) => {
+        if (sq.contentType !== ContentType.Autofill) return;
+
+        let sqKey = squareKey(sq);
+        let ignoredSquares = [sqKey];
+        let anchorInfo = populateFillWordAnchors(squares, calculatedSquares, ignoredSquares);
+        let filteredEntries = [] as string[];
+        anchorInfo.anchorCombosLeft.forEach(combo => {
+            let newPattern = wordPattern;
+            anchorInfo.anchorSquareKeys.forEach((sqKey, i) => {
+                newPattern = insertLetterIntoPattern(newPattern, combo[i], squares, sqKey);
+            });
+            let newEntries = getFilteredEntries(squares, newPattern, calculatedSquares, usedWords, ignoredSquares);
+            filteredEntries = filteredEntries.concat(newEntries);
+        });
+
+        if (filteredEntries.length > 0) {
+            let cross = getWordAtSquare(grid, sq.row, sq.col, otherDir(word.direction))!;
+            let crossSquares = deepClone(getSquaresForWord(grid, cross)) as GridSquare[];
+            let crossPattern = getLettersFromSquares(crossSquares);
+            insertLetterIntoPattern(crossPattern, entry[i], crossSquares, sqKey);
+            iffyEntries.push(crossPattern);
+            iffyWordKeys.push(wordKey(cross));
+        }
+        else unviableCrosses.push(sqKey);
+    });
+
+    if (unviableCrosses.length === 0) {
+        iffyEntries.push(wordPattern);
+        iffyWordKeys.push(wordKey(word));
+    }
+
+    return iffyWordKeys.length > 0;
+}
+
 function getFilteredEntries(squares: GridSquare[], anchorPattern: string, calculatedSquares?: Map<string, string[]>,
-    usedWords?: Map<string, boolean>): string[] {
+    usedWords?: Map<string, boolean>, ignoredSquares?: string[]): string[] {
     let entries = [] as string[];
-    broadenAnchorPatterns(squares, anchorPattern).forEach(pattern => {
+    broadenAnchorPatterns(squares, anchorPattern, calculatedSquares, ignoredSquares).forEach(pattern => {
         entries = entries.concat(queryIndexedWordList(pattern));
     });
 
@@ -228,6 +282,7 @@ function getFilteredEntries(squares: GridSquare[], anchorPattern: string, calcul
         for (let i = 0; i < squares.length; i++) {
             let sq = squares[i];
             let sqKey = squareKey(sq);
+            if (ignoredSquares && ignoredSquares.includes(sqKey)) return true;
             
             if (calculatedSquares) {
                 if (calculatedSquares.has(sqKey) && !calculatedSquares.get(sqKey)!.includes(entry[i])) {
@@ -246,8 +301,10 @@ function getFilteredEntries(squares: GridSquare[], anchorPattern: string, calcul
     return filteredEntries;
 }
 
-function broadenAnchorPatterns(squares: GridSquare[], anchorPattern: string, calculatedSquares?: Map<string, string[]>): string[] {
+function broadenAnchorPatterns(squares: GridSquare[], anchorPattern: string, 
+    calculatedSquares?: Map<string, string[]>, ignoredSquares?: string[]): string[] {
     let constraintCounts = squares.map((sq, i) => {
+        if (ignoredSquares && ignoredSquares.includes(squareKey(sq))) return [i, fullAlphabet] as [number, string[]];
         if (anchorPattern[i] !== "-") return [i, [anchorPattern[i]]] as [number, string[]];
         if (calculatedSquares && calculatedSquares.has(squareKey(sq))) {
             return [i, calculatedSquares.get(squareKey(sq))!] as [number, string[]];

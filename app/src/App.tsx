@@ -18,8 +18,8 @@ import { WordDirection } from './models/WordDirection';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
-  const [gridWidth, setGridWidth] = useState(7);
-  const [gridHeight, setGridHeight] = useState(7);
+  const [gridWidth, setGridWidth] = useState(15);
+  const [gridHeight, setGridHeight] = useState(4);
   const [updateSemaphore, setUpdateSemaphore] = useState(0);
   // eslint-disable-next-line
   const [ignored, forceUpdate] = useReducer(x => x + 1, 0);

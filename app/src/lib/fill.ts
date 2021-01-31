@@ -146,7 +146,7 @@ function populateSeedNodes(fillQueue: PriorityQueue<FillNode>) {
     let selectedSectionIds = Globals.selectedSectionIds!.size > 0 ? mapKeys(Globals.selectedSectionIds!) : [0];
     let activeSection = getSection();
 
-    if (activeSection.connections.size === 0) {
+    if (activeSection.candidates.size === 0) {
         let newNode = makeNewNode(grid, 0, false, undefined);
         fillQueue.insert(newNode, calculateNodePriority(newNode));
         return;

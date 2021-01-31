@@ -4,13 +4,14 @@ import "./FillView.scss";
 import Globals from '../../lib/windowService';
 import { FillStatus } from '../../models/FillStatus';
 import { getEntryAtWordKey, getGrid, getSection, getSquaresForWord, mapValues } from '../../lib/util';
-import { getLongestStackWord, getPhoneticName, insertSectionCandidateIntoGrid, 
+import { calculateSectionOrder, getLongestStackWord, getPhoneticName, insertSectionCandidateIntoGrid, 
     makeNewSection, sectionCandidateKey, updateSectionFilters } from '../../lib/section';
 import { getLettersFromSquares, insertEntryIntoGrid, updateManualEntryCandidates } from '../../lib/grid';
 import { fillSectionWord, makeNewNode } from '../../lib/fill';
 import { FillNode } from '../../models/FillNode';
 import { AppContext } from '../../AppContext';
 import { ContentType } from '../../models/ContentType';
+import { Section } from '../../models/Section';
 
 function FillView(props: any) {
     const appContext = useContext(AppContext);
@@ -150,6 +151,10 @@ function FillView(props: any) {
         triggerUpdate();
     }
 
+    function handleSectionChecked(event: any) {
+        alert("checked");
+    }
+
     function handleSectionCandidateClick(event: any) {
         let target = event.target;
         while (target.classList.length < 1 || target.classList[0] !== "fill-list-row-wrapper") {
@@ -193,10 +198,6 @@ function FillView(props: any) {
         triggerUpdate();
     }
 
-    function doNothing(event: any) {
-
-    }
-
     function handleFillWordClick(event: any) {
         fillSectionWord();
         triggerUpdate();
@@ -214,7 +215,11 @@ function FillView(props: any) {
     if (!showZeroEntries)
         entryCandidates = entryCandidates.filter(ec => ec.score > 0);
     let isNoEntryCandidates = Globals.selectedWordNode && entryCandidates.length === 0;
-    let sections = Globals.sections ? mapValues(Globals.sections!).sort((a, b) => b.squares.size - a.squares.size) : [];
+    let sections = [] as Section[];
+    if (Globals.sections!) {
+        let sectionsOrder = calculateSectionOrder(mapValues(Globals.sections!));
+        sections = sectionsOrder.map(id => Globals.sections!.get(id)!);
+    }
     let activeSection = Globals.sections ? Globals.sections!.get(Globals.activeSectionId!)! : makeNewSection(-1);
     let sectionCandidates = mapValues(activeSection.candidates).sort((a, b) => b.score - a.score);
     let selectedEntry = Globals.selectedWordKey ? getEntryAtWordKey(grid, Globals.selectedWordKey!) : "";
@@ -228,7 +233,7 @@ function FillView(props: any) {
         gridTemplateColumns: `1fr 2fr 1fr 1fr 1fr`
     } as React.CSSProperties;
 
-    let completedOptionsStyle = {
+    let fillsStyle = {
         gridTemplateColumns: `4fr 1fr 2fr`
     } as React.CSSProperties;
 
@@ -299,7 +304,7 @@ function FillView(props: any) {
                             <div className="fill-list-row-wrapper" key={sec.id} data-id={sec.id} 
                                 onClick={handleSectionClick} onMouseOver={handleSectionHover}>
                                 <div><input type="checkbox" className="section-checkbox"
-                                    checked={Globals.selectedSectionIds!.has(sec.id)} onChange={doNothing} /></div>
+                                    checked={Globals.selectedSectionIds!.has(sec.id)} onChange={handleSectionChecked} /></div>
                                 <div>{getPhoneticName(sec.id)}</div>
                                 <div>{sec.squares.size}</div>
                                 <div>{sec.connections.size}</div>
@@ -309,8 +314,8 @@ function FillView(props: any) {
                     </div>
                 </div>
                 <div className="fill-list-box" onMouseOut={handleSectionCandidateBlur}>
-                    <div className="fill-list-title">Completed Options</div>
-                    <div className="fill-list" style={completedOptionsStyle}>
+                    <div className="fill-list-title">Fills</div>
+                    <div className="fill-list" style={fillsStyle}>
                         <div className="fill-list-header">Longest</div>
                         <div className="fill-list-header">Score</div>
                         <div className="fill-list-header">Iffy</div>

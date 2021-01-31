@@ -174,9 +174,13 @@ export function generateGridSections(grid: GridState): Map<number, Section> {
             let wordOrder = [] as string[];
             let usedWords = new Map<string, boolean>();
             calculateSectionOrder(mapValues(sections)).forEach(id => {
+                if (id === 0) return;
                 let secOrder = calculateWordOrder(grid, sections.get(id)!);
                 wordOrder = wordOrder.concat(secOrder.filter(wk => !usedWords.has(wk)));
                 secOrder.forEach(wk => {usedWords.set(wk, true);});
+            });
+            mapKeys(section.words).filter(wKey => !usedWords.has(wKey)).forEach(wk => {
+                wordOrder.push(wk);
             });
             section.wordOrder = wordOrder;
             return;
@@ -199,6 +203,8 @@ export function generateGridSections(grid: GridState): Map<number, Section> {
 
 export function calculateSectionOrder(sections: Section[]): number[] {
     return sections.sort((a, b) => {
+        if (a.id === 0) return -1;
+        if (b.id === 0) return 1;
         if (a.connections.size !== b.connections.size) return b.connections.size - a.connections.size;
         return b.openSquareCount - a.openSquareCount;
     }).map(sec => sec.id);
@@ -242,9 +248,10 @@ function calculateWordOrder(grid: GridState, section: Section): string[] {
         [longestStack, otherStack].forEach(stack => {
             for (let i = 0; i < stack.length; i++) {
                 let word = stack[i];
+                let length = wordLength(word);
                 let curGroup = [word];
                 let prevRowOrCol = rowOrCol(word);
-                for (let j = i; wordLength(stack[j]) === length; j++) {
+                for (let j = i+1; j < stack.length && wordLength(stack[j]) === length; j++) {
                     let newWord = stack[j];
                     let newRowOrCol = rowOrCol(newWord);
                     if (newRowOrCol - prevRowOrCol === 1) {
