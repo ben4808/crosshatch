@@ -49,6 +49,7 @@ function FillView(props: any) {
 
     function getFillStatusString(status: FillStatus): string {
         switch(status) {
+            case FillStatus.NoWordList: return "No word list loaded"
             case FillStatus.Ready: return "Ready to Fill";
             case FillStatus.Running: return "Fill Running...";
             case FillStatus.Complete: return "Fill Complete";
@@ -209,7 +210,8 @@ function FillView(props: any) {
         Object.values(SymmetryType).filter(t => isNaN(Number(t))) :
         getSymmetryTypesForRectGrids();
 
-    let fillStatus = getFillStatusString(Globals.fillStatus!);
+    let fillStatus = Globals.fillStatus!;
+    let fillStatusStr = getFillStatusString(Globals.fillStatus!);
 
     let entryCandidates = Globals.selectedWordNode ? Globals.selectedWordNode.entryCandidates : [];
     if (!showZeroEntries)
@@ -225,6 +227,10 @@ function FillView(props: any) {
     let selectedEntry = Globals.selectedWordKey ? getEntryAtWordKey(grid, Globals.selectedWordKey!) : "";
     let isFillEnabled = Globals.isFillEnabled;
 
+    let wordListsStyle = {
+        gridTemplateColumns: `4fr 1fr`
+    } as React.CSSProperties;
+
     let entryCandidatesStyle = {
         gridTemplateColumns: `4fr 1fr 2fr`
     } as React.CSSProperties;
@@ -239,13 +245,16 @@ function FillView(props: any) {
 
     return (
         <div id="FillView" className="fill-container">
+            <div className={"fill-status" +
+                (fillStatus === FillStatus.NoWordList || fillStatus === FillStatus.Failed) ? " fill-status-red" :
+                fillStatus === FillStatus.Running ? " fill-status-green" : ""}>{fillStatusStr}</div>
             <div style={{display: "none"}}>{props.updateSemaphoreProp}</div>
             <div className="custom-control custom-switch fill-switch">
                 <input type="checkbox" className="custom-control-input" id="fillSwitch" 
                     checked={isFillEnabled} onChange={handleToggleFill} />
                 <label className="custom-control-label" htmlFor="fillSwitch">Fill</label>
             </div>
-            <div className="fill-status">{fillStatus}</div>
+            
             <br />
             Grid Symmetry: <br />
             <select className="custom-select symmetry-select" defaultValue={selectedSymmetry} onChange={handleSymmetryChange}>
@@ -258,11 +267,26 @@ function FillView(props: any) {
 
             <div className="fill-lists">
                 <div className="fill-list-box">
-                    <div className="fill-list-title">Word List Updates</div>
-                    <div className="fill-list-button">Export</div>
-                    <input type="text" className="fill-add-word-box" placeholder="Add word..."></input>
-                    <div className="fill-list" style={{marginTop: "5px", height: "300px"}}>
-
+                    <div className="fill-list-title">Word Lists</div>
+                    <div className="fill-list-button">Load</div>
+                    <div className="fill-list-button">Clear</div>
+                    <div className="fill-list" style={wordListsStyle}>
+                        <div className="fill-list-header">Filename</div>
+                        <div className="fill-list-header">Count</div>
+                        { isNoEntryCandidates && (
+                            <div className="fill-list-row-wrapper">
+                                <div><i>No word lists loaded</i></div><div></div><div></div>
+                            </div>
+                        )}
+                        { entryCandidates.map(ec => (
+                            <div className={"fill-list-row-wrapper" + (selectedEntry === ec.word ? " fill-list-row-selected" : "")} 
+                                key={ec.word} data-word={ec.word}
+                                onClick={handleEntryCandidateClick} onMouseOver={handleEntryCandidateHover}>
+                                <div>{ec.word}</div>
+                                <div>{ec.score.toFixed(0)}</div>
+                                <div>{ec.iffyEntry || ""}</div>
+                            </div>
+                        ))}
                     </div>
                 </div>
                 <div className="fill-list-box" onMouseOut={handleEntryCandidateBlur}>
