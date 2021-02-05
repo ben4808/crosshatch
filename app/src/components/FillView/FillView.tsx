@@ -3,7 +3,7 @@ import { SymmetryType } from '../../models/SymmetryType';
 import "./FillView.scss";
 import Globals from '../../lib/windowService';
 import { FillStatus } from '../../models/FillStatus';
-import { getEntryAtWordKey, getGrid, getSection, getSquaresForWord, mapValues } from '../../lib/util';
+import { getEntryAtWordKey, getGrid, getSection, getSquaresForWord, mapKeys, mapValues } from '../../lib/util';
 import { calculateSectionOrder, getLongestStackWord, getPhoneticName, insertSectionCandidateIntoGrid, 
     makeNewSection, sectionCandidateKey, updateSectionFilters } from '../../lib/section';
 import { getLettersFromSquares, insertEntryIntoGrid, updateManualEntryCandidates } from '../../lib/grid';
@@ -12,10 +12,11 @@ import { FillNode } from '../../models/FillNode';
 import { AppContext } from '../../AppContext';
 import { ContentType } from '../../models/ContentType';
 import { Section } from '../../models/Section';
+import { processWordListData } from '../../lib/wordList';
 
 function FillView(props: any) {
     const appContext = useContext(AppContext);
-    const [showZeroEntries, setShowZeroEntries] = useState(false);
+    const [showSectionCandidates, setShowSectionCandidates] = useState(false);
 
     function triggerUpdate() {
         appContext.triggerUpdate();
@@ -28,6 +29,10 @@ function FillView(props: any) {
 
     function handleSymmetryChange(event: any) {
         Globals.gridSymmetry = +SymmetryType[event.target[event.target.selectedIndex].value] as SymmetryType;
+    }
+
+    function handleIffyLengthChange(event: any) {
+        Globals.maxIffyLength = +event.target[event.target.selectedIndex].value;
     }
 
     function getSymmetryTypeString(type: string): string {
@@ -49,11 +54,10 @@ function FillView(props: any) {
 
     function getFillStatusString(status: FillStatus): string {
         switch(status) {
-            case FillStatus.NoWordList: return "No word list loaded"
+            case FillStatus.NoWordList: return "No Word List Loaded";
             case FillStatus.Ready: return "Ready to Fill";
             case FillStatus.Running: return "Fill Running...";
             case FillStatus.Complete: return "Fill Complete";
-            case FillStatus.Failed: return "Fill Failed";
             default: return "";
         }
     }
@@ -125,12 +129,15 @@ function FillView(props: any) {
         }
 
         let sectionId = +target.attributes["data-id"].value;
-        if (Globals.selectedSectionIds!.get(sectionId))
+        if (Globals.selectedSectionIds!.get(sectionId)) {
             Globals.selectedSectionIds!.delete(sectionId);
-        else
+            Globals.activeSectionId = 0;
+        }
+        else {
             Globals.selectedSectionIds!.set(sectionId, true);
+            Globals.activeSectionId = sectionId;
+        }
 
-        updateSectionFilters();
         Globals.hoverGrid = undefined;
         triggerUpdate();
     }
@@ -150,10 +157,6 @@ function FillView(props: any) {
     function handleSectionBlur() {
         Globals.hoverSectionId = undefined;
         triggerUpdate();
-    }
-
-    function handleSectionChecked(event: any) {
-        alert("checked");
     }
 
     function handleSectionCandidateClick(event: any) {
@@ -190,8 +193,19 @@ function FillView(props: any) {
         triggerUpdate();
     }
 
-    function handleZerosBoxToggle() {
-        setShowZeroEntries(!showZeroEntries);
+    function handleShowSectinCandidatesToggle() {
+        setShowSectionCandidates(!showSectionCandidates);
+    }
+
+    function handleUseHeuristicsToggle() {
+        let newValue = !Globals.useManualHeuristics!;
+        Globals.useManualHeuristics = newValue;
+
+        let node = Globals.selectedWordNode;
+        if (!node) return;
+
+        updateManualEntryCandidates(grid);
+        triggerUpdate();
     }
 
     function handleSectionCandidateBlur() {
@@ -204,6 +218,30 @@ function FillView(props: any) {
         triggerUpdate();
     }
 
+    function loadWordList() {
+        document.getElementById("open-wordlist-input")!.click();
+    }
+
+    function clearWordLists() {
+        Globals.wordList = undefined;
+        Globals.wordLists = [];
+        Globals.fillStatus = FillStatus.NoWordList;
+        triggerUpdate();
+    }
+
+    function onWordListUpload(event: any) {
+        let file = event.target.files[0];
+        event.target.value = null;
+
+        processWordListData("mywordlist", file).then(wordList => {
+            if (wordList) {
+                Globals.wordLists!.push(wordList);
+                Globals.fillStatus = FillStatus.Ready;
+                triggerUpdate();
+            }
+        });
+    }
+
     let grid = getGrid();
     let selectedSymmetry = SymmetryType[Globals.gridSymmetry!];
     let symmetryOptions = (!grid || grid.width === grid.height) ?
@@ -212,20 +250,24 @@ function FillView(props: any) {
 
     let fillStatus = Globals.fillStatus!;
     let fillStatusStr = getFillStatusString(Globals.fillStatus!);
+    let isFillEnabled = Globals.isFillEnabled;
+    
+    let wordLists = Globals.wordLists || [];
 
     let entryCandidates = Globals.selectedWordNode ? Globals.selectedWordNode.entryCandidates : [];
-    if (!showZeroEntries)
-        entryCandidates = entryCandidates.filter(ec => ec.score > 0);
     let isNoEntryCandidates = Globals.selectedWordNode && entryCandidates.length === 0;
+
     let sections = [] as Section[];
     if (Globals.sections!) {
         let sectionsOrder = calculateSectionOrder(mapValues(Globals.sections!));
         sections = sectionsOrder.map(id => Globals.sections!.get(id)!);
     }
     let activeSection = Globals.sections ? Globals.sections!.get(Globals.activeSectionId!)! : makeNewSection(-1);
+    let selectedSectionIds = mapKeys(Globals.selectedSectionIds!) || [0];
     let sectionCandidates = mapValues(activeSection.candidates).sort((a, b) => b.score - a.score);
     let selectedEntry = Globals.selectedWordKey ? getEntryAtWordKey(grid, Globals.selectedWordKey!) : "";
-    let isFillEnabled = Globals.isFillEnabled;
+    let selectedMaxIffyLength = Globals.maxIffyLength || 0;
+    let useManualHeuristics = Globals.useManualHeuristics || true;
 
     let wordListsStyle = {
         gridTemplateColumns: `4fr 1fr`
@@ -245,15 +287,29 @@ function FillView(props: any) {
 
     return (
         <div id="FillView" className="fill-container">
+            <input id="open-wordlist-input" hidden type="file" accept=".dict,.txt" onChange={onWordListUpload} />
+
             <div className={"fill-status" +
-                (fillStatus === FillStatus.NoWordList || fillStatus === FillStatus.Failed) ? " fill-status-red" :
+                (fillStatus === FillStatus.NoWordList) ? " fill-status-red" :
                 fillStatus === FillStatus.Running ? " fill-status-green" : ""}>{fillStatusStr}</div>
-            <div style={{display: "none"}}>{props.updateSemaphoreProp}</div>
-            <div className="custom-control custom-switch fill-switch">
-                <input type="checkbox" className="custom-control-input" id="fillSwitch" 
-                    checked={isFillEnabled} onChange={handleToggleFill} />
-                <label className="custom-control-label" htmlFor="fillSwitch">Fill</label>
-            </div>
+            {wordLists.length > 0 &&
+            <>
+                <div className="custom-control custom-switch fill-switch">
+                    <input type="checkbox" className="custom-control-input" id="fillSwitch" 
+                        checked={isFillEnabled} onChange={handleToggleFill} />
+                    <label className="custom-control-label" htmlFor="fillSwitch">Fill</label>
+                </div>
+                <br />
+                <select className="custom-select iffy-select" id="iffySelect"
+                    defaultValue={selectedMaxIffyLength} onChange={handleIffyLengthChange}>
+                    <option value={0} key={0}>Off</option>
+                    {[2, 3, 4, 5, 6, 7].map(length => (
+                        <option value={length} key={length}>{length}</option>
+                    ))}
+                </select>
+                <label className="custom-control-label" htmlFor="iffySelect">Max Iffy Length</label>
+            </>
+            }
             
             <br />
             Grid Symmetry: <br />
@@ -268,33 +324,30 @@ function FillView(props: any) {
             <div className="fill-lists">
                 <div className="fill-list-box">
                     <div className="fill-list-title">Word Lists</div>
-                    <div className="fill-list-button">Load</div>
-                    <div className="fill-list-button">Clear</div>
+                    <div className="fill-list-button" onClick={loadWordList}>Load</div>
+                    <div className="fill-list-button" onClick={clearWordLists}>Clear</div>
                     <div className="fill-list" style={wordListsStyle}>
                         <div className="fill-list-header">Filename</div>
                         <div className="fill-list-header">Count</div>
-                        { isNoEntryCandidates && (
+                        { wordLists.length === 0 && (
                             <div className="fill-list-row-wrapper">
-                                <div><i>No word lists loaded</i></div><div></div><div></div>
+                                <div><i>No word lists loaded</i></div><div></div>
                             </div>
                         )}
-                        { entryCandidates.map(ec => (
-                            <div className={"fill-list-row-wrapper" + (selectedEntry === ec.word ? " fill-list-row-selected" : "")} 
-                                key={ec.word} data-word={ec.word}
-                                onClick={handleEntryCandidateClick} onMouseOver={handleEntryCandidateHover}>
-                                <div>{ec.word}</div>
-                                <div>{ec.score.toFixed(0)}</div>
-                                <div>{ec.iffyEntry || ""}</div>
+                        { wordLists.map(wl => (
+                            <div className="fill-list-row-wrapper" key={wl.filename}>
+                                <div>{wl.filename}</div>
+                                <div>{wl.wordCount}</div>
                             </div>
                         ))}
                     </div>
                 </div>
                 <div className="fill-list-box" onMouseOut={handleEntryCandidateBlur}>
                     <div className="fill-list-title entry-color">Entry Candidates</div>
-                    <div className="show-zeros-box">
-                        <input type="checkbox" className="section-checkbox" id="zeros-box"
-                                    checked={showZeroEntries} onChange={handleZerosBoxToggle} />
-                        <label htmlFor="zeros-box">Show 0-score entries</label>
+                    <div className="fill-sec-checkbox">
+                        <input type="checkbox" className="section-checkbox" id="use-heuristics-box"
+                                    checked={useManualHeuristics} onChange={handleUseHeuristicsToggle} />
+                        <label htmlFor="use-heuristics-box">Use heuristics</label>
                     </div>
                     <div className="fill-list" style={entryCandidatesStyle}>
                         <div className="fill-list-header">Entry</div>
@@ -328,7 +381,7 @@ function FillView(props: any) {
                             <div className="fill-list-row-wrapper" key={sec.id} data-id={sec.id} 
                                 onClick={handleSectionClick} onMouseOver={handleSectionHover}>
                                 <div><input type="checkbox" className="section-checkbox"
-                                    checked={Globals.selectedSectionIds!.has(sec.id)} onChange={handleSectionChecked} /></div>
+                                    checked={selectedSectionIds.includes(sec.id)} onChange={handleSectionClick} /></div>
                                 <div>{getPhoneticName(sec.id)}</div>
                                 <div>{sec.squares.size}</div>
                                 <div>{sec.connections.size}</div>
@@ -338,12 +391,22 @@ function FillView(props: any) {
                     </div>
                 </div>
                 <div className="fill-list-box" onMouseOut={handleSectionCandidateBlur}>
-                    <div className="fill-list-title">Fills</div>
+                    <div className="fill-list-title">Fills ({sectionCandidates.length})</div>
+                    <div className="fill-sec-checkbox">
+                        <input type="checkbox" className="section-checkbox" id="show-fills-box"
+                                    checked={showSectionCandidates} onChange={handleShowSectinCandidatesToggle} />
+                        <label htmlFor="use-heuristics-box">Show</label>
+                    </div>
                     <div className="fill-list" style={fillsStyle}>
                         <div className="fill-list-header">Longest</div>
                         <div className="fill-list-header">Score</div>
                         <div className="fill-list-header">Iffy</div>
-                        { sectionCandidates.map(sc => {
+                        {!showSectionCandidates && (
+                            <div className="fill-list-row-wrapper">
+                                <div><i>Hidden</i></div><div></div><div></div>
+                            </div>
+                        )}
+                        {showSectionCandidates && sectionCandidates.map(sc => {
                             let entry = getLettersFromSquares(getSquaresForWord(sc.grid, getLongestStackWord(activeSection)));
                             let candidateKey = sectionCandidateKey(activeSection, sc.grid);
 
@@ -354,7 +417,7 @@ function FillView(props: any) {
                                 <div>{sc.score.toFixed(2)}</div>
                                 <div>{sc.iffyEntry || ""}</div>
                             </div>
-                            )})}
+                        )})}
                     </div>
                 </div>
             </div>

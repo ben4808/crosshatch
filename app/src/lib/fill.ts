@@ -1,5 +1,6 @@
 import { EntryCandidate } from '../models/EntryCandidate';
 import { FillNode } from '../models/FillNode';
+import { FillStatus } from '../models/FillStatus';
 import { GridSquare } from '../models/GridSquare';
 import { GridState } from '../models/GridState';
 import { GridWord } from '../models/GridWord';
@@ -28,7 +29,9 @@ export function fillSectionWord(): boolean {
     if (!node) {
         populateSeedNodes(fillQueue);
         node = fillQueue.peek()!;
-        if (!node) return false;
+        if (!node) {
+            Globals.fillStatus = FillStatus.Complete;
+        }
     }
     while (node.needsNewPriority) {
         node.needsNewPriority = false;
@@ -48,15 +51,15 @@ export function fillSectionWord(): boolean {
         let sectionString = getSectionString(node.endGrid, section);
         // is section filled?
         if (!sectionString.includes("-")) {
-            let wasNewCandidate = false;
+            let newSecCandidateFound = false;
             if (!section.candidates.has(sectionString)) {
                 let newCandidate = newSectionCandidate(node, section);
                 section.candidates.set(sectionString, newCandidate);
                 Globals.activeGrid = node.endGrid;
-                wasNewCandidate = true;
+                newSecCandidateFound = true;
             }
             
-            invalidateChainNode(node, wasNewCandidate);
+            invalidateChainNode(node, undefined, newSecCandidateFound);
             fillQueue.pop();
             return true;
         }
@@ -75,8 +78,8 @@ export function fillSectionWord(): boolean {
     return true;
 }
 
-function invalidateChainNode(node: FillNode, wasNewCandidate?: boolean) {
-    if (wasNewCandidate === undefined) wasNewCandidate = false;
+function invalidateChainNode(node: FillNode, crossAndCrosses?: Map<string, boolean>, newSecCandidateFound?: boolean) {
+    if (newSecCandidateFound === undefined) newSecCandidateFound = false;
 
     let parent = node.parent!;
     if (!parent) return;
@@ -102,10 +105,26 @@ function invalidateChainNode(node: FillNode, wasNewCandidate?: boolean) {
             parent.needsNewPriority = true;
             Globals.curChainId!++;
         }
-        invalidateChainNode(parent);
+
+        if (crossAndCrosses === undefined) {
+            let grid = parent.endGrid;
+            let fillWord = parent.fillWord!;
+            crossAndCrosses = new Map<string, boolean>();
+            getAllCrosses(grid, fillWord).forEach(cross => {
+                crossAndCrosses!.set(wordKey(cross), true);
+                getAllCrosses(grid, cross).forEach(crossCross => {
+                    crossAndCrosses!.set(wordKey(crossCross), true);
+                });
+            });
+        }
+
+        while (!crossAndCrosses.has(wordKey(parent.fillWord!)) && parent.isChainNode) {
+
+        }
+        invalidateChainNode(parent, crossAndCrosses);
     }
 
-    if (wasNewCandidate) {
+    if (newSecCandidateFound) {
         if (node.iffyWordKey && node.chainIffyCandidates < 25) {
             node.chainIffyCandidates++;
             return;
@@ -246,6 +265,7 @@ export function makeNewNode(grid: GridState, depth: number, isChainNode: boolean
         chainGoodCandidates: parent ? parent.chainGoodCandidates : 0,
         chainIffyCandidates: parent ? parent.chainIffyCandidates : 0,
         chainId: Globals.curChainId!,
+        shouldBeDeleted: false,
     } as FillNode;
 }
 

@@ -7,6 +7,7 @@ import { QualityClass } from "./QualityClass";
 import { Section } from "./Section";
 import { SymmetryType } from "./SymmetryType";
 import { WordDirection } from "./WordDirection";
+import { WordList } from "./WordList";
 
 export interface GlobalsObj {
     puzzle?: Puzzle;
@@ -14,10 +15,6 @@ export interface GlobalsObj {
     hoverGrid?: GridState;
     selectedWordKey?: string;
     selectedWordDir?: WordDirection;
-    gridSymmetry?: SymmetryType;
-    isFillEnabled: boolean;
-    isFillComplete: boolean;
-    fillStatus?: FillStatus;
     selectedWordNode?: FillNode;
     curChainId?: number;
 
@@ -26,6 +23,14 @@ export interface GlobalsObj {
     hoverSectionId?: number;
     selectedSectionIds?: Map<number, boolean>;
     selectedSectionCandidateKeys?: Map<number, string>;
+
+    fillStatus?: FillStatus;
+    isFillEnabled?: boolean;
+    useManualHeuristics?: boolean;
+    maxIffyLength?: number;
+    gridSymmetry?: SymmetryType;
+
+    wordLists?: WordList[];
 
     wordList?: IndexedWordList;
     qualityClasses?: Map<string, QualityClass>;

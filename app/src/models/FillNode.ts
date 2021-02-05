@@ -17,6 +17,7 @@ export interface FillNode {
     iffyWordKey?: string;
     needsNewPriority: boolean;
     chainId?: number;
+    shouldBeDeleted: boolean;
     
     anchorSquareKeys: string[];
     anchorCombosLeft: [string, string][];

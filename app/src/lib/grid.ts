@@ -5,17 +5,18 @@ import { GridWord } from "../models/GridWord";
 import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
 import Globals from './windowService';
-import { getSquaresForWord, isBlackSquare, newWord, forAllGridSquares, 
-    isWordFull, isWordEmpty, getGrid, isUserFilled, deepClone, 
-    wordKey, getWordAtSquare, getSquareAtKey, otherDir, squareKey, getSection, mapKeys, fullAlphabet, letterListToLetterMatrix, letterMatrixToLetterList } from "./util";
+import { getSquaresForWord, isBlackSquare, newWord, forAllGridSquares, isWordFull, isWordEmpty, getGrid, 
+    isUserFilled, deepClone, wordKey, getWordAtSquare, getSquareAtKey, otherDir, squareKey, getSection, mapKeys, 
+    fullAlphabet, letterListToLetterMatrix, letterMatrixToLetterList } from "./util";
 import { SymmetryType } from "../models/SymmetryType";
 import { makeNewNode } from "./fill";
 import { ContentType } from "../models/ContentType";
 import { processAndInsertChosenEntry } from "./insertEntry";
 import { queryIndexedWordList } from "./wordList";
-import { populateAndScoreEntryCandidates } from "./entryCandidates";
+import { populateAndScoreEntryCandidates, populateNoHeuristicEntryCandidates } from "./entryCandidates";
 import { getSectionsWithSelectedCandidate, getSectionWithCandidate, 
     getSelectedSectionCandidatesWithSquare } from "./section";
+import { FillStatus } from "../models/FillStatus";
 
 export function populateWords(grid: GridState) {
     function processSquare(grid: GridState, row: number, col: number, dir: WordDirection) {
@@ -294,6 +295,7 @@ export function eraseGridSquare(grid: GridState, sq: GridSquare, dir: WordDirect
 export function clearFill(grid: GridState) {
     Globals.selectedWordNode = undefined;
     getSection().fillQueue = undefined;
+    Globals.fillStatus = FillStatus.Ready;
 
     forAllGridSquares(grid, sq => {
         if (!isUserFilled(sq)) {
@@ -305,12 +307,18 @@ export function clearFill(grid: GridState) {
 }
 
 export function updateManualEntryCandidates(grid: GridState) {
-    if (Globals.selectedWordKey) {
-        let node = makeNewNode(grid, 0, false, undefined);
-        node.fillWord = grid.words.get(Globals.selectedWordKey!);
-        populateAndScoreEntryCandidates(node, true);
-        Globals.selectedWordNode = node;
-    }
-    else 
+    if (!Globals.selectedWordKey || !Globals.wordList) {
         Globals.selectedWordNode = undefined;
+        return;
+    }
+
+    let node = makeNewNode(grid, 0, false, undefined);
+    node.fillWord = grid.words.get(Globals.selectedWordKey!);
+    if (Globals.useManualHeuristics!) {
+        populateAndScoreEntryCandidates(node, true);
+    }
+    else {
+        populateNoHeuristicEntryCandidates(node);
+    }
+    Globals.selectedWordNode = node;
 }

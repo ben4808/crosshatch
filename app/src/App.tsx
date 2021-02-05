@@ -46,10 +46,12 @@ function App(props: AppProps) {
     if (Globals.isFillEnabled) {
       let interval = setInterval(() => doFillWord(), 5);
       setFillInterval(interval);
+      Globals.fillStatus = FillStatus.Running;
     }
-    else {
-      if (fillInterval)
-        clearInterval(fillInterval);
+    else if (fillInterval) {
+      clearInterval(fillInterval);
+      clearFill(getGrid());
+      Globals.fillStatus = FillStatus.Ready;
     }
     triggerUpdate();
   }
@@ -105,8 +107,9 @@ function App(props: AppProps) {
     Globals.selectedWordDir = WordDirection.Across;
     Globals.gridSymmetry = SymmetryType.Rotate180;
     Globals.isFillEnabled = false;
-    Globals.isFillComplete = false;
-    Globals.fillStatus = FillStatus.Ready;
+    Globals.useManualHeuristics = true;
+    Globals.maxIffyLength = 0;
+    Globals.fillStatus = FillStatus.NoWordList;
     Globals.selectedWordNode = undefined;
     Globals.curChainId = 1;
 

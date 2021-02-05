@@ -11,7 +11,6 @@ import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
 import { generateGridSections } from "./section";
 
-export const maxIffyLength = 1;
 export const fullAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 export function average(arr: number[]): number {
