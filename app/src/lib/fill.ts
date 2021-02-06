@@ -10,7 +10,7 @@ import { WordDirection } from '../models/WordDirection';
 import { populateAndScoreEntryCandidates } from './entryCandidates';
 import { processAndInsertChosenEntry } from './insertEntry';
 import { PriorityQueue, priorityQueue } from './priorityQueue';
-import { getSectionString, insertSectionCandidateIntoGrid, newSectionCandidate } from './section';
+import { getSectionString, getSectionsWithWord, insertSectionCandidateIntoGrid, newSectionCandidate } from './section';
 import { deepClone, getSquaresForWord, mapKeys, isWordFull, 
     getWordAtSquare, otherDir, mapValues, getSection, getGrid, wordKey } from './util';
 import Globals from './windowService';
@@ -33,10 +33,10 @@ export function fillSectionWord(): boolean {
             Globals.fillStatus = FillStatus.Complete;
         }
     }
-    while (node.needsNewPriority) {
+    while (node.needsNewPriority || node.shouldBeDeleted) {
         node.needsNewPriority = false;
         fillQueue.pop();
-        fillQueue.insert(node, calculateNodePriority(node));
+        if (!node.shouldBeDeleted) fillQueue.insert(node, calculateNodePriority(node));
         node = fillQueue.peek()!;
         if (!node) return false;
     }
@@ -99,7 +99,7 @@ function invalidateChainNode(node: FillNode, crossAndCrosses?: Map<string, boole
     parent.iffyWordKey = parent.parent ? parent.parent.iffyWordKey : undefined;
     parent.endGrid = deepClone(parent.startGrid);
 
-    if (parent.backtracks >= 3) {
+    if (parent.backtracks >= 3 || node.shouldBeDeleted) {
         if (parent.parent && !parent.parent.isChainNode) {
             parent.isChainNode = false;
             parent.needsNewPriority = true;
@@ -107,20 +107,22 @@ function invalidateChainNode(node: FillNode, crossAndCrosses?: Map<string, boole
         }
 
         if (crossAndCrosses === undefined) {
-            let grid = parent.endGrid;
             let fillWord = parent.fillWord!;
+            let sectionsWithWord = getSectionsWithWord(fillWord);
+            let grid = parent.endGrid;
             crossAndCrosses = new Map<string, boolean>();
             getAllCrosses(grid, fillWord).forEach(cross => {
                 crossAndCrosses!.set(wordKey(cross), true);
                 getAllCrosses(grid, cross).forEach(crossCross => {
-                    crossAndCrosses!.set(wordKey(crossCross), true);
+                    if (sectionsWithWord.find(sec => sec.words.has(wordKey(crossCross))))
+                        crossAndCrosses!.set(wordKey(crossCross), true);
                 });
             });
         }
 
-        while (!crossAndCrosses.has(wordKey(parent.fillWord!)) && parent.isChainNode) {
-
-        }
+        if (parent.parent && parent.parent.isChainNode && !crossAndCrosses.has(wordKey(parent.parent.fillWord!)))
+            parent.shouldBeDeleted = true;
+            
         invalidateChainNode(parent, crossAndCrosses);
     }
 

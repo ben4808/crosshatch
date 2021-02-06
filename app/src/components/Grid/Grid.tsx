@@ -17,7 +17,7 @@ import { updateSectionFilters } from '../../lib/section';
 import { QualityClass } from '../../models/QualityClass';
 import { GridSquare } from '../../models/GridSquare';
 
-function Grid(props: any) {
+function Grid() {
     const [selectedSquare, setSelectedSquare] = useState([-1, -1] as [number, number]);
     const appContext = useContext(AppContext);
 
@@ -257,7 +257,7 @@ function Grid(props: any) {
             let squares = getSquaresForWord(grid, w);
             if (isWordFull(squares)) {
                 let letters = getLettersFromSquares(squares);
-                let qc = Globals.qualityClasses!.get(letters);
+                let qc = Globals.qualityClasses ? Globals.qualityClasses!.get(letters) : QualityClass.Normal;
                 squares.forEach(sq => {
                     if (sq.contentType === ContentType.Autofill)
                         ret.set(squareKey(sq), qc || QualityClass.Iffy);
@@ -270,7 +270,7 @@ function Grid(props: any) {
             let squares = getSquaresForWord(grid, w);
             if (isWordFull(squares)) {
                 let letters = getLettersFromSquares(squares);
-                let qc = Globals.qualityClasses!.get(letters);
+                let qc = Globals.qualityClasses ? Globals.qualityClasses!.get(letters) : QualityClass.Normal;
                 squares.forEach(sq => {
                     if (sq.contentType === ContentType.Autofill) {
                         let curQc = ret.get(squareKey(sq)) || QualityClass.Normal;
@@ -304,7 +304,6 @@ function Grid(props: any) {
 
     return (
         <>
-            <div style={{display: "none"}}>{props.updateSemaphoreProp}</div>
             <div className="puzzle-author-by">&nbsp;</div>
             <div id="puzzleTitle" className="puzzle-title editable" contentEditable={true} suppressContentEditableWarning={true}
                 onKeyDown={suppressEnterKey} onBlur={setTitle} onFocusCapture={handleFocus}>{puzzle.title || "(title)"}</div>

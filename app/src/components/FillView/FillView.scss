@@ -40,6 +40,7 @@
     cursor: pointer;
     background-color: #ddd;
     margin-top: 5px;
+    margin-left: 5px;
 }
 .fill-list-button:hover {
     background-color: #bbb;
@@ -97,7 +98,13 @@
 }
 
 .fill-status {
-    margin-top: 5px;
+    margin-bottom: 5px;
+}
+.fill-status-red {
+    color: darkred;
+}
+.fill-status-green {
+    color: darkgreen;
 }
 
 .section-checkbox {

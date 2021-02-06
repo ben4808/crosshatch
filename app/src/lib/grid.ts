@@ -16,7 +16,6 @@ import { queryIndexedWordList } from "./wordList";
 import { populateAndScoreEntryCandidates, populateNoHeuristicEntryCandidates } from "./entryCandidates";
 import { getSectionsWithSelectedCandidate, getSectionWithCandidate, 
     getSelectedSectionCandidatesWithSquare } from "./section";
-import { FillStatus } from "../models/FillStatus";
 
 export function populateWords(grid: GridState) {
     function processSquare(grid: GridState, row: number, col: number, dir: WordDirection) {
@@ -295,7 +294,6 @@ export function eraseGridSquare(grid: GridState, sq: GridSquare, dir: WordDirect
 export function clearFill(grid: GridState) {
     Globals.selectedWordNode = undefined;
     getSection().fillQueue = undefined;
-    Globals.fillStatus = FillStatus.Ready;
 
     forAllGridSquares(grid, sq => {
         if (!isUserFilled(sq)) {

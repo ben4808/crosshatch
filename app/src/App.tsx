@@ -105,13 +105,17 @@ function App(props: AppProps) {
     Globals.hoverGrid = undefined;
     Globals.selectedWordKey = "";
     Globals.selectedWordDir = WordDirection.Across;
-    Globals.gridSymmetry = SymmetryType.Rotate180;
+    Globals.gridSymmetry = SymmetryType.MirrorHorizontal;
     Globals.isFillEnabled = false;
     Globals.useManualHeuristics = true;
     Globals.maxIffyLength = 0;
     Globals.fillStatus = FillStatus.NoWordList;
     Globals.selectedWordNode = undefined;
     Globals.curChainId = 1;
+    Globals.isFillEnabled = false;
+    Globals.useManualHeuristics = true;
+    Globals.maxIffyLength = 0;
+    Globals.wordLists = [];
 
     initializeSessionGlobals();
     clearFill(Globals.activeGrid!);
@@ -133,7 +137,7 @@ function App(props: AppProps) {
             <CluesView updateSemaphore={updateSemaphore}></CluesView>
         }
         {activeView === "Fill" && 
-            <FillView updateSemaphoreProp={updateSemaphore}></FillView>
+            <FillView></FillView>
         }
       </div>
       

@@ -14,9 +14,9 @@ import { ContentType } from '../../models/ContentType';
 import { Section } from '../../models/Section';
 import { processWordListData } from '../../lib/wordList';
 
-function FillView(props: any) {
+function FillView() {
     const appContext = useContext(AppContext);
-    const [showSectionCandidates, setShowSectionCandidates] = useState(false);
+    const [showSectionCandidates, setShowSectionCandidates] = useState(true);
 
     function triggerUpdate() {
         appContext.triggerUpdate();
@@ -193,19 +193,19 @@ function FillView(props: any) {
         triggerUpdate();
     }
 
-    function handleShowSectinCandidatesToggle() {
+    function handleShowSectionCandidatesToggle() {
         setShowSectionCandidates(!showSectionCandidates);
     }
 
     function handleUseHeuristicsToggle() {
-        let newValue = !Globals.useManualHeuristics!;
+        let newValue = Globals.useManualHeuristics !== undefined ? !Globals.useManualHeuristics! : false;
         Globals.useManualHeuristics = newValue;
 
+        triggerUpdate();
         let node = Globals.selectedWordNode;
         if (!node) return;
 
         updateManualEntryCandidates(grid);
-        triggerUpdate();
     }
 
     function handleSectionCandidateBlur() {
@@ -223,6 +223,8 @@ function FillView(props: any) {
     }
 
     function clearWordLists() {
+        if (!window.confirm("Are you sure you want to clear the word lists?")) return;
+
         Globals.wordList = undefined;
         Globals.wordLists = [];
         Globals.fillStatus = FillStatus.NoWordList;
@@ -233,7 +235,7 @@ function FillView(props: any) {
         let file = event.target.files[0];
         event.target.value = null;
 
-        processWordListData("mywordlist", file).then(wordList => {
+        processWordListData(file.name, file).then(wordList => {
             if (wordList) {
                 Globals.wordLists!.push(wordList);
                 Globals.fillStatus = FillStatus.Ready;
@@ -267,7 +269,7 @@ function FillView(props: any) {
     let sectionCandidates = mapValues(activeSection.candidates).sort((a, b) => b.score - a.score);
     let selectedEntry = Globals.selectedWordKey ? getEntryAtWordKey(grid, Globals.selectedWordKey!) : "";
     let selectedMaxIffyLength = Globals.maxIffyLength || 0;
-    let useManualHeuristics = Globals.useManualHeuristics || true;
+    let useManualHeuristics = Globals.useManualHeuristics !== undefined ? Globals.useManualHeuristics : true;
 
     let wordListsStyle = {
         gridTemplateColumns: `4fr 1fr`
@@ -290,8 +292,8 @@ function FillView(props: any) {
             <input id="open-wordlist-input" hidden type="file" accept=".dict,.txt" onChange={onWordListUpload} />
 
             <div className={"fill-status" +
-                (fillStatus === FillStatus.NoWordList) ? " fill-status-red" :
-                fillStatus === FillStatus.Running ? " fill-status-green" : ""}>{fillStatusStr}</div>
+                (fillStatus === FillStatus.NoWordList ? " fill-status-red" :
+                fillStatus === FillStatus.Running ? " fill-status-green" : "")}>{fillStatusStr}</div>
             {wordLists.length > 0 &&
             <>
                 <div className="custom-control custom-switch fill-switch">
@@ -300,18 +302,17 @@ function FillView(props: any) {
                     <label className="custom-control-label" htmlFor="fillSwitch">Fill</label>
                 </div>
                 <br />
-                <select className="custom-select iffy-select" id="iffySelect"
-                    defaultValue={selectedMaxIffyLength} onChange={handleIffyLengthChange}>
+                Max Iffy Length: <br />
+                <select className="custom-select iffy-select" defaultValue={selectedMaxIffyLength} onChange={handleIffyLengthChange}>
                     <option value={0} key={0}>Off</option>
                     {[2, 3, 4, 5, 6, 7].map(length => (
                         <option value={length} key={length}>{length}</option>
                     ))}
                 </select>
-                <label className="custom-control-label" htmlFor="iffySelect">Max Iffy Length</label>
             </>
             }
             
-            <br />
+            <br /><br />
             Grid Symmetry: <br />
             <select className="custom-select symmetry-select" defaultValue={selectedSymmetry} onChange={handleSymmetryChange}>
                 {symmetryOptions.map(type => (
@@ -324,18 +325,18 @@ function FillView(props: any) {
             <div className="fill-lists">
                 <div className="fill-list-box">
                     <div className="fill-list-title">Word Lists</div>
-                    <div className="fill-list-button" onClick={loadWordList}>Load</div>
                     <div className="fill-list-button" onClick={clearWordLists}>Clear</div>
+                    <div className="fill-list-button" onClick={loadWordList}>Load</div>
                     <div className="fill-list" style={wordListsStyle}>
                         <div className="fill-list-header">Filename</div>
                         <div className="fill-list-header">Count</div>
                         { wordLists.length === 0 && (
-                            <div className="fill-list-row-wrapper">
+                            <div className="fill-list-row-wrapper" style={{cursor: "auto"}}>
                                 <div><i>No word lists loaded</i></div><div></div>
                             </div>
                         )}
                         { wordLists.map(wl => (
-                            <div className="fill-list-row-wrapper" key={wl.filename}>
+                            <div className="fill-list-row-wrapper" style={{cursor: "auto"}} key={wl.filename}>
                                 <div>{wl.filename}</div>
                                 <div>{wl.wordCount}</div>
                             </div>
@@ -376,7 +377,7 @@ function FillView(props: any) {
                         <div className="fill-list-header">ID</div>
                         <div className="fill-list-header">Size</div>
                         <div className="fill-list-header">Conn</div>
-                        <div className="fill-list-header">Can</div>
+                        <div className="fill-list-header">Fills</div>
                         { sections.map(sec => (
                             <div className="fill-list-row-wrapper" key={sec.id} data-id={sec.id} 
                                 onClick={handleSectionClick} onMouseOver={handleSectionHover}>
@@ -391,11 +392,11 @@ function FillView(props: any) {
                     </div>
                 </div>
                 <div className="fill-list-box" onMouseOut={handleSectionCandidateBlur}>
-                    <div className="fill-list-title">Fills ({sectionCandidates.length})</div>
+                    <div className="fill-list-title">Fills {sectionCandidates.length > 0 ? `(${sectionCandidates.length})` : ""}</div>
                     <div className="fill-sec-checkbox">
                         <input type="checkbox" className="section-checkbox" id="show-fills-box"
-                                    checked={showSectionCandidates} onChange={handleShowSectinCandidatesToggle} />
-                        <label htmlFor="use-heuristics-box">Show</label>
+                                    checked={showSectionCandidates} onChange={handleShowSectionCandidatesToggle} />
+                        <label htmlFor="show-fills-box">Show</label>
                     </div>
                     <div className="fill-list" style={fillsStyle}>
                         <div className="fill-list-header">Longest</div>

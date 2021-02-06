@@ -7,6 +7,8 @@ import { createNewGrid, populateWords } from "./grid";
 import { deepClone, getGrid, mapValues, newPuzzle, wordKey } from "./util";
 import Globals from '../lib/windowService';
 
+// https://code.google.com/archive/p/puz/wikis/FileFormat.wiki
+
 export async function loadPuzFile(url: string): Promise<Puzzle | undefined> {
     let response = await fetch(url);
     let data: Blob = await response.blob();
@@ -111,7 +113,7 @@ export async function processPuzData(data: Blob): Promise<Puzzle | undefined> {
         rebusSquareMappings.forEach((v, k) => {
             let tokens = k.split(",");
             let square = grid.squares[+tokens[0]][+tokens[1]];
-            square.content = rebusValues.get(v)!;
+            square.content = rebusValues.get(v)![0]; // TODO: Use full value when we have rebus support
             square.contentType = ContentType.User;
         });
     }
@@ -149,12 +151,15 @@ export function generatePuzFile(puzzle: Puzzle): Blob {
 
     let pos = 0x34;
     let solutionPos = pos;
+    let areCircledSquares = false;
     for (let row = 0; row < grid.height; row++) {
         for (let col = 0; col < grid.width; col++) {
             let sq = grid.squares[row][col];
             let char = sq.type === SquareType.Black ? "." : sq.content ? sq.content : " ";
             insertString(bytes, char, pos);
             pos++;
+
+            if (sq.isCircled) areCircledSquares = true;
         }
     }
     let gridPos = pos;
@@ -192,6 +197,28 @@ export function generatePuzFile(puzzle: Puzzle): Blob {
 
     insertString(bytes, puzzle.notes + "\0", pos);
     pos++;
+
+    if (areCircledSquares) {
+        let sectionSize = grid.width * grid.height;
+        insertString(bytes, "GEXT", pos);
+        pos += 4;
+        insertNumber(bytes, sectionSize, pos, 2);
+        pos += 2;
+        let checksumPos = pos;
+        pos += 2;
+        for (let row = 0; row < grid.height; row++) {
+            for (let col = 0; col < grid.width; col++) {
+                let sq = grid.squares[row][col];
+                insertNumber(bytes, sq.isCircled ? 0x80 : 0, pos, 1);
+                pos++;
+            }
+        }
+        insertString(bytes, "\0", pos);
+        pos++;
+
+        let cksum = cksum_region(bytes, checksumPos + 2, sectionSize, 0);
+        insertNumber(bytes, cksum, checksumPos, 2);
+    }
 
     let c_cib = cksum_region(bytes, 0x2c, 8, 0);
     let cksum = c_cib;
@@ -235,7 +262,6 @@ export function generatePuzFile(puzzle: Puzzle): Blob {
     return new Blob([finalArray], {type: "application/octet-stream; charset=ISO-8859-1"});
 }
 
-// https://code.google.com/archive/p/puz/wikis/FileFormat.wiki
 // http://www.keiranking.com/phil/
 function cksum_region(bytes: Uint8Array, startPos: number, len: number, cksum: number) {
     for (let i = 0; i < len; i++) {

@@ -89,31 +89,31 @@ export function queryIndexedWordList(pattern: string): string[] {
 }
 
 function indexWordList(entries: string[], existingList?: IndexedWordList) {
-    let wl = existingList ? existingList.buckets : {
+    let buckets = existingList ? existingList.buckets : {
         oneVal: [] as any[],
         twoVal: [] as any[],
     };
 
     for (let length = 2; length <= 15; length++) {
-        wl.oneVal.push([] as any[]);
+        buckets.oneVal.push([] as any[]);
         for (let pos1 = 1; pos1 <= length; pos1++) {
-            wl.oneVal[length-2].push([] as any[]);
+            buckets.oneVal[length-2].push([] as any[]);
             for (let ch1 = 65; ch1 <= 90; ch1++) {
-                wl.oneVal[length-2][pos1-1].push([] as string[]);
+                buckets.oneVal[length-2][pos1-1].push([] as string[]);
             }
         }
     }
 
     for (let length = 2; length <= 15; length++) {
-        wl.twoVal.push([] as any[]);
+        buckets.twoVal.push([] as any[]);
         for (let pos1 = 1; pos1 <= length-1; pos1++) {
-            wl.twoVal[length-2].push([] as any[]);
+            buckets.twoVal[length-2].push([] as any[]);
             for (let pos2 = pos1+1; pos2 <= length; pos2++) {
-                wl.twoVal[length-2][pos1-1].push([] as any[]);
+                buckets.twoVal[length-2][pos1-1].push([] as any[]);
                 for (let ch1 = 65; ch1 <= 90; ch1++) {
-                    wl.twoVal[length-2][pos1-1][pos2-(pos1+1)].push([] as any[]);
+                    buckets.twoVal[length-2][pos1-1][pos2-(pos1+1)].push([] as any[]);
                     for (let ch2 = 65; ch2 <= 90; ch2++) {
-                        wl.twoVal[length-2][pos1-1][pos2-(pos1+1)][ch1-65].push([] as string[]);
+                        buckets.twoVal[length-2][pos1-1][pos2-(pos1+1)][ch1-65].push([] as string[]);
                     }
                 }
             }
@@ -123,16 +123,16 @@ function indexWordList(entries: string[], existingList?: IndexedWordList) {
     entries.forEach(word => {
         // 1-position entries
         for (let pos1 = 1; pos1 <= word.length; pos1++) {
-            wl.oneVal[word.length-2][pos1-1][word[pos1-1].charCodeAt(0)-65].push(word);
+            buckets.oneVal[word.length-2][pos1-1][word[pos1-1].charCodeAt(0)-65].push(word);
         }
 
         // 2-position entries
         for (let pos1 = 1; pos1 < word.length; pos1++) {
             for (let pos2 = pos1 + 1; pos2 <= word.length; pos2++) {
-                wl.twoVal[word.length-2][pos1-1][pos2-(pos1+1)][word[pos1-1].charCodeAt(0)-65][word[pos2-1].charCodeAt(0)-65].push(word);
+                buckets.twoVal[word.length-2][pos1-1][pos2-(pos1+1)][word[pos1-1].charCodeAt(0)-65][word[pos2-1].charCodeAt(0)-65].push(word);
             }
         }
     });
 
-    Globals.wordList = wl;
+    Globals.wordList = { buckets: buckets } as IndexedWordList;
 }

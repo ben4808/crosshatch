@@ -428,3 +428,7 @@ export function getSectionWithCandidate(sc: SectionCandidate): Section {
 export function getUnfilteredSectionCandidates(section: Section): SectionCandidate[] {
     return mapValues(section.candidates).filter(sc => !sc.isFilteredOut);
 }
+
+export function getSectionsWithWord(word: GridWord): Section[] {
+    return mapValues(Globals.sections!).filter(sec => sec.id > 0 && sec.words.has(wordKey(word)));
+}
