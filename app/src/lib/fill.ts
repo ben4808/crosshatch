@@ -1,6 +1,5 @@
 import { EntryCandidate } from '../models/EntryCandidate';
 import { FillNode } from '../models/FillNode';
-import { FillStatus } from '../models/FillStatus';
 import { GridSquare } from '../models/GridSquare';
 import { GridState } from '../models/GridState';
 import { GridWord } from '../models/GridWord';
@@ -30,7 +29,7 @@ export function fillSectionWord(): boolean {
         populateSeedNodes(fillQueue);
         node = fillQueue.peek()!;
         if (!node) {
-            Globals.fillStatus = FillStatus.Complete;
+            return false;
         }
     }
     while (node.needsNewPriority || node.shouldBeDeleted) {
@@ -263,7 +262,6 @@ export function makeNewNode(grid: GridState, depth: number, isChainNode: boolean
         anchorCombosLeft: [],
         viableLetterCounts: new Map<string, Map<string, number>>(),
         iffyWordKey: parent ? parent.iffyWordKey : undefined,
-        constraintMode: "One",
         chainGoodCandidates: parent ? parent.chainGoodCandidates : 0,
         chainIffyCandidates: parent ? parent.chainIffyCandidates : 0,
         chainId: Globals.curChainId!,

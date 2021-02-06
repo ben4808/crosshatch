@@ -56,7 +56,11 @@ export function insertSectionCandidateIntoGrid(grid: GridState, candidate: Secti
         }
     });
     if (foundDiscrepancy) return false;
-    else grid = newGrid;
+    else {
+        forAllGridSquares(newGrid, newSq => {
+            grid.squares[newSq.row][newSq.col] = newSq;
+        });
+    }
 
     section.words.forEach((_, key) => {
         let word = grid.words.get(key)!;
@@ -174,7 +178,7 @@ export function generateGridSections(grid: GridState): Map<number, Section> {
             let wordOrder = [] as string[];
             let usedWords = new Map<string, boolean>();
             calculateSectionOrder(mapValues(sections)).forEach(id => {
-                if (id === 0) return;
+                if (id === 0 && sections.size > 1) return;
                 let secOrder = calculateWordOrder(grid, sections.get(id)!);
                 wordOrder = wordOrder.concat(secOrder.filter(wk => !usedWords.has(wk)));
                 secOrder.forEach(wk => {usedWords.set(wk, true);});
@@ -256,6 +260,7 @@ function calculateWordOrder(grid: GridState, section: Section): string[] {
                     let newRowOrCol = rowOrCol(newWord);
                     if (newRowOrCol - prevRowOrCol === 1) {
                         curGroup.push(newWord);
+                        prevRowOrCol = newRowOrCol;
                         i++;
                     }
                     else break;

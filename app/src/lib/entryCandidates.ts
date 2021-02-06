@@ -21,7 +21,7 @@ export function populateAndScoreEntryCandidates(node: FillNode, isForManualFill:
     }
 
     let eligibleCandidates = [] as EntryCandidate[];
-    let performFullHeuristics = node.anchorCombosLeft.length <= 50;
+    let performFullHeuristics = node.anchorCombosLeft.length <= 20;
     // cap anchor combos processed at 144
     for(let i = 0; i < 144; i++) {
         processAnchorCombo(node, isForManualFill, performFullHeuristics);
@@ -148,8 +148,6 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean, performFul
         let crossCrossKeys = new Map<string, boolean>();
         let calculatedSquares = new Map<string, string[]>();
         let usedWords = new Map<string, boolean>();
-        let unfilledTotal = 0;
-        let unfilledCount = 0;
         let iffyEntries = [] as string[];
         let iffyWordKeys = [] as string[];
         let crossCount = 0;
@@ -168,10 +166,11 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean, performFul
         while(true) {
             let wordKeys = distillIndex % 2 === 1  ? crossKeys : crossCrossKeys;
             let foundCountReduction = false;
-            let shortCircuited = false;
     
             // eslint-disable-next-line
             wordKeys.forEach((_, wKey) => {
+                if (!isViable) return;
+
                 let word = grid.words.get(wKey)!;
                 let squares = getSquaresForWord(grid, word);
                 if (isWordFull(squares)) return;
@@ -179,7 +178,6 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean, performFul
                 let filteredEntries = [] as string[];
                 let anchorInfo = populateFillWordAnchors(squares, calculatedSquares);
                 let anchorComboCount = anchorInfo.anchorCombosLeft.length;
-                if (distillIndex === 1 && anchorComboCount > 120) shortCircuited = true;
                 if (distillIndex > 1 && anchorComboCount > 120) return;
 
                 anchorInfo.anchorCombosLeft.forEach(combo => {
@@ -198,7 +196,7 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean, performFul
                 }
 
                 if (distillIndex === 1)
-                    crossCount =+ filteredEntries.length;
+                    crossCount += filteredEntries.length;
     
                 squares.forEach((sq, i) => {
                     let newMatrix = Array<boolean>(26).fill(false);
@@ -212,18 +210,13 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean, performFul
                         foundCountReduction = true;
 
                     calculatedSquares.set(squareKey(sq), letters);
-                    if (distillIndex === 1 && !sq.content) {
-                        unfilledCount++;
-                        unfilledTotal += letters.length;
-                    }
                 });
             });
 
-            if (!foundCountReduction || shortCircuited) break;
-            if (distillIndex === 1 && unfilledTotal/unfilledCount >= 18) break;
+            if (!foundCountReduction) break;
             if (iffyEntries.length > 0) break;
             if (!isViable) break;
-            if (!performFullHeuristics) break;
+            if (distillIndex > 0 && !performFullHeuristics) break;
 
             distillIndex++;
         }
@@ -315,14 +308,11 @@ function getFilteredEntries(squares: GridSquare[], anchorPattern: string, calcul
             let sqKey = squareKey(sq);
             if (ignoredSquares && ignoredSquares.includes(sqKey)) return true;
             
-            if (calculatedSquares) {
-                if (calculatedSquares.has(sqKey) && !calculatedSquares.get(sqKey)!.includes(entry[i])) {
-                    return false;
-                }
+            if (calculatedSquares && calculatedSquares.has(sqKey) && !calculatedSquares.get(sqKey)!.includes(entry[i])) {
+                return false;
             }
-            else {
-                if (sq.viableLetters && !sq.viableLetters.includes(entry[i]))
-                    return false;
+            else if (sq.viableLetters && !sq.viableLetters.includes(entry[i])) {
+                return false;
             }
         }
         

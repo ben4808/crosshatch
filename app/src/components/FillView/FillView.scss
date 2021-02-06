@@ -84,10 +84,10 @@
 }
 
 .fill-switch {
-    cursor: pointer;
     margin-left: 10px;
 }
 .custom-control-label {
+    display: inline;
     width: 125px;
     cursor: pointer;
     padding-left: 5px;
@@ -110,3 +110,21 @@
 .section-checkbox {
     margin-left: 10px;
 }
+
+#loader {
+    position: absolute;
+    left: 290px;
+    top: 150px;
+    z-index: 1;
+    width: 60px;
+    height: 60px;
+    border: 10px solid #f3f3f3;
+    border-radius: 50%;
+    border-top: 10px solid #3498db;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }

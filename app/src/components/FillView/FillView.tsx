@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { SymmetryType } from '../../models/SymmetryType';
 import "./FillView.scss";
 import Globals from '../../lib/windowService';
@@ -6,25 +6,60 @@ import { FillStatus } from '../../models/FillStatus';
 import { getEntryAtWordKey, getGrid, getSection, getSquaresForWord, mapKeys, mapValues } from '../../lib/util';
 import { calculateSectionOrder, getLongestStackWord, getPhoneticName, insertSectionCandidateIntoGrid, 
     makeNewSection, sectionCandidateKey, updateSectionFilters } from '../../lib/section';
-import { getLettersFromSquares, insertEntryIntoGrid, updateManualEntryCandidates } from '../../lib/grid';
+import { clearFill, getLettersFromSquares, insertEntryIntoGrid, updateGridConstraintInfo, updateManualEntryCandidates } from '../../lib/grid';
 import { fillSectionWord, makeNewNode } from '../../lib/fill';
 import { FillNode } from '../../models/FillNode';
 import { AppContext } from '../../AppContext';
 import { ContentType } from '../../models/ContentType';
 import { Section } from '../../models/Section';
 import { processWordListData } from '../../lib/wordList';
+import { useInterval } from '../../lib/useInterval';
 
 function FillView() {
     const appContext = useContext(AppContext);
     const [showSectionCandidates, setShowSectionCandidates] = useState(true);
+    const [isWordListLoading, setIsWordListLoading] = useState(false);
+    const [fillStatus, setFillStatus] = useState(FillStatus.NoWordList);
+    const [isFillRunning, setIsFillRunning] = useState(false);
+
+    useEffect(() => {
+        if (Globals.wordList) setFillStatus(FillStatus.Ready);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     function triggerUpdate() {
         appContext.triggerUpdate();
     }
 
     function handleToggleFill() {
-        Globals.isFillEnabled = !Globals.isFillEnabled;
-        appContext.toggleFill();
+        if (fillStatus === FillStatus.Complete) return;
+
+        if (isFillRunning) {
+            clearFill(getGrid());
+            setFillStatus(FillStatus.Ready);
+            setIsFillRunning(false);
+            triggerUpdate();
+        }
+        else {
+            setFillStatus(FillStatus.Running);
+            setIsFillRunning(true);
+        }
+    }
+    
+    function doFillWord() {
+        if (!fillSectionWord()) {
+            clearFill(getGrid());
+            setFillStatus(FillStatus.Complete);
+            setIsFillRunning(false);
+        }
+        triggerUpdate();
+    }
+
+    function handleFillWordClick(event: any) {
+        if (!Globals.wordList) return;
+
+        fillSectionWord();
+        triggerUpdate();
     }
 
     function handleSymmetryChange(event: any) {
@@ -213,11 +248,6 @@ function FillView() {
         triggerUpdate();
     }
 
-    function handleFillWordClick(event: any) {
-        fillSectionWord();
-        triggerUpdate();
-    }
-
     function loadWordList() {
         document.getElementById("open-wordlist-input")!.click();
     }
@@ -227,22 +257,33 @@ function FillView() {
 
         Globals.wordList = undefined;
         Globals.wordLists = [];
-        Globals.fillStatus = FillStatus.NoWordList;
-        triggerUpdate();
+        setFillStatus(FillStatus.NoWordList);
+        Globals.selectedWordNode = undefined;
     }
 
     function onWordListUpload(event: any) {
         let file = event.target.files[0];
         event.target.value = null;
+        setIsWordListLoading(true);
 
-        processWordListData(file.name, file).then(wordList => {
-            if (wordList) {
-                Globals.wordLists!.push(wordList);
-                Globals.fillStatus = FillStatus.Ready;
-                triggerUpdate();
-            }
-        });
+        setTimeout(() => {
+            processWordListData(file.name, file).then(wordList => {
+                if (wordList) {
+                    Globals.wordLists!.push(wordList);
+                    setFillStatus(FillStatus.Ready);
+                    let grid = getGrid();
+                    updateGridConstraintInfo(grid);
+                    updateManualEntryCandidates(grid);
+                    setIsWordListLoading(false);
+                    triggerUpdate();
+                }
+            });
+        }, 5);
     }
+
+    useInterval(() => {
+        doFillWord();
+    }, isFillRunning ? 5 : null);
 
     let grid = getGrid();
     let selectedSymmetry = SymmetryType[Globals.gridSymmetry!];
@@ -250,9 +291,7 @@ function FillView() {
         Object.values(SymmetryType).filter(t => isNaN(Number(t))) :
         getSymmetryTypesForRectGrids();
 
-    let fillStatus = Globals.fillStatus!;
-    let fillStatusStr = getFillStatusString(Globals.fillStatus!);
-    let isFillEnabled = Globals.isFillEnabled;
+    let fillStatusStr = getFillStatusString(fillStatus);
     
     let wordLists = Globals.wordLists || [];
 
@@ -290,6 +329,7 @@ function FillView() {
     return (
         <div id="FillView" className="fill-container">
             <input id="open-wordlist-input" hidden type="file" accept=".dict,.txt" onChange={onWordListUpload} />
+            <div id="loader" style={{display: isWordListLoading ? "block" : "none"}}></div>
 
             <div className={"fill-status" +
                 (fillStatus === FillStatus.NoWordList ? " fill-status-red" :
@@ -298,7 +338,7 @@ function FillView() {
             <>
                 <div className="custom-control custom-switch fill-switch">
                     <input type="checkbox" className="custom-control-input" id="fillSwitch" 
-                        checked={isFillEnabled} onChange={handleToggleFill} />
+                        checked={isFillRunning} onChange={handleToggleFill} />
                     <label className="custom-control-label" htmlFor="fillSwitch">Fill</label>
                 </div>
                 <br />
@@ -354,7 +394,7 @@ function FillView() {
                         <div className="fill-list-header">Entry</div>
                         <div className="fill-list-header">Score</div>
                         <div className="fill-list-header">Iffy</div>
-                        { isNoEntryCandidates && (
+                        { isNoEntryCandidates && useManualHeuristics && (
                             <div className="fill-list-row-wrapper">
                                 <div><i>No viable entries</i></div><div></div><div></div>
                             </div>
@@ -379,8 +419,8 @@ function FillView() {
                         <div className="fill-list-header">Conn</div>
                         <div className="fill-list-header">Fills</div>
                         { sections.map(sec => (
-                            <div className="fill-list-row-wrapper" key={sec.id} data-id={sec.id} 
-                                onClick={handleSectionClick} onMouseOver={handleSectionHover}>
+                            <div className={"fill-list-row-wrapper" + (sec.id === activeSection.id ? " fill-list-row-selected" : "")} 
+                                key={sec.id} data-id={sec.id} onClick={handleSectionClick} onMouseOver={handleSectionHover}>
                                 <div><input type="checkbox" className="section-checkbox"
                                     checked={selectedSectionIds.includes(sec.id)} onChange={handleSectionClick} /></div>
                                 <div>{getPhoneticName(sec.id)}</div>

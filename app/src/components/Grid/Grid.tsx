@@ -6,9 +6,10 @@ import Square from '../Square/Square';
 import { GridState } from '../../models/GridState';
 import { WordDirection } from '../../models/WordDirection';
 import Globals from '../../lib/windowService';
-import { compareTuples, doesWordContainSquare, getGrid, getSelectedWord, getSquaresForWord, 
-    getWordAtSquare, initializeSessionGlobals, isWordFull, mapKeys, mapValues, otherDir, squareKey, wordKey } from '../../lib/util';
-import { eraseGridSquare, getLettersFromSquares, getSymmetrySquares, getUncheckedSquareDir, populateWords, 
+import { compareTuples, doesWordContainSquare, getGrid, getSection, getSelectedWord, getSquaresForWord, 
+    getWordAtSquare, initializeSessionGlobals, isWordFull, mapKeys, mapValues, otherDir, 
+    squareKey, wordKey } from '../../lib/util';
+import { clearFill, eraseGridSquare, getLettersFromSquares, getSymmetrySquares, getUncheckedSquareDir, populateWords, 
     updateGridConstraintInfo, updateManualEntryCandidates } from '../../lib/grid';
 import { GridWord } from '../../models/GridWord';
 import { AppContext } from '../../AppContext';
@@ -123,6 +124,7 @@ function Grid() {
         if (blackSquareChanged) {
             populateWords(grid);
             initializeSessionGlobals();
+            clearFill(grid);
             setSelWordAtSelSquare(newSelSq);
             updateGridConstraintInfo(grid);
         }
@@ -173,8 +175,9 @@ function Grid() {
         return !!getSelectedWord();
     }
 
-    function isSquareInSelectedSection(sq: GridSquare): boolean {
-        return !!sections.find(s => s.squares.has(squareKey(sq)))
+    function isSquareInActiveSection(sq: GridSquare): boolean {
+        let section = getSection();
+        return section.squares.has(squareKey(sq));
     }
 
     function setSelWordAtSelSquare(newSelSquare: [number, number]) {
@@ -198,7 +201,7 @@ function Grid() {
             qualityClass: qualityClassMap.get(squareKey(square)) || QualityClass.Normal,
             isSelected: isSquareSelected() && compareTuples(selectedSquare, [row, col]),
             isInSelectedWord: isWordSelected() && doesWordContainSquare(selectedWord!, row, col),
-            isInSelectedSection: isSquareInSelectedSection(square),
+            isInSelectedSection: isSquareInActiveSection(square),
             constraintSum: square.viableLetters ? square.viableLetters.length : 26,
             isCircled: square.isCircled,
         };

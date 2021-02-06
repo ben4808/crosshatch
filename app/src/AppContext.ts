@@ -7,6 +7,5 @@ export const AppContext = React.createContext({
     setPuzzle: (_: Puzzle) => {},
     createNewPuzzle: (w: number, h: number) => {},
     exportPuz: () => {},
-    toggleFill: () => {},
   });
   

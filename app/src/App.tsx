@@ -1,4 +1,4 @@
-import React, { useEffect, useReducer, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { AppContext } from './AppContext';
 import { AppProps } from './AppProps';
 import CluesView from './components/CluesView/CluesView';
@@ -11,20 +11,15 @@ import { Puzzle } from './models/Puzzle';
 import { getGrid, initializeSessionGlobals, newPuzzle } from './lib/util';
 import { generatePuzFile } from './lib/puzFiles';
 import { SymmetryType } from './models/SymmetryType';
-import { FillStatus } from './models/FillStatus';
 import { clearFill, createNewGrid } from './lib/grid';
-import { fillSectionWord } from './lib/fill';
 import { WordDirection } from './models/WordDirection';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
-  const [gridWidth, setGridWidth] = useState(15);
-  const [gridHeight, setGridHeight] = useState(4);
+  const [gridWidth, setGridWidth] = useState(7);
+  const [gridHeight, setGridHeight] = useState(7);
   const [updateSemaphore, setUpdateSemaphore] = useState(0);
-  // eslint-disable-next-line
-  const [ignored, forceUpdate] = useReducer(x => x + 1, 0);
   const [appState, setAppState] = useState(getAppContext());
-  const [fillInterval, setFillInterval] = useState({} as any);
 
   useEffect(() => {
     setAppState(getAppContext());
@@ -38,32 +33,11 @@ function App(props: AppProps) {
       setPuzzle: setPuzzle,
       createNewPuzzle: createNewPuzzle,
       exportPuz: exportPuz,
-      toggleFill: toggleFill,
     }
-  }
-
-  function toggleFill() {
-    if (Globals.isFillEnabled) {
-      let interval = setInterval(() => doFillWord(), 5);
-      setFillInterval(interval);
-      Globals.fillStatus = FillStatus.Running;
-    }
-    else if (fillInterval) {
-      clearInterval(fillInterval);
-      clearFill(getGrid());
-      Globals.fillStatus = FillStatus.Ready;
-    }
-    triggerUpdate();
-  }
-
-  function doFillWord() {
-    fillSectionWord();
-    triggerUpdate();
   }
 
   function triggerUpdate() {
     setUpdateSemaphore(updateSemaphore + 1);
-    forceUpdate();
   }
 
   function switchActiveView(newView: string) {
@@ -98,27 +72,23 @@ function App(props: AppProps) {
     Globals.puzzle = puzzle || newPuzzle();
     if (width === undefined) width = gridWidth;
     if (height === undefined) height = gridHeight;
-    setGridWidth(width);
-    setGridHeight(height);
     if (!Globals.activeGrid || !isNewPuzzle)
       Globals.activeGrid = createNewGrid(width, height);
     Globals.hoverGrid = undefined;
-    Globals.selectedWordKey = "";
+    Globals.selectedWordKey = undefined;
     Globals.selectedWordDir = WordDirection.Across;
-    Globals.gridSymmetry = SymmetryType.MirrorHorizontal;
-    Globals.isFillEnabled = false;
-    Globals.useManualHeuristics = true;
-    Globals.maxIffyLength = 0;
-    Globals.fillStatus = FillStatus.NoWordList;
+    if (!Globals.gridSymmetry) Globals.gridSymmetry = SymmetryType.Rotate180;
+    if (Globals.useManualHeuristics === undefined) Globals.useManualHeuristics = true;
+    if (Globals.maxIffyLength === undefined) Globals.maxIffyLength = 0;
     Globals.selectedWordNode = undefined;
     Globals.curChainId = 1;
-    Globals.isFillEnabled = false;
-    Globals.useManualHeuristics = true;
-    Globals.maxIffyLength = 0;
-    Globals.wordLists = [];
+    if (Globals.wordLists === undefined) Globals.wordLists = [];
 
     initializeSessionGlobals();
     clearFill(Globals.activeGrid!);
+
+    setGridWidth(width);
+    setGridHeight(height);
   }
 
   if (!Globals.puzzle) {

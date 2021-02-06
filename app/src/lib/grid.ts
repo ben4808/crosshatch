@@ -63,6 +63,8 @@ export function updateGridConstraintInfo(grid: GridState) {
     grid.usedWords = new Map<string, boolean>();
     forAllGridSquares(grid, sq => { sq.viableLetters = undefined; });
 
+    if (!Globals.wordList) return;
+
     let wordKeys = mapKeys(grid.words);
     let sortedWordKeys = wordKeys.filter(k => k.includes("A")).concat(wordKeys.filter(k => k.includes("D")));
     sortedWordKeys.forEach(wordKey => {
@@ -288,6 +290,7 @@ export function eraseGridSquare(grid: GridState, sq: GridSquare, dir: WordDirect
     }
         
     sq.content = undefined;
+    sq.contentType = ContentType.Autofill;
     clearFill(grid);
 }
 

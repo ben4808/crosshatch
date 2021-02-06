@@ -1,5 +1,4 @@
 import { FillNode } from "./FillNode";
-import { FillStatus } from "./FillStatus";
 import { GridState } from "./GridState";
 import { IndexedWordList } from "./IndexedWordList";
 import { Puzzle } from "./Puzzle";
@@ -24,8 +23,6 @@ export interface GlobalsObj {
     selectedSectionIds?: Map<number, boolean>;
     selectedSectionCandidateKeys?: Map<number, string>;
 
-    fillStatus?: FillStatus;
-    isFillEnabled?: boolean;
     useManualHeuristics?: boolean;
     maxIffyLength?: number;
     gridSymmetry?: SymmetryType;
