@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useState } from 'react';
+import React, { useContext, useState } from 'react';
 import { SymmetryType } from '../../models/SymmetryType';
 import "./FillView.scss";
 import Globals from '../../lib/windowService';
@@ -6,7 +6,7 @@ import { FillStatus } from '../../models/FillStatus';
 import { getEntryAtWordKey, getGrid, getSection, getSquaresForWord, mapKeys, mapValues } from '../../lib/util';
 import { calculateSectionOrder, getLongestStackWord, getPhoneticName, insertSectionCandidateIntoGrid, 
     makeNewSection, sectionCandidateKey, updateSectionFilters } from '../../lib/section';
-import { clearFill, getLettersFromSquares, insertEntryIntoGrid, updateGridConstraintInfo, updateManualEntryCandidates } from '../../lib/grid';
+import { clearFill, eraseSectionCandidateFromGrid, getLettersFromSquares, insertEntryIntoGrid, updateGridConstraintInfo, updateManualEntryCandidates } from '../../lib/grid';
 import { fillSectionWord, makeNewNode } from '../../lib/fill';
 import { FillNode } from '../../models/FillNode';
 import { AppContext } from '../../AppContext';
@@ -19,23 +19,22 @@ function FillView() {
     const appContext = useContext(AppContext);
     const [showSectionCandidates, setShowSectionCandidates] = useState(true);
     const [isWordListLoading, setIsWordListLoading] = useState(false);
-    const [fillStatus, setFillStatus] = useState(FillStatus.NoWordList);
     const [isFillRunning, setIsFillRunning] = useState(false);
-
-    useEffect(() => {
-        if (Globals.wordList) setFillStatus(FillStatus.Ready);
-        // eslint-disable-next-line react-hooks/exhaustive-deps
-    }, []);
 
     function triggerUpdate() {
         appContext.triggerUpdate();
     }
 
+    function setFillStatus(newStatus: FillStatus) {
+        Globals.fillStatus = newStatus;
+        triggerUpdate();
+    }
+
     function handleToggleFill() {
-        if (fillStatus === FillStatus.Complete) return;
+        if (Globals.fillStatus === FillStatus.Complete) return;
 
         if (isFillRunning) {
-            clearFill(getGrid());
+            //clearFill(getGrid());
             setFillStatus(FillStatus.Ready);
             setIsFillRunning(false);
             triggerUpdate();
@@ -47,6 +46,7 @@ function FillView() {
     }
     
     function doFillWord() {
+        if (Globals.fillStatus === FillStatus.Complete) return;
         if (!fillSectionWord()) {
             clearFill(getGrid());
             setFillStatus(FillStatus.Complete);
@@ -58,7 +58,10 @@ function FillView() {
     function handleFillWordClick(event: any) {
         if (!Globals.wordList) return;
 
-        fillSectionWord();
+        if (!fillSectionWord()) {
+            clearFill(getGrid());
+            setFillStatus(FillStatus.Complete);
+        }
         triggerUpdate();
     }
 
@@ -110,7 +113,7 @@ function FillView() {
         let node = makeNewNode(grid, 0, false, undefined);
         let section = getSection();
         let candidate = section.candidates.get(sectionCandidateKey)!;
-        insertSectionCandidateIntoGrid(node.endGrid, candidate, section, 
+        insertSectionCandidateIntoGrid(node.endGrid, candidate, 
             isHover ? ContentType.HoverChosenSection : ContentType.ChosenSection);
         return node;
     }
@@ -164,16 +167,20 @@ function FillView() {
         }
 
         let sectionId = +target.attributes["data-id"].value;
-        if (Globals.selectedSectionIds!.get(sectionId)) {
-            Globals.selectedSectionIds!.delete(sectionId);
+        clearFill(getGrid());
+
+        if (sectionId === Globals.activeSectionId!)
             Globals.activeSectionId = 0;
-        }
-        else {
-            Globals.selectedSectionIds!.set(sectionId, true);
+        else
             Globals.activeSectionId = sectionId;
-        }
+
+        if (Globals.selectedSectionIds!.get(sectionId))
+            Globals.selectedSectionIds!.delete(sectionId);
+        else
+            Globals.selectedSectionIds!.set(sectionId, true);
 
         Globals.hoverGrid = undefined;
+        Globals.hoverSectionId = undefined;
         triggerUpdate();
     }
 
@@ -195,6 +202,15 @@ function FillView() {
     }
 
     function handleSectionCandidateClick(event: any) {
+        function eraseSc() {
+            section.selectedCandidate = undefined;
+            section.comboPermsQueue = [];
+            section.comboPermsUsed = new Map<string, boolean>();
+            let sc = section.candidates.get(candidateKey)!;
+            eraseSectionCandidateFromGrid(grid, sc);
+            clearFill(grid);
+        }
+
         let target = event.target;
         while (target.classList.length < 1 || target.classList[0] !== "fill-list-row-wrapper") {
             target = target.parentElement;
@@ -202,13 +218,24 @@ function FillView() {
         }
 
         let section = getSection();
+        let grid = getGrid();
         let candidateKey = target.attributes["data-candidate-key"].value as string;
-        let node = getManualSectionNode(candidateKey, false);
-        Globals.selectedSectionCandidateKeys!.set(section.id, candidateKey);
 
-        updateManualEntryCandidates(node.endGrid);
+        if (section.selectedCandidate === candidateKey) {
+            eraseSc();
+        }
+        else {
+            if (section.selectedCandidate) eraseSc();
 
-        Globals.activeGrid = node.endGrid;
+            let node = getManualSectionNode(candidateKey, false);
+            Globals.selectedSectionCandidateKeys!.set(section.id, candidateKey);
+            section.selectedCandidate = candidateKey;
+
+            updateManualEntryCandidates(node.endGrid);
+
+            Globals.activeGrid = node.endGrid;
+        }
+        
         updateSectionFilters();
         Globals.hoverGrid = undefined;
         triggerUpdate();
@@ -291,7 +318,7 @@ function FillView() {
         Object.values(SymmetryType).filter(t => isNaN(Number(t))) :
         getSymmetryTypesForRectGrids();
 
-    let fillStatusStr = getFillStatusString(fillStatus);
+    let fillStatusStr = getFillStatusString(Globals.fillStatus!);
     
     let wordLists = Globals.wordLists || [];
 
@@ -304,6 +331,7 @@ function FillView() {
         sections = sectionsOrder.map(id => Globals.sections!.get(id)!);
     }
     let activeSection = Globals.sections ? Globals.sections!.get(Globals.activeSectionId!)! : makeNewSection(-1);
+    let selectedScKey = activeSection.selectedCandidate;
     let selectedSectionIds = mapKeys(Globals.selectedSectionIds!) || [0];
     let sectionCandidates = mapValues(activeSection.candidates).sort((a, b) => b.score - a.score);
     let selectedEntry = Globals.selectedWordKey ? getEntryAtWordKey(grid, Globals.selectedWordKey!) : "";
@@ -332,8 +360,8 @@ function FillView() {
             <div id="loader" style={{display: isWordListLoading ? "block" : "none"}}></div>
 
             <div className={"fill-status" +
-                (fillStatus === FillStatus.NoWordList ? " fill-status-red" :
-                fillStatus === FillStatus.Running ? " fill-status-green" : "")}>{fillStatusStr}</div>
+                (Globals.fillStatus! === FillStatus.NoWordList ? " fill-status-red" :
+                Globals.fillStatus! === FillStatus.Running ? " fill-status-green" : "")}>{fillStatusStr}</div>
             {wordLists.length > 0 &&
             <>
                 <div className="custom-control custom-switch fill-switch">
@@ -447,12 +475,18 @@ function FillView() {
                                 <div><i>Hidden</i></div><div></div><div></div>
                             </div>
                         )}
+                        {showSectionCandidates && Globals.fillStatus === FillStatus.Complete && sectionCandidates.length === 0 && (
+                            <div className="fill-list-row-wrapper">
+                                <div><i>Hidden</i></div><div></div><div></div>
+                            </div>
+                        )}
                         {showSectionCandidates && sectionCandidates.map(sc => {
                             let entry = getLettersFromSquares(getSquaresForWord(sc.grid, getLongestStackWord(activeSection)));
                             let candidateKey = sectionCandidateKey(activeSection, sc.grid);
 
                             return (
-                            <div className="fill-list-row-wrapper" key={candidateKey} data-candidate-key={candidateKey}
+                            <div className={"fill-list-row-wrapper" + (selectedScKey === candidateKey ? " fill-list-row-selected" : "")}
+                                key={candidateKey} data-candidate-key={candidateKey}
                                 onClick={handleSectionCandidateClick} onMouseOver={handleSectionCandidateHover}>
                                 <div>{entry}</div>
                                 <div>{sc.score.toFixed(2)}</div>

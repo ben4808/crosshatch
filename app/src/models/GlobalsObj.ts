@@ -1,4 +1,5 @@
 import { FillNode } from "./FillNode";
+import { FillStatus } from "./FillStatus";
 import { GridState } from "./GridState";
 import { IndexedWordList } from "./IndexedWordList";
 import { Puzzle } from "./Puzzle";
@@ -26,6 +27,7 @@ export interface GlobalsObj {
     useManualHeuristics?: boolean;
     maxIffyLength?: number;
     gridSymmetry?: SymmetryType;
+    fillStatus?: FillStatus;
 
     wordLists?: WordList[];
 

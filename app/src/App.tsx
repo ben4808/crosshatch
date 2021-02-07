@@ -13,6 +13,7 @@ import { generatePuzFile } from './lib/puzFiles';
 import { SymmetryType } from './models/SymmetryType';
 import { clearFill, createNewGrid } from './lib/grid';
 import { WordDirection } from './models/WordDirection';
+import { FillStatus } from './models/FillStatus';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
@@ -83,6 +84,7 @@ function App(props: AppProps) {
     Globals.selectedWordNode = undefined;
     Globals.curChainId = 1;
     if (Globals.wordLists === undefined) Globals.wordLists = [];
+    Globals.fillStatus = Globals.wordList !== undefined ? FillStatus.Ready : FillStatus.NoWordList;
 
     initializeSessionGlobals();
     clearFill(Globals.activeGrid!);

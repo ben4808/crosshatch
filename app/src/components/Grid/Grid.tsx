@@ -7,7 +7,7 @@ import { GridState } from '../../models/GridState';
 import { WordDirection } from '../../models/WordDirection';
 import Globals from '../../lib/windowService';
 import { compareTuples, doesWordContainSquare, getGrid, getSection, getSelectedWord, getSquaresForWord, 
-    getWordAtSquare, initializeSessionGlobals, isWordFull, mapKeys, mapValues, otherDir, 
+    getWordAtSquare, initializeSessionGlobals, isWordFull, mapValues, otherDir, 
     squareKey, wordKey } from '../../lib/util';
 import { clearFill, eraseGridSquare, getLettersFromSquares, getSymmetrySquares, getUncheckedSquareDir, populateWords, 
     updateGridConstraintInfo, updateManualEntryCandidates } from '../../lib/grid';
@@ -17,6 +17,7 @@ import { ContentType } from '../../models/ContentType';
 import { updateSectionFilters } from '../../lib/section';
 import { QualityClass } from '../../models/QualityClass';
 import { GridSquare } from '../../models/GridSquare';
+import { Section } from '../../models/Section';
 
 function Grid() {
     const [selectedSquare, setSelectedSquare] = useState([-1, -1] as [number, number]);
@@ -175,8 +176,7 @@ function Grid() {
         return !!getSelectedWord();
     }
 
-    function isSquareInActiveSection(sq: GridSquare): boolean {
-        let section = getSection();
+    function isSquareInSection(section: Section, sq: GridSquare): boolean {
         return section.squares.has(squareKey(sq));
     }
 
@@ -201,7 +201,8 @@ function Grid() {
             qualityClass: qualityClassMap.get(squareKey(square)) || QualityClass.Normal,
             isSelected: isSquareSelected() && compareTuples(selectedSquare, [row, col]),
             isInSelectedWord: isWordSelected() && doesWordContainSquare(selectedWord!, row, col),
-            isInSelectedSection: isSquareInActiveSection(square),
+            isInSelectedSection: (Globals.activeSectionId !== 0 && isSquareInSection(getSection(), square)) ||
+                (Globals.hoverSectionId !== undefined && isSquareInSection(Globals.sections!.get(Globals.hoverSectionId)!, square)),
             constraintSum: square.viableLetters ? square.viableLetters.length : 26,
             isCircled: square.isCircled,
         };
@@ -289,8 +290,6 @@ function Grid() {
 
     let puzzle = Globals.puzzle!;
     let grid = Globals.hoverGrid ? Globals.hoverGrid! : getGrid();
-    let sections = Globals.hoverSectionId !== undefined ? [Globals.sections!.get(Globals.hoverSectionId!)!] 
-        : mapKeys(Globals.selectedSectionIds!).map(k => Globals.sections!.get(k)!);
     let qualityClassMap = generateQualityClassMap(grid);
 
     let squareElements = [];

@@ -4,6 +4,7 @@ import { GridWord } from "./GridWord";
 
 export interface FillNode {
     parent?: FillNode;
+    chainBaseNode?: FillNode;
     startGrid: GridState;
     endGrid: GridState;
     fillWord?: GridWord;
@@ -11,13 +12,16 @@ export interface FillNode {
     chosenEntry?: EntryCandidate;
     depth: number;
     isChainNode: boolean;
+    isSectionBase: boolean;
     backtracks: number;
     chainGoodCandidates: number;
     chainIffyCandidates: number;
     iffyWordKey?: string;
     needsNewPriority: boolean;
-    chainId?: number;
     shouldBeDeleted: boolean;
+    chainId?: number;
+    topCrossScore: number;
+    topMinCrossScore: number;
     
     anchorSquareKeys: string[];
     anchorCombosLeft: [string, string][];

@@ -16,6 +16,8 @@ import { queryIndexedWordList } from "./wordList";
 import { populateAndScoreEntryCandidates, populateNoHeuristicEntryCandidates } from "./entryCandidates";
 import { getSectionsWithSelectedCandidate, getSectionWithCandidate, 
     getSelectedSectionCandidatesWithSquare } from "./section";
+import { FillStatus } from "../models/FillStatus";
+import { SectionCandidate } from "../models/SectionCandidate";
 
 export function populateWords(grid: GridState) {
     function processSquare(grid: GridState, row: number, col: number, dir: WordDirection) {
@@ -265,19 +267,14 @@ export function eraseGridSquare(grid: GridState, sq: GridSquare, dir: WordDirect
     }
     else if (squares.find(sq => sq.contentType === ContentType.ChosenSection)) {
         getSelectedSectionCandidatesWithSquare(squareKey(sq)).forEach(sc => {
-            let section = getSectionWithCandidate(sc);
-            Globals.selectedSectionCandidateKeys?.delete(section.id);
-            section.squares.forEach((_, sqKey) => {
-                let sq = getSquareAtKey(grid, sqKey);
-                if (sq.contentType === ContentType.ChosenSection)
-                    sq.contentType = ContentType.Autofill;
-            });
+            eraseSectionCandidateFromGrid(grid, sc);
         });
     }
     else if (squares.find(sq => [ContentType.User, ContentType.ChosenWord].includes(sq.contentType))) {
         let isInSection = getSectionsWithSelectedCandidate().find(sec => sec.squares.has(squareKey(sq)));
 
         squares.forEach(wsq => {
+            if (wsq.contentType === ContentType.User) return;
             let cross = getWordAtSquare(grid, wsq.row, wsq.col, otherDir(dir))!;
             let crossSquares = getSquaresForWord(grid, cross);
             if (crossSquares.find(csq => [ContentType.Autofill, ContentType.ChosenSection].includes(csq.contentType))) {
@@ -294,9 +291,25 @@ export function eraseGridSquare(grid: GridState, sq: GridSquare, dir: WordDirect
     clearFill(grid);
 }
 
+export function eraseSectionCandidateFromGrid(grid: GridState, sc: SectionCandidate) {
+    let section = getSectionWithCandidate(sc);
+    Globals.selectedSectionCandidateKeys?.delete(section.id);
+    section.squares.forEach((_, sqKey) => {
+        let sq = getSquareAtKey(grid, sqKey);
+        let scs = getSelectedSectionCandidatesWithSquare(sqKey);
+        if (scs.length > 1) return;
+        if (sq.contentType === ContentType.ChosenSection)
+            sq.contentType = ContentType.Autofill;
+    });
+}
+
 export function clearFill(grid: GridState) {
     Globals.selectedWordNode = undefined;
-    getSection().fillQueue = undefined;
+    let section = getSection();
+    section.fillQueue = undefined;
+    section.comboPermsQueue = [];
+    section.comboPermsUsed = new Map<string, boolean>();
+    Globals.fillStatus = Globals.wordList !== undefined ? FillStatus.Ready : FillStatus.NoWordList;
 
     forAllGridSquares(grid, sq => {
         if (!isUserFilled(sq)) {

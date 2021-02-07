@@ -8,4 +8,6 @@ export interface EntryCandidate {
     iffyWordKey?: string;
     // <squareKey, letters>
     calculatedSquares: Map<string, string[]>;
+    crossScore: number;
+    minCrossScore: number;
 }

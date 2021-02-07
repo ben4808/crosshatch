@@ -58,13 +58,24 @@ export function fillSectionWord(): boolean {
                 newSecCandidateFound = true;
             }
             
-            invalidateChainNode(node, undefined, newSecCandidateFound);
+            invalidateChainNode(node, newSecCandidateFound);
             fillQueue.pop();
             return true;
         }
 
         Globals.activeGrid = node.endGrid;
         let newNode = makeNewNode(node.endGrid, node.depth + 1, true, node);
+        
+        if (section.id === 0) {
+            let nextFillWord = selectWordToFill(node, getSection());
+            let curSections = getSectionsWithWord(node.fillWord!);
+            let nextSections = getSectionsWithWord(nextFillWord!);
+            if (curSections.length > 0 && !curSections.find(cs => nextSections.find(ns => ns.id === cs.id))) {
+                newNode = makeNewNode(node.endGrid, node.depth + 1, false, node, true);
+                Globals.curChainId!++;
+            }
+        }
+        
         fillQueue.insert(newNode, calculateNodePriority(newNode));
     }
     else {
@@ -77,7 +88,7 @@ export function fillSectionWord(): boolean {
     return true;
 }
 
-function invalidateChainNode(node: FillNode, crossAndCrosses?: Map<string, boolean>, newSecCandidateFound?: boolean) {
+function invalidateChainNode(node: FillNode, newSecCandidateFound?: boolean) {
     if (newSecCandidateFound === undefined) newSecCandidateFound = false;
 
     let parent = node.parent!;
@@ -98,45 +109,29 @@ function invalidateChainNode(node: FillNode, crossAndCrosses?: Map<string, boole
     parent.iffyWordKey = parent.parent ? parent.parent.iffyWordKey : undefined;
     parent.endGrid = deepClone(parent.startGrid);
 
-    if (parent.backtracks >= 3 || node.shouldBeDeleted) {
+    if (parent.backtracks >= 3) {
         if (parent.parent && !parent.parent.isChainNode) {
             parent.isChainNode = false;
             parent.needsNewPriority = true;
             Globals.curChainId!++;
         }
-
-        if (crossAndCrosses === undefined) {
-            let fillWord = parent.fillWord!;
-            let sectionsWithWord = getSectionsWithWord(fillWord);
-            let grid = parent.endGrid;
-            crossAndCrosses = new Map<string, boolean>();
-            getAllCrosses(grid, fillWord).forEach(cross => {
-                crossAndCrosses!.set(wordKey(cross), true);
-                getAllCrosses(grid, cross).forEach(crossCross => {
-                    if (sectionsWithWord.find(sec => sec.words.has(wordKey(crossCross))))
-                        crossAndCrosses!.set(wordKey(crossCross), true);
-                });
-            });
-        }
-
-        if (parent.parent && parent.parent.isChainNode && !crossAndCrosses.has(wordKey(parent.parent.fillWord!)))
-            parent.shouldBeDeleted = true;
             
-        invalidateChainNode(parent, crossAndCrosses);
+        invalidateChainNode(parent);
     }
 
     if (newSecCandidateFound) {
-        if (node.iffyWordKey && node.chainIffyCandidates < 25) {
-            node.chainIffyCandidates++;
+        if (node.iffyWordKey && node.chainBaseNode!.chainIffyCandidates < 25) {
+            node.chainBaseNode!.chainIffyCandidates++;
             return;
         }
-        else if (!node.iffyWordKey && node.chainGoodCandidates < 5) {
-            node.chainGoodCandidates++;
+        else if (!node.iffyWordKey && node.chainBaseNode!.chainGoodCandidates < 5) {
+            node.chainBaseNode!.chainGoodCandidates++;
             return;
         }
 
         let curNode = parent;
-        while (curNode.parent && curNode.parent.isChainNode) {
+        while (curNode.parent && (curNode.parent.isChainNode || curNode.parent.isSectionBase)) {
+            if (curNode.isSectionBase) curNode.shouldBeDeleted = true;
             curNode = curNode.parent!;
         }
         curNode.isChainNode = false;
@@ -155,6 +150,8 @@ function calculateNodePriority(node: FillNode): number {
     let situationScore: number;
     if (node.isChainNode)
         situationScore = 1e8 + 10000*(node.depth+1);
+    else if (node.isSectionBase)
+        situationScore = (10000 + node.depth) * 10000;
     else
         situationScore = (10000 - node.depth) * 10000;
 
@@ -165,24 +162,25 @@ function populateSeedNodes(fillQueue: PriorityQueue<FillNode>) {
     let grid = getGrid();
     let selectedSectionIds = Globals.selectedSectionIds!.size > 0 ? mapKeys(Globals.selectedSectionIds!) : [0];
     let activeSection = getSection();
-
-    if (activeSection.candidates.size === 0) {
-        let newNode = makeNewNode(grid, 0, false, undefined);
-        fillQueue.insert(newNode, calculateNodePriority(newNode));
-        return;
-    }
-
     let connectionIds = mapKeys(activeSection.connections)
-        .filter(id => selectedSectionIds.includes(id) && Globals.sections!.get(id)!.candidates.size > 0)
+        .filter(id => selectedSectionIds.includes(id) && Globals.sections!.get(id)!.selectedCandidate === undefined
+            && Globals.sections!.get(id)!.candidates.size > 0)
         .sort();
     let candidateCounts = connectionIds.map(i => Globals.sections!.get(i)!.candidates.size);
+    
     getNewPermutations(candidateCounts, activeSection);
     activeSection.comboPermsQueue.forEach(perm => {
         let node = makeNewNode(grid, 0, false, undefined);
+        if (perm[0] === -1) {
+            fillQueue.insert(node, calculateNodePriority(node));
+            return;
+        }
         let wasSuccess = true;
         for (let i = 0; i < perm.length; i++) {
-            let candidate = mapValues(Globals.sections!.get(connectionIds[i])!.candidates)[perm[i]];
-            if (!insertSectionCandidateIntoGrid(node.startGrid, candidate, activeSection))
+            let sortedCandidates = mapValues(Globals.sections!.get(connectionIds[i])!.candidates)
+                .sort((a, b) => b.score - a.score);
+            let candidate = sortedCandidates[perm[i]];
+            if (!insertSectionCandidateIntoGrid(node.startGrid, candidate))
                 wasSuccess = false;
         }
         if (wasSuccess)
@@ -195,7 +193,16 @@ function getNewPermutations(candidateCounts: number[], section: Section) {
         return "[" + perm.map(n => n.toString()).join(",") + "]";
     }
 
+    if (section.comboPermsUsed.size > 0 && section.comboPermsQueue.length > 0 && section.comboPermsQueue[0][0] === -1)
+        section.comboPermsQueue.shift();
     if (section.comboPermsUsed.size > 0 && section.comboPermsQueue.length === 0) return;
+
+    if (candidateCounts.length === 0) {
+        let defaultCombo = [-1];
+        section.comboPermsQueue = [defaultCombo];
+        section.comboPermsUsed.set(comboKey(defaultCombo), true);
+        return;
+    }
 
     if (section.comboPermsUsed.size === 0) {
         let allOnes = [] as number[];
@@ -206,7 +213,7 @@ function getNewPermutations(candidateCounts: number[], section: Section) {
     }
 
     while(true) {
-        let perm = section.comboPermsQueue.pop()!;
+        let perm = section.comboPermsQueue.shift()!;
         if (!perm) break;
         let permKey = perm.map(i => i.toString()).join(",");
         let foundNew = false;
@@ -247,17 +254,21 @@ export function processSectionNode(node: FillNode, section: Section): boolean {
     return false;
 }
 
-export function makeNewNode(grid: GridState, depth: number, isChainNode: boolean, parent: FillNode | undefined): FillNode {
+export function makeNewNode(grid: GridState, depth: number, isChainNode: boolean, parent: FillNode | undefined, 
+    isSectionBase?: boolean): FillNode {
     return {
         startGrid: deepClone(grid),
         endGrid: deepClone(grid),
         entryCandidates: [],
         depth: depth,
         isChainNode: isChainNode,
+        isSectionBase: !!isSectionBase,
         backtracks: 0,
         madeUpWord: undefined,
         parent: parent,
+        chainBaseNode: isChainNode ? (parent!.isChainNode ? parent!.chainBaseNode : parent!) : undefined,
         needsNewPriority: false,
+        shouldBeDeleted: false,
         anchorSquareKeys: [],
         anchorCombosLeft: [],
         viableLetterCounts: new Map<string, Map<string, number>>(),
@@ -265,7 +276,8 @@ export function makeNewNode(grid: GridState, depth: number, isChainNode: boolean
         chainGoodCandidates: parent ? parent.chainGoodCandidates : 0,
         chainIffyCandidates: parent ? parent.chainIffyCandidates : 0,
         chainId: Globals.curChainId!,
-        shouldBeDeleted: false,
+        topCrossScore: 0,
+        topMinCrossScore: 0,
     } as FillNode;
 }
 

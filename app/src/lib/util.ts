@@ -133,9 +133,9 @@ export function forAllGridSquares(grid: GridState, func: (sq: GridSquare) => voi
 
 export function wordLength(word: GridWord): number {
     if (word.direction === WordDirection.Across)
-        return word.end[1] - word.start[1];
+        return word.end[1] - word.start[1] + 1;
     else
-        return word.end[0] - word.start[0];
+        return word.end[0] - word.start[0] + 1;
 }
 
 export function newPuzzle(): Puzzle {

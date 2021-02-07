@@ -6,7 +6,7 @@ import { GridWord } from "../models/GridWord";
 import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
 import { WordDirection } from "../models/WordDirection";
-import { getUnfilledCrosses, getWordScore } from "./fill";
+import { getAllCrosses, getWordScore } from "./fill";
 import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
 import { forAllGridSquares, getEntryAtWordKey, getGrid, getSquaresForWord, getWordAtSquare, getSquareAtKey, isAcross, 
     isBlackSquare, mapKeys, squareKey, wordKey, wordLength, mapValues, isUserOrWordFilled, deepClone } from "./util";
@@ -40,9 +40,9 @@ export function getSectionString(grid: GridState, section: Section): string {
 }
 
 // returns whether it was a success
-export function insertSectionCandidateIntoGrid(grid: GridState, candidate: SectionCandidate, 
-    section: Section, contentType?: ContentType): boolean {
+export function insertSectionCandidateIntoGrid(grid: GridState, candidate: SectionCandidate, contentType?: ContentType): boolean {
     let newGrid = deepClone(grid) as GridState;
+    let section = Globals.sections!.get(candidate.sectionId)!;
     let foundDiscrepancy = false;
     section.squares.forEach((_, sqKey) => {
         let sq = getSquareAtKey(newGrid, sqKey);
@@ -163,7 +163,7 @@ export function generateGridSections(grid: GridState): Map<number, Section> {
     sections.forEach(section => {
         section.words.forEach((_, key) => {
             let word = grid.words.get(key)!;
-            let crosses = getUnfilledCrosses(grid, word);
+            let crosses = getAllCrosses(grid, word);
             crosses.forEach(cross => {
                 let crossKey = wordKey(cross);
                 if (!section.words.has(crossKey))
@@ -177,10 +177,11 @@ export function generateGridSections(grid: GridState): Map<number, Section> {
         if (section.id === 0) {
             let wordOrder = [] as string[];
             let usedWords = new Map<string, boolean>();
-            calculateSectionOrder(mapValues(sections)).forEach(id => {
+            let orderedSections = calculateSectionOrder(mapValues(sections));
+            orderedSections.forEach(id => {
                 if (id === 0 && sections.size > 1) return;
                 let secOrder = calculateWordOrder(grid, sections.get(id)!);
-                wordOrder = wordOrder.concat(secOrder.filter(wk => !usedWords.has(wk)));
+                wordOrder.push(...secOrder.filter(wk => !usedWords.has(wk)));
                 secOrder.forEach(wk => {usedWords.set(wk, true);});
             });
             mapKeys(section.words).filter(wKey => !usedWords.has(wKey)).forEach(wk => {
@@ -210,7 +211,7 @@ export function calculateSectionOrder(sections: Section[]): number[] {
         if (a.id === 0) return -1;
         if (b.id === 0) return 1;
         if (a.connections.size !== b.connections.size) return b.connections.size - a.connections.size;
-        return b.openSquareCount - a.openSquareCount;
+        return b.squares.size - a.squares.size;
     }).map(sec => sec.id);
 }
 
