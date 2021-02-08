@@ -59,6 +59,7 @@ function parseWordList(lines: string[]): string[] {
 export function queryIndexedWordList(pattern: string): string[] {
     let wl = Globals.wordList!;
     let words = [] as string[];
+    if (pattern.length > 15) return words;
     let letters = [] as [number, string][];
     let length = pattern.length;
     for (let i = 0; i < pattern.length; i++) {

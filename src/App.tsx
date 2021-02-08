@@ -104,7 +104,7 @@ function App(props: AppProps) {
 
       <Menu gridHeight={gridHeight} gridWidth={gridWidth} openView={activeView}></Menu>
 
-      <div className="main-panel">
+      <div className="left-panel">
         {activeView === "Clues" && 
             <CluesView updateSemaphore={updateSemaphore}></CluesView>
         }
@@ -113,7 +113,7 @@ function App(props: AppProps) {
         }
       </div>
       
-      <div className="main-panel">
+      <div className="right-panel">
         <Grid></Grid>
       </div>
     </AppContext.Provider>

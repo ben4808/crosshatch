@@ -64,6 +64,17 @@
     overflow-y: auto;
 }
 
+@media (max-width: 1400px) {
+    .fill-list-box {
+        height: 280px;
+        
+    }
+
+    .fill-list {
+        max-height: 245px;
+    }
+}
+
 .fill-list-header {
     font-weight: bold;
     padding: 0 2px;
@@ -122,10 +133,10 @@
     border-radius: 50%;
     border-top: 10px solid #3498db;
     animation: spin 1s linear infinite;
-  }
-  
-  @keyframes spin {
+}
+
+@keyframes spin {
     0% { transform: rotate(0deg); }
     100% { transform: rotate(360deg); }
-  }
+}
   
