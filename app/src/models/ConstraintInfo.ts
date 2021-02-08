@@ -1,4 +1,5 @@
 export interface ConstraintInfo {
-    viableLetters: Map<string, number>;
-    sumTotal: number,
+    isCalculated: boolean;
+    letterFillCount: number;
+    viableLetters: string[];
 }

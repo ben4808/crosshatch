@@ -1,10 +1,11 @@
-import { GridSquare } from "./GridSquare";
-
 export interface EntryCandidate {
     word: string;
-    score?: number;
+    score: number;
     isViable: boolean;
     hasBeenChained: boolean;
     wasChainFailure: boolean;
-    constraintSquaresForCrosses: GridSquare[][];
+    iffyEntry?: string;
+    iffyWordKey?: string;
+    crossScore: number;
+    minCrossScore: number;
 }

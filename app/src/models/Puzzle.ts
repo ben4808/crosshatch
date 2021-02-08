@@ -5,6 +5,5 @@ export interface Puzzle {
     author: string;
     copyright: string;
     notes: string;
-    grid: GridState;
     clues: Map<string, string>;
 }

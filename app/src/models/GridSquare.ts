@@ -1,5 +1,4 @@
-import { ConstraintInfo } from "./ConstraintInfo";
-import { QualityClass } from "./QualityClass";
+import { ContentType } from "./ContentType";
 import { SquareType } from "./SquareType";
 
 export interface GridSquare {
@@ -9,10 +8,8 @@ export interface GridSquare {
     type: SquareType;
     isCircled: boolean;
 
-    userContent?: string;
-    chosenFillContent?: string;
-    fillContent?: string;
-    qualityClass?: QualityClass;
+    content?: string;
+    contentType: ContentType;
 
-    constraintInfo?: ConstraintInfo;
+    viableLetters?: string[];
 }

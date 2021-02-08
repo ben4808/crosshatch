@@ -36,6 +36,11 @@
     .grid-content { padding-top: 1px; }
     .grid-number { left: -1px; top: -3px }
 }
+.grid-square-selected-section {
+    border: 2px solid lighten(darkgoldenrod, 40%);
+    .grid-content { padding-top: 1px; }
+    .grid-number { left: -1px; top: -3px }
+}
 .grid-square-error-word {
     background-color: lighten(indianred, 20%);
 }
@@ -70,17 +75,23 @@
     padding-top: 3px;
     color: black;
 }
-.grid-content-chosen-fill {
-    color: steelblue;
+.grid-content-chosen-word {
+    color: darken(steelblue, 10%);
+}
+.grid-content-chosen-word-hover {
+    color: lighten(steelblue, 10%);
+}
+.grid-content-chosen-section {
+    color: darkgoldenrod;
+}
+.grid-content-chosen-section-hover {
+    color: lighten(darkgoldenrod, 10%);
 }
 .grid-content-lively {
     color: seagreen;
 }
 .grid-content-normal {
     color: lighten(black, 50%);
-}
-.grid-content-crosswordese {
-    color: darkgoldenrod;
 }
 .grid-content-iffy {
     color: sienna
@@ -135,4 +146,22 @@
 
 .editable:hover {
     background-color: #ddd;
+}
+
+.entry-color {
+    color: darken(steelblue, 10%);
+}
+.section-color {
+    color: darkgoldenrod;
+}
+
+.fill-sec-checkbox {
+    float: right;
+    font-size: 12px;
+    margin-top: 5px;
+}
+.fill-sec-checkbox > label {
+    margin-left: 5px;
+    margin-bottom: 0;
+    cursor: pointer;
 }

@@ -1,8 +1,131 @@
 .fill-container {
     display: inline-block;
+    position: relative;
 }
 
 .symmetry-select {
     display: inline-block;
     width: 100px;
 }
+
+.fill-lists {
+    position: absolute;
+    top: 0px;
+    left: 180px;
+    width: 575px;
+}
+
+.fill-list-box {
+    display: inline-block;
+    width: 270px;
+    height: 360px;
+    margin: 0 5px;
+    margin-bottom: 7px;
+    padding: 0 5px;
+    vertical-align: top;
+    border: 1px solid #ccc;
+}
+
+.fill-list-title {
+    font-size: 14px;
+    font-weight: bold;
+    display: inline-block;
+}
+
+.fill-list-button {
+    float: right;
+    border: 1px solid black;
+    font-size: 14px;
+    padding: 0 5px;
+    cursor: pointer;
+    background-color: #ddd;
+    margin-top: 5px;
+    margin-left: 5px;
+}
+.fill-list-button:hover {
+    background-color: #bbb;
+}
+
+.fill-add-word-box {
+    font-size: 14px;
+}
+
+.fill-list {
+    background-color: white;
+    width: 268px;
+    max-height: 325px;
+    margin-top: 9px;
+    margin-left: -5px;
+    font-size: 10px;
+
+    display: inline-grid;
+    font-family: Verdana, sans-serif;
+    color: #333;
+    overflow-y: auto;
+}
+
+.fill-list-header {
+    font-weight: bold;
+    padding: 0 2px;
+}
+
+.fill-list-row-wrapper {
+    display: contents;
+    cursor: pointer;
+}
+.fill-list-row-wrapper > div {
+    padding: 0 2px;
+}
+.fill-list-row-wrapper:hover > div {
+    background-color: #ddd;
+}
+.fill-list-row-selected > div {
+    background-color: lightblue !important;
+}
+
+.fill-switch {
+    margin-left: 10px;
+}
+.custom-control-label {
+    display: inline;
+    width: 125px;
+    cursor: pointer;
+    padding-left: 5px;
+}
+.custom-control-label::before {
+    cursor: pointer;
+    transform: scale(1.4);
+}
+
+.fill-status {
+    margin-bottom: 5px;
+}
+.fill-status-red {
+    color: darkred;
+}
+.fill-status-green {
+    color: darkgreen;
+}
+
+.section-checkbox {
+    margin-left: 10px;
+}
+
+#loader {
+    position: absolute;
+    left: 290px;
+    top: 150px;
+    z-index: 1;
+    width: 60px;
+    height: 60px;
+    border: 10px solid #f3f3f3;
+    border-radius: 50%;
+    border-top: 10px solid #3498db;
+    animation: spin 1s linear infinite;
+  }
+  
+  @keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+  

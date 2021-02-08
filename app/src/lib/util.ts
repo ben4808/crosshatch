@@ -3,10 +3,15 @@ import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
-import { queryIndexedWordList } from "./wordList";
 import Globals from './windowService';
 import { Puzzle } from "../models/Puzzle";
-import { createNewGrid } from "./grid";
+import { getLettersFromSquares } from "./grid";
+import { ContentType } from "../models/ContentType";
+import { Section } from "../models/Section";
+import { SectionCandidate } from "../models/SectionCandidate";
+import { generateGridSections } from "./section";
+
+export const fullAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
 
 export function average(arr: number[]): number {
     return arr.reduce((a,b) => a + b, 0) / arr.length;
@@ -57,54 +62,6 @@ export function otherDir(dir: WordDirection): WordDirection {
     return dir === WordDirection.Across ? WordDirection.Down : WordDirection.Across;
 }
 
-export function indexedWordListLookup(grid: GridState, word: GridWord): string[] {
-    let squares = getSquaresForWord(grid, word);
-    return indexedWordListLookupSquares(grid, squares);
-}
-
-export function indexedWordListLookupSquares(grid: GridState, squares: GridSquare[]): string[] {
-    let length = squares.length;
-
-    let letters: [number, string][] = [];
-    for(let pos = 1; pos <= length; pos++) {
-        let ltr = squares[pos-1].fillContent;
-        if (ltr) {
-            letters.push([pos, ltr]);
-        }
-    }
-
-    if (letters.length === 1) {
-        return queryIndexedWordList(length, letters[0][0], letters[0][1]);
-    }
-
-    let possibles: string[] = [];
-    for(let i = 0; i < letters.length; i+=2) {
-        let entries = i === letters.length-1 ?
-            queryIndexedWordList(length, letters[i-1][0], letters[i-1][1], letters[i][0], letters[i][1]) :
-            queryIndexedWordList(length, letters[i][0], letters[i][1], letters[i+1][0], letters[i+1][1]);
-        if (entries.length === 0) return [];
-        possibles = i === 0 ? entries : intersectEntryLists(possibles, entries);
-    }
-
-    return possibles;
-}
-
-export function getRandomWordsOfLength(length: number): string[] {
-    let bucket = Globals.starterLengthBuckets!.get(length) || [];
-    let map = new Map<string, boolean>();
-    let ret = [];
-    for (let i = 0; i < 50; i++) {
-        let index = Math.floor(Math.random() * bucket.length);
-        let word = bucket[index];
-        if (!map.has(word)) {
-            map.set(word, true);
-            ret.push(word);
-        }
-    }
-
-    return ret;
-}
-
 export function getSquaresForWord(grid: GridState, word: GridWord): GridSquare[] {
     let row = word.start[0];
     let col = word.start[1];
@@ -118,20 +75,19 @@ export function getSquaresForWord(grid: GridState, word: GridWord): GridSquare[]
     return squares;
 }
 
-function intersectEntryLists(list1: string[], list2: string[]): string[] {
-    var hash2 = new Map(list2.map(i => [i, true]));
-    return list1.filter(word => hash2.has(word));
-}
-
 export function getWordAtSquare(grid: GridState, row: number, col: number, dir: WordDirection): GridWord | undefined {
-    if (dir === WordDirection.Across) {
-        return grid.words.find(x => x.direction === dir && x.start[0] === row && 
-            x.start[1] <= col && x.end[1] >= col);
-    }
-    else {
-        return grid.words.find(x => x.direction === dir && x.start[1] === col && 
-            x.start[0] <= row && x.end[0] >= row);
-    }
+    let ret = undefined as GridWord | undefined;
+
+    grid.words.forEach((word, _) => {
+        if (dir === WordDirection.Across && word.direction === dir && word.start[0] === row &&
+            word.start[1] <= col && word.end[1] >= col)
+            ret = word;
+        if (dir === WordDirection.Down && word.direction === dir && word.start[1] === col &&
+            word.start[0] <= row && word.end[0] >= row)
+            ret = word;
+    });
+
+    return ret;
 }
 
 export function newWord(): GridWord {
@@ -153,11 +109,11 @@ export function doesWordContainSquare(word: GridWord, row: number, col: number):
 }
 
 export function isWordEmpty(squares: GridSquare[]): boolean {
-    return !squares.find(x => !isBlackSquare(x) && x.fillContent);
+    return !squares.find(x => !isBlackSquare(x) && x.content);
 }
 
 export function isWordFull(squares: GridSquare[]): boolean {
-    return !squares.find(x => !isBlackSquare(x) && !x.fillContent);
+    return !squares.find(x => !isBlackSquare(x) && !x.content);
 }
 
 export function shuffleArray(array: any[]) {
@@ -175,28 +131,131 @@ export function forAllGridSquares(grid: GridState, func: (sq: GridSquare) => voi
     });
 }
 
-export function getWordLength(word: GridWord): number {
+export function wordLength(word: GridWord): number {
     if (word.direction === WordDirection.Across)
-        return word.end[1] - word.start[1];
+        return word.end[1] - word.start[1] + 1;
     else
-        return word.end[0] - word.start[0];
+        return word.end[0] - word.start[0] + 1;
 }
 
-export function newPuzzle(gridWidth: number, gridHeight: number): Puzzle {
+export function newPuzzle(): Puzzle {
     return {
         title: "",
         author: "",
         copyright: "",
-        grid: createNewGrid(gridWidth, gridHeight),
         clues: new Map<string, string>(),
         notes: "",
-    } as Puzzle;
+    } as Puzzle;    
 }
 
-export function clueKey(word: GridWord): string {
-    return `${word.start[0]},${word.start[1]},${word.direction === WordDirection.Across ? "A" : "D"}`;
+export function wordKey(word: GridWord): string {
+    return `[${word.start[0]},${word.start[1]},${word.direction === WordDirection.Across ? "A" : "D"}]`;
+}
+
+export function squareKey(sq: GridSquare | undefined): string {
+    return sq ? `[${sq.row},${sq.col}]` : "";
 }
 
 export function getGrid(): GridState {
-    return Globals.puzzle!.grid!;
+    return Globals.activeGrid!;
+}
+
+export function getSection(): Section {
+    return Globals.sections!.get(Globals.activeSectionId!)!;
+}
+
+export function getSelectedWord(): GridWord | undefined {
+    let grid = getGrid();
+    if (!Globals.selectedWordKey) return undefined;
+    return grid.words.get(Globals.selectedWordKey);
+}
+
+export function mapKeys<TKey, TVal>(map: Map<TKey, TVal>): TKey[] {
+    return Array.from(map.keys()) || [];
+}
+
+export function mapValues<TKey, TVal>(map: Map<TKey, TVal>): TVal[] {
+    return Array.from(map.values()) || [];
+}
+
+export function isUserFilled(sq: GridSquare): boolean {
+    return sq.contentType === ContentType.User || sq.contentType === ContentType.ChosenWord 
+        || sq.contentType === ContentType.ChosenSection;
+}
+
+export function isUserOrWordFilled(sq: GridSquare): boolean {
+    return sq.contentType === ContentType.User || sq.contentType === ContentType.ChosenWord;
+}
+
+export function isAcross(word: GridWord): boolean {
+    return word.direction === WordDirection.Across;
+}
+
+export function getSquareAtKey(grid: GridState, squareKey: string): GridSquare {
+    let tokens = squareKey.substring(1, squareKey.length - 1).split(",");
+    return grid.squares[+tokens[0]][+tokens[1]];
+}
+
+export function isPartOfIffyWord(sq: GridSquare): boolean {
+    if (!sq.viableLetters) return false;
+    return sq.viableLetters.length === 0;
+}
+
+// https://stackoverflow.com/questions/2450954/how-to-randomize-shuffle-a-javascript-array
+export function shuffle(array: any[]) {
+    for (let i = array.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [array[i], array[j]] = [array[j], array[i]];
+    }
+}
+
+export function getEntryAtWordKey(grid: GridState, wordKey: string): string {
+    return getLettersFromSquares(getSquaresForWord(grid, grid.words.get(wordKey)!));
+}
+
+export function getSectionCandidatesFromKeys(keys: string[]): SectionCandidate[] {
+    return keys
+        .map(sck => mapValues(Globals.sections!).find(sec => sec.candidates.has(sck))?.candidates.get(sck))
+        .filter(sck => sck !== undefined)
+        .map(sck => sck!);
+}
+
+export function constraintLetterCount(sq: GridSquare): number {
+    if (!sq.viableLetters) return 26;
+
+    return sq.viableLetters.length;
+}
+
+export function isPatternFull(pattern: string): boolean {
+    return !pattern.includes("-");
+}
+
+export function getUserFilledSections(grid: GridState): Section[] {
+    let sectionCandidates = getSectionCandidatesFromKeys(mapKeys(grid.userFilledSectionCandidates));
+    return sectionCandidates.map(sc => Globals.sections!.get(sc.sectionId)!);
+}
+
+export function getUserFilledSectionCandidates(grid: GridState): SectionCandidate[] {
+    return getSectionCandidatesFromKeys(mapKeys(grid.userFilledSectionCandidates));
+}
+
+export function initializeSessionGlobals() {
+    let grid = getGrid();
+    Globals.sections = generateGridSections(grid);
+    Globals.activeSectionId = 0;
+    Globals.hoverSectionId = undefined;
+    Globals.selectedSectionIds = new Map<number, boolean>();
+    Globals.selectedSectionCandidateKeys = new Map<number, string>();
+}
+
+export function letterMatrixToLetterList(matrix: boolean[]): string[] {
+    return matrix.map((x, i) => x ? String.fromCharCode(i + 65) : "").filter(x => x);
+}
+
+export function letterListToLetterMatrix(list: string[]): boolean[] {
+    let matrix = Array<boolean>(26).fill(false);
+    list.forEach(ltr => {
+        matrix[ltr.charCodeAt(0)] = true;
+    });
+    return matrix;
 }

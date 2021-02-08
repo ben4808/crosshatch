@@ -1,7 +1,6 @@
 export enum FillStatus {
+    NoWordList,
     Ready,
     Running,
-    Success,
-    Failed,
-    Paused,
+    Complete,
 }

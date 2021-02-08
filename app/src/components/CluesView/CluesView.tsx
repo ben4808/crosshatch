@@ -1,7 +1,7 @@
 import { CluesViewProp } from "./CluesViewProp";
 import React, { createRef, useEffect, useRef, useState } from 'react';
 import "./CluesView.scss";
-import { clueKey, deepClone, getSquaresForWord } from "../../lib/util";
+import { wordKey, deepClone, getSquaresForWord, getGrid, mapValues } from "../../lib/util";
 import Globals from '../../lib/windowService';
 import { getLettersFromSquares } from "../../lib/grid";
 import { WordDirection } from "../../models/WordDirection";
@@ -20,18 +20,18 @@ function CluesView(props: any) {
         let props = [] as CluesViewProp[];
         if (!Globals.puzzle) return props;
 
-        let grid = Globals.puzzle.grid;
-        let words = Globals.puzzle.grid.words;
+        let grid = getGrid();
+        let words = grid.words;
         let clues = Globals.puzzle.clues;
-        words.forEach(word => {
-            let key = clueKey(word);
+        mapValues(words).sort((a, b) => (a.number || 0) - (b.number || 0)).forEach(word => {
+            let key = wordKey(word);
             let squares = getSquaresForWord(grid, word);
             let prop = {
                 number: word.number!,
                 key: key,
                 direction: word.direction,
                 clue: clues.get(key)! || "",
-                entry: getLettersFromSquares(squares, false),
+                entry: getLettersFromSquares(squares),
                 isOpenForEditing: false,
             } as CluesViewProp;
             props.push(prop);

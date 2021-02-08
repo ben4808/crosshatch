@@ -4,15 +4,25 @@ import { GridWord } from "./GridWord";
 
 export interface FillNode {
     parent?: FillNode;
+    chainBaseNode?: FillNode;
     startGrid: GridState;
     endGrid: GridState;
     fillWord?: GridWord;
     entryCandidates: EntryCandidate[];
     chosenEntry?: EntryCandidate;
     depth: number;
-    processStops: number;
-    processStopsUpdated: boolean;
     isChainNode: boolean;
+    isSectionBase: boolean;
     backtracks: number;
-    isStartOfSection: boolean;
+    chainGoodCandidates: number;
+    chainIffyCandidates: number;
+    iffyWordKey?: string;
+    needsNewPriority: boolean;
+    shouldBeDeleted: boolean;
+    chainId?: number;
+    topCrossScore: number;
+    topMinCrossScore: number;
+    
+    anchorSquareKeys: string[];
+    anchorCombosLeft: [string, string][];
 }

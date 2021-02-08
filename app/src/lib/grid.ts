@@ -1,15 +1,23 @@
-import { ConstraintInfo } from "../models/ConstraintInfo";
 import { FillNode } from "../models/FillNode";
-import { FillStatus } from "../models/FillStatus";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
-import { priorityQueue } from "./priorityQueue";
 import Globals from './windowService';
-import { getSquaresForWord, isBlackSquare, newWord, forAllGridSquares, 
-    indexedWordListLookupSquares, isWordFull, isWordEmpty } from "./util";
+import { getSquaresForWord, isBlackSquare, newWord, forAllGridSquares, isWordFull, isWordEmpty, getGrid, 
+    isUserFilled, deepClone, wordKey, getWordAtSquare, getSquareAtKey, otherDir, squareKey, getSection, mapKeys, 
+    fullAlphabet, letterListToLetterMatrix, letterMatrixToLetterList } from "./util";
+import { SymmetryType } from "../models/SymmetryType";
+import { makeNewNode } from "./fill";
+import { ContentType } from "../models/ContentType";
+import { processAndInsertChosenEntry } from "./insertEntry";
+import { queryIndexedWordList } from "./wordList";
+import { populateAndScoreEntryCandidates, populateNoHeuristicEntryCandidates } from "./entryCandidates";
+import { getSectionsWithSelectedCandidate, getSectionWithCandidate, 
+    getSelectedSectionCandidatesWithSquare } from "./section";
+import { FillStatus } from "../models/FillStatus";
+import { SectionCandidate } from "../models/SectionCandidate";
 
 export function populateWords(grid: GridState) {
     function processSquare(grid: GridState, row: number, col: number, dir: WordDirection) {
@@ -30,12 +38,12 @@ export function populateWords(grid: GridState) {
         if (nextSq[0] === grid.height || nextSq[1] === grid.width || isBlackSquare(grid.squares[nextSq[0]][nextSq[1]])) {
             if ((dir === WordDirection.Across && currentWord.end[1] - currentWord.start[1] > 0) ||
                 (dir === WordDirection.Down && currentWord.end[0] - currentWord.start[0] > 0))
-                grid.words.push(currentWord);
+                grid.words.set(wordKey(currentWord), currentWord);
             currentWord = newWord();
         }
     }
 
-    grid.words = [];
+    grid.words = new Map<string, GridWord>();
 
     numberizeGrid(grid);
 
@@ -51,22 +59,22 @@ export function populateWords(grid: GridState) {
             processSquare(grid, row, col, WordDirection.Down);
         }
     }
-
-    grid.words.sort((a, b) => {
-        if (a.direction !== b.direction) return a.direction === WordDirection.Across ? -1 : 1;
-        return a.number! - b.number!;
-    });
 }
 
 export function updateGridConstraintInfo(grid: GridState) {
     grid.usedWords = new Map<string, boolean>();
-    forAllGridSquares(grid, sq => { sq.constraintInfo = undefined; });
+    forAllGridSquares(grid, sq => { sq.viableLetters = undefined; });
 
-    grid.words.forEach(word => {
-        let squares = getSquaresForWord(grid, word);
-        let letters = getLettersFromSquares(squares);
-        if (!letters.includes(".")) grid.usedWords.set(letters, true);
-        let newSquares = generateConstraintInfoForSquares(grid, squares);
+    if (!Globals.wordList) return;
+
+    let wordKeys = mapKeys(grid.words);
+    let sortedWordKeys = wordKeys.filter(k => k.includes("A")).concat(wordKeys.filter(k => k.includes("D")));
+    sortedWordKeys.forEach(wordKey => {
+        let word = grid.words.get(wordKey)!;
+        let newSquares = deepClone(getSquaresForWord(grid, word)) as GridSquare[];
+        let letters = getLettersFromSquares(newSquares);
+        if (!letters.includes("-")) grid.usedWords.set(letters, true);
+        generateConstraintInfoForSquares(newSquares);
         if (newSquares !== undefined && newSquares.length > 0) {
             newSquares.forEach(ns => {
                 grid.squares[ns.row][ns.col] = ns;
@@ -102,99 +110,60 @@ function numberizeGrid(grid: GridState) {
     }
 }
 
-export function generateConstraintInfoForSquares(grid: GridState, squares: GridSquare[]): GridSquare[] | undefined {
-    let ret = [] as GridSquare[];
+export function generateConstraintInfoForSquares(squares: GridSquare[]) {
+    squares.forEach(sq => {
+        if (sq.content) {
+            sq.viableLetters = [sq.content];
+        }
+        else if (!sq.viableLetters) {
+            sq.viableLetters = deepClone(fullAlphabet);
+        }
+    });
+    if (isWordEmpty(squares) || isWordFull(squares)) return;
 
-    if (isWordEmpty(squares)) return ret;
+    let pattern = getLettersFromSquares(squares);
+    let entryOptions = queryIndexedWordList(pattern);
+    if (entryOptions.length > 500) return;
 
-    if (isWordFull(squares)) {
-        squares.forEach(sq => {
-            sq.constraintInfo = {
-                sumTotal: 1,
-                viableLetters: new Map<string, number>([[sq.fillContent!, 1]]),
-            };
-        });
-        return squares;
-    }
-
-    let entryOptions = indexedWordListLookupSquares(grid, squares);
-    if (entryOptions.length > 200) return ret;
-
-    let foundZeroSquare = false;
     for (let i = 0; i < squares.length; i++) {
         let sq = squares[i];
+        if (sq.content) continue;
+        let curViableMatrix = sq.viableLetters ? letterListToLetterMatrix(sq.viableLetters) : Array<boolean>(26).fill(true);
+        let newViableMatrix = Array<boolean>(26).fill(false);
 
-        let justInitialized = false;
-        if (!sq.constraintInfo) {
-            sq.constraintInfo = {
-                viableLetters: new Map<string, number>(),
-                sumTotal: 0,
-            } as ConstraintInfo;
-            justInitialized = true;
-        }
-
-        if (sq.fillContent) {
-            sq.constraintInfo.sumTotal = 1;
-            sq.constraintInfo.viableLetters = new Map<string, number>([[sq.fillContent, 1]]);
-            continue;
-        }
-
-        let letters = entryOptions.map(x => x[i]);
-        let newViableLetters = new Map<string, number>();
+        let letters = entryOptions.map(entry => entry[i]);
         letters.forEach(ltr => {
-            newViableLetters.set(ltr, (newViableLetters.get(ltr) || 0) + 1);
+            if (sq.viableLetters && curViableMatrix[ltr.charCodeAt(0) - 65]) return;
+            setLettersArrayVal(newViableMatrix, ltr, true);
         });
-
-        let sumTotal = 0;
-        let existingViableLetters = sq.constraintInfo!.viableLetters;
-        if (!justInitialized) {
-            newViableLetters.forEach((v, k) => {
-                if (!existingViableLetters.has(k))
-                newViableLetters.delete(k);
-            });
-            newViableLetters.forEach((v, k) => {
-                let oldVal = existingViableLetters.get(k) || 0;
-                let newVal = Math.min(v, oldVal);
-                if (newVal > 0) newViableLetters.set(k, newVal);
-                else newViableLetters.delete(k);
-                sumTotal += newVal;
-            });
-        }
-        else {
-            newViableLetters.forEach((v, k) => {
-                sumTotal += v;
-            });
-        }
-
-        if (sumTotal === 0) foundZeroSquare = true;
-        sq.constraintInfo!.viableLetters = newViableLetters;
-        sq.constraintInfo.sumTotal = sumTotal;
+        sq.viableLetters = letterMatrixToLetterList(newViableMatrix);
     }
+}
 
-    return foundZeroSquare ? undefined : squares;
+export function getLettersArrayVal(arr: boolean[], ltr: string) {
+    return arr[ltr.charCodeAt(0) - 65];
+}
+
+export function setLettersArrayVal(arr: boolean[], ltr: string, newVal: boolean) {
+    arr[ltr.charCodeAt(0) - 65] = newVal;
 }
 
 export function getConstraintSquareSum(squares: GridSquare[]): number {
     let total = 0;
     squares.forEach(sq => {
-        total += sq.constraintInfo!.sumTotal;
+        total += sq.viableLetters ? sq.viableLetters.length : 0;
     });
     return total;
 }
 
-export function getLettersFromSquares(squares: GridSquare[], includeFillContent?: boolean): string {
-    if (includeFillContent === undefined) includeFillContent = true;
-    let ret = "";
-    squares.forEach(sq => {
-        ret += (includeFillContent ? sq.fillContent : sq.userContent) || "-";
-    });
-    return ret;
+export function getLettersFromSquares(squares: GridSquare[]): string {
+    return squares.map(sq => sq.content ? sq.content! : "-").join("");
 }
 
 export function gridToString(grid: GridState): string {
     let chs: string[] = [];
     forAllGridSquares(grid, sq => {
-        chs.push(isBlackSquare(sq) ? "." : sq.fillContent ? sq.fillContent : "-");
+        chs.push(isBlackSquare(sq) ? "." : sq.content ? sq.content : "-");
     });
     return chs.join("");
 }
@@ -210,7 +179,8 @@ export function createNewGrid(width: number, height: number): GridState {
                 col: col,
                 type: SquareType.White,
                 isCircled: false,
-            };
+                contentType: ContentType.Autofill,
+            } as GridSquare;
         }
     }
 
@@ -218,8 +188,9 @@ export function createNewGrid(width: number, height: number): GridState {
         height: height,
         width: width,
         squares: squares,
-        words: [],
+        words: new Map<string, GridWord>(),
         usedWords: new Map<string, boolean>(),
+        userFilledSectionCandidates: new Map<string, boolean>(),
     };
 
     populateWords(grid);
@@ -239,16 +210,124 @@ export function getUncheckedSquareDir(grid: GridState, row: number, col: number)
     return undefined;
 }
 
-export function clearFill(grid: GridState) {
-    Globals.fillStatus = FillStatus.Ready;
-    Globals.isFirstFillCall = true;
-    Globals.fillQueue = priorityQueue<FillNode>();
+export function getSymmetrySquares(initSquare: [number, number]): [number, number][] {
+    let grid = getGrid();
+    let w = grid.width - 1;
+    let h = grid.height - 1;
+    let r = initSquare[0];
+    let c = initSquare[1];
+    let ret = [initSquare];
 
-    grid.squares.forEach(row => {
-        row.forEach(sq => {
-            if (!sq.userContent && !sq.chosenFillContent) {
-                sq.fillContent = undefined;
+    switch (Globals.gridSymmetry!) {
+        case SymmetryType.Rotate180:
+            ret.push([h - r, w - c]);
+            break;
+        case SymmetryType.Rotate90:
+            ret.push([c, h - r]);
+            ret.push([h - r, w - c]);
+            ret.push([w - c, r]);
+            break;
+        case SymmetryType.MirrorHorizontal:
+            ret.push([r, w - c]);
+            break;
+        case SymmetryType.MirrorVertical:
+            ret.push([h - r, c]);
+            break;
+        case SymmetryType.MirrorNWSE:
+            ret.push([w - c, h - r]);
+            break;
+        case SymmetryType.MirrorNESW:
+            ret.push([c, r]);
+            break;
+    }
+
+    return ret;
+}
+
+export function insertEntryIntoGrid(node: FillNode, wordKey: string, entry: string, iffyWordKey?: string, contentType?: ContentType) {
+    let grid = node.startGrid;
+    node.fillWord = grid.words.get(wordKey)!;
+    node.chosenEntry = node.entryCandidates.find(ec => ec.word === entry && ec.iffyWordKey === iffyWordKey);
+    processAndInsertChosenEntry(node, contentType);
+}
+
+export function eraseGridSquare(grid: GridState, sq: GridSquare, dir: WordDirection) {
+    if (sq.content === undefined) return;
+
+    let word = getWordAtSquare(grid, sq.row, sq.col, dir)!;
+    let squares = word ? getSquaresForWord(grid, word) : [sq];
+
+    let otherDirWord = getWordAtSquare(grid, sq.row, sq.col, dir)!;
+    let otherDirSquares = otherDirWord ? getSquaresForWord(grid, otherDirWord) : [sq];
+    if (squares.length > 1 && isWordFull(squares)) grid.usedWords.delete(getLettersFromSquares(squares));
+    if (otherDirSquares.length > 1 && isWordFull(otherDirSquares)) grid.usedWords.delete(getLettersFromSquares(otherDirSquares));
+
+    if (squares.find(sq => sq.contentType === ContentType.Autofill)) {
+        ; // autofill is ephemeral, no need to explicitly delete
+    }
+    else if (squares.find(sq => [ContentType.User, ContentType.ChosenWord].includes(sq.contentType))) {
+        let isInSection = getSectionsWithSelectedCandidate().find(sec => sec.squares.has(squareKey(sq)));
+
+        squares.forEach(wsq => {
+            if (wsq.contentType === ContentType.User) return;
+            let cross = getWordAtSquare(grid, wsq.row, wsq.col, otherDir(dir))!;
+            let crossSquares = getSquaresForWord(grid, cross);
+            if (crossSquares.find(csq => [ContentType.Autofill, ContentType.ChosenSection].includes(csq.contentType))) {
+                if (isInSection)
+                    wsq.contentType = ContentType.ChosenSection;
+                else
+                    wsq.contentType = ContentType.Autofill;
             }
         });
+    }
+        
+    sq.content = undefined;
+    sq.contentType = ContentType.Autofill;
+    clearFill(grid);
+}
+
+export function eraseSectionCandidateFromGrid(grid: GridState, sc: SectionCandidate) {
+    let section = getSectionWithCandidate(sc);
+    Globals.selectedSectionCandidateKeys?.delete(section.id);
+    section.squares.forEach((_, sqKey) => {
+        let sq = getSquareAtKey(grid, sqKey);
+        let scs = getSelectedSectionCandidatesWithSquare(sqKey);
+        if (scs.length > 1) return;
+        if (sq.contentType === ContentType.ChosenSection)
+            sq.contentType = ContentType.Autofill;
     });
-  }
+}
+
+export function clearFill(grid: GridState) {
+    Globals.selectedWordNode = undefined;
+    let section = getSection();
+    section.fillQueue = undefined;
+    section.comboPermsQueue = [];
+    section.comboPermsUsed = new Map<string, boolean>();
+    Globals.fillStatus = Globals.wordList !== undefined ? FillStatus.Ready : FillStatus.NoWordList;
+
+    forAllGridSquares(grid, sq => {
+        if (!isUserFilled(sq)) {
+            sq.content = undefined;
+        }
+    });
+
+    updateGridConstraintInfo(grid);
+}
+
+export function updateManualEntryCandidates(grid: GridState) {
+    if (!Globals.selectedWordKey || !Globals.wordList) {
+        Globals.selectedWordNode = undefined;
+        return;
+    }
+
+    let node = makeNewNode(grid, 0, false, undefined);
+    node.fillWord = grid.words.get(Globals.selectedWordKey!);
+    if (Globals.useManualHeuristics!) {
+        populateAndScoreEntryCandidates(node, true);
+    }
+    else {
+        populateNoHeuristicEntryCandidates(node);
+    }
+    Globals.selectedWordNode = node;
+}

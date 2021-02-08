@@ -1,3 +1,4 @@
+import { ContentType } from "../../models/ContentType";
 import { QualityClass } from "../../models/QualityClass";
 import { SquareType } from "../../models/SquareType";
 
@@ -7,12 +8,12 @@ export interface SquareProps {
     col: number;
     number?: number;
     type: SquareType;
-    userContent?: string;
-    chosenFillContent?: string;
-    fillContent?: string;
+    content?: string;
+    contentType: ContentType;
     qualityClass?: QualityClass;
     isSelected: boolean;
     isInSelectedWord: boolean;
+    isInSelectedSection: boolean;
     constraintSum: number;
     isCircled: boolean;
 }
