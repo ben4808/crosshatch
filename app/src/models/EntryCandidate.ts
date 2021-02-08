@@ -6,8 +6,6 @@ export interface EntryCandidate {
     wasChainFailure: boolean;
     iffyEntry?: string;
     iffyWordKey?: string;
-    // <squareKey, letters>
-    calculatedSquares: Map<string, string[]>;
     crossScore: number;
     minCrossScore: number;
 }

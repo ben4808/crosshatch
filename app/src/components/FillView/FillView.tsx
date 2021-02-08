@@ -14,6 +14,7 @@ import { ContentType } from '../../models/ContentType';
 import { Section } from '../../models/Section';
 import { processWordListData } from '../../lib/wordList';
 import { useInterval } from '../../lib/useInterval';
+import { SectionCandidate } from '../../models/SectionCandidate';
 
 function FillView() {
     const appContext = useContext(AppContext);
@@ -34,7 +35,7 @@ function FillView() {
         if (Globals.fillStatus === FillStatus.Complete) return;
 
         if (isFillRunning) {
-            //clearFill(getGrid());
+            clearFill(getGrid());
             setFillStatus(FillStatus.Ready);
             setIsFillRunning(false);
             triggerUpdate();
@@ -100,10 +101,10 @@ function FillView() {
         }
     }
 
-    function getManualEntryNode(entry: string, isHover: boolean): FillNode {
+    function getManualEntryNode(entry: string, iffyWordKey?: string, isHover?: boolean): FillNode {
         let node = Globals.selectedWordNode!;
         let wordKey = Globals.selectedWordKey!;
-        insertEntryIntoGrid(node, wordKey, entry, isHover ? ContentType.HoverChosenWord : ContentType.ChosenWord);
+        insertEntryIntoGrid(node, wordKey, entry, iffyWordKey, isHover ? ContentType.HoverChosenWord : ContentType.ChosenWord);
         return node;
     }
 
@@ -128,7 +129,10 @@ function FillView() {
         if (!Globals.selectedWordKey) return;
 
         let entry = target.attributes["data-word"].value as string;
-        let node = getManualEntryNode(entry, false);
+        let iffyWordKey = target.attributes["data-iffykey"].value as string;
+        let node = getManualEntryNode(entry, iffyWordKey === "na" ? undefined : iffyWordKey, false);
+
+        Globals.manualIffyKey = iffyWordKey;
 
         updateManualEntryCandidates(node.endGrid);
 
@@ -148,7 +152,8 @@ function FillView() {
         if (!Globals.selectedWordKey) return;
 
         let entry = target.attributes["data-word"].value as string;
-        let node = getManualEntryNode(entry, true);
+        let iffyWordKey = target.attributes["data-iffykey"].value as string;
+        let node = getManualEntryNode(entry, iffyWordKey === "na" ? undefined : iffyWordKey, true);
 
         Globals.hoverGrid = node.endGrid;
         triggerUpdate();
@@ -162,6 +167,7 @@ function FillView() {
     function handleSectionClick(event: any) {
         let target = event.target;
         while (target.classList.length < 1 || target.classList[0] !== "fill-list-row-wrapper") {
+            if (target.classList[0] === "section-checkbox") return;
             target = target.parentElement;
             if (!target) return;
         }
@@ -171,17 +177,28 @@ function FillView() {
 
         if (sectionId === Globals.activeSectionId!)
             Globals.activeSectionId = 0;
-        else
+        else {
             Globals.activeSectionId = sectionId;
-
-        if (Globals.selectedSectionIds!.get(sectionId))
-            Globals.selectedSectionIds!.delete(sectionId);
-        else
             Globals.selectedSectionIds!.set(sectionId, true);
+        }
 
         Globals.hoverGrid = undefined;
         Globals.hoverSectionId = undefined;
         triggerUpdate();
+    }
+
+    function handleSectionCheckClick(event: any) {
+        let target = event.target;
+        while (target.classList.length < 1 || target.classList[0] !== "fill-list-row-wrapper") {
+            target = target.parentElement;
+            if (!target) return;
+        }
+
+        let sectionId = +target.attributes["data-id"].value;
+        if (Globals.selectedSectionIds!.get(sectionId))
+            Globals.selectedSectionIds!.delete(sectionId);
+        else
+            Globals.selectedSectionIds!.set(sectionId, true);
     }
 
     function handleSectionHover(event: any) {
@@ -259,6 +276,15 @@ function FillView() {
         setShowSectionCandidates(!showSectionCandidates);
     }
 
+    function clearSectionCandidates() {
+        if (!window.confirm("Are you sure you want to clear the fills?")) return;
+
+        let section = getSection();
+        section.candidates = new Map<string, SectionCandidate>();
+        section.selectedCandidate = undefined;
+        triggerUpdate();
+    }
+
     function handleUseHeuristicsToggle() {
         let newValue = Globals.useManualHeuristics !== undefined ? !Globals.useManualHeuristics! : false;
         Globals.useManualHeuristics = newValue;
@@ -333,7 +359,8 @@ function FillView() {
     let activeSection = Globals.sections ? Globals.sections!.get(Globals.activeSectionId!)! : makeNewSection(-1);
     let selectedScKey = activeSection.selectedCandidate;
     let selectedSectionIds = mapKeys(Globals.selectedSectionIds!) || [0];
-    let sectionCandidates = mapValues(activeSection.candidates).sort((a, b) => b.score - a.score);
+    let sectionCandidates = mapValues(activeSection.candidates)
+        .filter(sc => !sc.isFilteredOut).sort((a, b) => b.score - a.score);
     let selectedEntry = Globals.selectedWordKey ? getEntryAtWordKey(grid, Globals.selectedWordKey!) : "";
     let selectedMaxIffyLength = Globals.maxIffyLength || 0;
     let useManualHeuristics = Globals.useManualHeuristics !== undefined ? Globals.useManualHeuristics : true;
@@ -388,7 +415,7 @@ function FillView() {
                 ))}
             </select>
             <br /><br />
-            <button className="btn btn-primary" onClick={handleFillWordClick}>Fill Word</button>
+            <button className="btn btn-primary" onClick={handleFillWordClick} style={{display: "none"}}>Fill Word</button>
 
             <div className="fill-lists">
                 <div className="fill-list-box">
@@ -429,7 +456,7 @@ function FillView() {
                         )}
                         { entryCandidates.map(ec => (
                             <div className={"fill-list-row-wrapper" + (selectedEntry === ec.word ? " fill-list-row-selected" : "")} 
-                                key={ec.word} data-word={ec.word}
+                                key={ec.word + (ec.iffyEntry || "")} data-word={ec.word} data-iffykey={ec.iffyWordKey || "na"}
                                 onClick={handleEntryCandidateClick} onMouseOver={handleEntryCandidateHover}>
                                 <div>{ec.word}</div>
                                 <div>{ec.score.toFixed(0)}</div>
@@ -450,7 +477,7 @@ function FillView() {
                             <div className={"fill-list-row-wrapper" + (sec.id === activeSection.id ? " fill-list-row-selected" : "")} 
                                 key={sec.id} data-id={sec.id} onClick={handleSectionClick} onMouseOver={handleSectionHover}>
                                 <div><input type="checkbox" className="section-checkbox"
-                                    checked={selectedSectionIds.includes(sec.id)} onChange={handleSectionClick} /></div>
+                                    checked={selectedSectionIds.includes(sec.id)} onChange={handleSectionCheckClick} /></div>
                                 <div>{getPhoneticName(sec.id)}</div>
                                 <div>{sec.squares.size}</div>
                                 <div>{sec.connections.size}</div>
@@ -461,6 +488,7 @@ function FillView() {
                 </div>
                 <div className="fill-list-box" onMouseOut={handleSectionCandidateBlur}>
                     <div className="fill-list-title">Fills {sectionCandidates.length > 0 ? `(${sectionCandidates.length})` : ""}</div>
+                    <div className="fill-list-button" onClick={clearSectionCandidates}>Clear</div>
                     <div className="fill-sec-checkbox">
                         <input type="checkbox" className="section-checkbox" id="show-fills-box"
                                     checked={showSectionCandidates} onChange={handleShowSectionCandidatesToggle} />
@@ -477,7 +505,7 @@ function FillView() {
                         )}
                         {showSectionCandidates && Globals.fillStatus === FillStatus.Complete && sectionCandidates.length === 0 && (
                             <div className="fill-list-row-wrapper">
-                                <div><i>Hidden</i></div><div></div><div></div>
+                                <div><i>No fills found</i></div><div></div><div></div>
                             </div>
                         )}
                         {showSectionCandidates && sectionCandidates.map(sc => {

@@ -244,10 +244,10 @@ export function getSymmetrySquares(initSquare: [number, number]): [number, numbe
     return ret;
 }
 
-export function insertEntryIntoGrid(node: FillNode, wordKey: string, entry: string, contentType?: ContentType) {
+export function insertEntryIntoGrid(node: FillNode, wordKey: string, entry: string, iffyWordKey?: string, contentType?: ContentType) {
     let grid = node.startGrid;
     node.fillWord = grid.words.get(wordKey)!;
-    node.chosenEntry = node.entryCandidates.find(ec => ec.word === entry);
+    node.chosenEntry = node.entryCandidates.find(ec => ec.word === entry && ec.iffyWordKey === iffyWordKey);
     processAndInsertChosenEntry(node, contentType);
 }
 
@@ -264,11 +264,6 @@ export function eraseGridSquare(grid: GridState, sq: GridSquare, dir: WordDirect
 
     if (squares.find(sq => sq.contentType === ContentType.Autofill)) {
         ; // autofill is ephemeral, no need to explicitly delete
-    }
-    else if (squares.find(sq => sq.contentType === ContentType.ChosenSection)) {
-        getSelectedSectionCandidatesWithSquare(squareKey(sq)).forEach(sc => {
-            eraseSectionCandidateFromGrid(grid, sc);
-        });
     }
     else if (squares.find(sq => [ContentType.User, ContentType.ChosenWord].includes(sq.contentType))) {
         let isInSection = getSectionsWithSelectedCandidate().find(sec => sec.squares.has(squareKey(sq)));

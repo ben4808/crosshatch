@@ -41,6 +41,7 @@ export function getSectionString(grid: GridState, section: Section): string {
 
 // returns whether it was a success
 export function insertSectionCandidateIntoGrid(grid: GridState, candidate: SectionCandidate, contentType?: ContentType): boolean {
+    if (contentType === undefined) contentType = ContentType.ChosenSection;
     let newGrid = deepClone(grid) as GridState;
     let section = Globals.sections!.get(candidate.sectionId)!;
     let foundDiscrepancy = false;
@@ -52,7 +53,8 @@ export function insertSectionCandidateIntoGrid(grid: GridState, candidate: Secti
         sq.content = candidateSq.content;
         sq.viableLetters = [sq.content!];
         if (!isUserOrWordFilled(sq)) {
-            sq.contentType = contentType === ContentType.HoverChosenSection ? ContentType.Autofill : ContentType.ChosenSection;
+            sq.contentType = [ContentType.HoverChosenSection, ContentType.Autofill].includes(contentType!) ? 
+                ContentType.Autofill : ContentType.ChosenSection;
         }
     });
     if (foundDiscrepancy) return false;

@@ -1,3 +1,4 @@
+import { ContentType } from '../models/ContentType';
 import { EntryCandidate } from '../models/EntryCandidate';
 import { FillNode } from '../models/FillNode';
 import { GridSquare } from '../models/GridSquare';
@@ -43,6 +44,11 @@ export function fillSectionWord(): boolean {
         fillQueue.pop();
         node = fillQueue.peek()!;
         if (!node) return false;
+    }
+
+    if (!node.isChainNode && Globals.activeGrid !== node.startGrid) {
+        Globals.activeGrid = node.startGrid;
+        return true;
     }
 
     let success = processSectionNode(node, section);
@@ -120,11 +126,11 @@ function invalidateChainNode(node: FillNode, newSecCandidateFound?: boolean) {
     }
 
     if (newSecCandidateFound) {
-        if (node.iffyWordKey && node.chainBaseNode!.chainIffyCandidates < 25) {
+        if (node.iffyWordKey && node.chainBaseNode!.chainIffyCandidates < 24) {
             node.chainBaseNode!.chainIffyCandidates++;
             return;
         }
-        else if (!node.iffyWordKey && node.chainBaseNode!.chainGoodCandidates < 5) {
+        else if (!node.iffyWordKey && node.chainBaseNode!.chainGoodCandidates < 4) {
             node.chainBaseNode!.chainGoodCandidates++;
             return;
         }
@@ -180,7 +186,7 @@ function populateSeedNodes(fillQueue: PriorityQueue<FillNode>) {
             let sortedCandidates = mapValues(Globals.sections!.get(connectionIds[i])!.candidates)
                 .sort((a, b) => b.score - a.score);
             let candidate = sortedCandidates[perm[i]];
-            if (!insertSectionCandidateIntoGrid(node.startGrid, candidate))
+            if (!insertSectionCandidateIntoGrid(node.startGrid, candidate, ContentType.Autofill))
                 wasSuccess = false;
         }
         if (wasSuccess)
@@ -215,7 +221,6 @@ function getNewPermutations(candidateCounts: number[], section: Section) {
     while(true) {
         let perm = section.comboPermsQueue.shift()!;
         if (!perm) break;
-        let permKey = perm.map(i => i.toString()).join(",");
         let foundNew = false;
 
         for(let i = 0; i < perm.length; i++) {
@@ -224,7 +229,7 @@ function getNewPermutations(candidateCounts: number[], section: Section) {
             let newPerm = deepClone(perm);
             newPerm[i]++;
             let newPermKey = comboKey(newPerm);
-            if (section.comboPermsUsed.has(permKey)) continue;
+            if (section.comboPermsUsed.has(newPermKey)) continue;
 
             section.comboPermsUsed.set(newPermKey, true);
             foundNew = true;
@@ -264,7 +269,6 @@ export function makeNewNode(grid: GridState, depth: number, isChainNode: boolean
         isChainNode: isChainNode,
         isSectionBase: !!isSectionBase,
         backtracks: 0,
-        madeUpWord: undefined,
         parent: parent,
         chainBaseNode: isChainNode ? (parent!.isChainNode ? parent!.chainBaseNode : parent!) : undefined,
         needsNewPriority: false,
