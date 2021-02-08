@@ -129,8 +129,9 @@ function FillView() {
         if (!Globals.selectedWordKey) return;
 
         let entry = target.attributes["data-word"].value as string;
-        let iffyWordKey = target.attributes["data-iffykey"].value as string;
-        let node = getManualEntryNode(entry, iffyWordKey === "na" ? undefined : iffyWordKey, false);
+        let iffyWordKey = target.attributes["data-iffykey"].value as string | undefined;
+        if (iffyWordKey === "na") iffyWordKey = undefined;
+        let node = getManualEntryNode(entry, iffyWordKey, false);
 
         Globals.manualIffyKey = iffyWordKey;
 
@@ -152,8 +153,9 @@ function FillView() {
         if (!Globals.selectedWordKey) return;
 
         let entry = target.attributes["data-word"].value as string;
-        let iffyWordKey = target.attributes["data-iffykey"].value as string;
-        let node = getManualEntryNode(entry, iffyWordKey === "na" ? undefined : iffyWordKey, true);
+        let iffyWordKey = target.attributes["data-iffykey"].value as string | undefined;
+        if (iffyWordKey === "na") iffyWordKey = undefined;
+        let node = getManualEntryNode(entry, iffyWordKey, true);
 
         Globals.hoverGrid = node.endGrid;
         triggerUpdate();
