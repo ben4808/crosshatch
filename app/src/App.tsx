@@ -17,8 +17,8 @@ import { FillStatus } from './models/FillStatus';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
-  const [gridWidth, setGridWidth] = useState(7);
-  const [gridHeight, setGridHeight] = useState(7);
+  const [gridWidth, setGridWidth] = useState(15);
+  const [gridHeight, setGridHeight] = useState(15);
   const [updateSemaphore, setUpdateSemaphore] = useState(0);
   const [appState, setAppState] = useState(getAppContext());
 
@@ -80,7 +80,7 @@ function App(props: AppProps) {
     Globals.selectedWordDir = WordDirection.Across;
     if (!Globals.gridSymmetry) Globals.gridSymmetry = SymmetryType.Rotate180;
     if (Globals.useManualHeuristics === undefined) Globals.useManualHeuristics = true;
-    if (Globals.maxIffyLength === undefined) Globals.maxIffyLength = 7;
+    if (Globals.maxIffyLength === undefined) Globals.maxIffyLength = 0;
     Globals.selectedWordNode = undefined;
     Globals.curChainId = 1;
     if (Globals.wordLists === undefined) Globals.wordLists = [];
