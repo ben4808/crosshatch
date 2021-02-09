@@ -15,6 +15,7 @@ import { Section } from '../../models/Section';
 import { processWordListData } from '../../lib/wordList';
 import { useInterval } from '../../lib/useInterval';
 import { SectionCandidate } from '../../models/SectionCandidate';
+import { QualityClass } from '../../models/QualityClass';
 
 function FillView() {
     const appContext = useContext(AppContext);
@@ -314,6 +315,7 @@ function FillView() {
         Globals.wordLists = [];
         setFillStatus(FillStatus.NoWordList);
         Globals.selectedWordNode = undefined;
+        Globals.qualityClasses = new Map<string, QualityClass>();
     }
 
     function onWordListUpload(event: any) {

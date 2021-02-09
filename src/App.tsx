@@ -17,8 +17,8 @@ import { FillStatus } from './models/FillStatus';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
-  const [gridWidth, setGridWidth] = useState(15);
-  const [gridHeight, setGridHeight] = useState(15);
+  const [gridWidth, setGridWidth] = useState(7);
+  const [gridHeight, setGridHeight] = useState(7);
   const [updateSemaphore, setUpdateSemaphore] = useState(0);
   const [appState, setAppState] = useState(getAppContext());
 
