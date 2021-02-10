@@ -178,10 +178,14 @@ function FillView() {
         let sectionId = +target.attributes["data-id"].value;
         clearFill(getGrid());
 
-        if (sectionId === Globals.activeSectionId!)
+        if (sectionId === Globals.activeSectionId!) {
             Globals.activeSectionId = 0;
+            Globals.selectedSectionIds = new Map<number, boolean>();
+            Globals.selectedSectionIds!.set(sectionId, true);
+        }
         else {
             Globals.activeSectionId = sectionId;
+            Globals.selectedSectionIds = new Map<number, boolean>();
             Globals.selectedSectionIds!.set(sectionId, true);
         }
 
@@ -191,6 +195,7 @@ function FillView() {
     }
 
     function handleSectionCheckClick(event: any) {
+        return;
         let target = event.target;
         while (target.classList.length < 1 || target.classList[0] !== "fill-list-row-wrapper") {
             target = target.parentElement;

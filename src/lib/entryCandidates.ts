@@ -10,6 +10,11 @@ import Globals from './windowService';
 
 // returns false if no viable candidates were found or iffy was set
 export function populateAndScoreEntryCandidates(node: FillNode, isForManualFill: boolean): boolean {
+    if (isForManualFill && wordKey(node.fillWord!) === node.iffyWordKey) {
+        populateNoHeuristicEntryCandidates(node);
+        return true;
+    }
+
     if (node.anchorSquareKeys.length === 0) {
         let word = node.fillWord!;
         let squares = getSquaresForWord(node.startGrid, word);
@@ -210,6 +215,11 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean, heuristics
             calculatedSquares.set(sqKey, [entry[i]]);
 
             let cross = getWordAtSquare(grid, sq.row, sq.col, otherDir(node.fillWord!.direction))!;
+            if (!cross) {
+                calculatedSquares.set(sqKey, deepClone(fullAlphabet));
+                return;
+            }
+
             let crossSquares = getSquaresForWord(grid, cross);
             let pattern = getLettersFromSquares(crossSquares);
             insertLetterIntoPattern(pattern, entry[i], crossSquares, sqKey);

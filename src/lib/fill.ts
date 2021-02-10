@@ -166,7 +166,7 @@ function calculateNodePriority(node: FillNode): number {
 
 function populateSeedNodes(fillQueue: PriorityQueue<FillNode>) {
     let grid = getGrid();
-    let selectedSectionIds = Globals.selectedSectionIds!.size > 0 ? mapKeys(Globals.selectedSectionIds!) : [0];
+    let selectedSectionIds = [Globals.activeSectionId!]; //Globals.selectedSectionIds!.size > 0 ? mapKeys(Globals.selectedSectionIds!) : [0];
     let activeSection = getSection();
     let connectionIds = mapKeys(activeSection.connections)
         .filter(id => selectedSectionIds.includes(id) && Globals.sections!.get(id)!.selectedCandidate === undefined

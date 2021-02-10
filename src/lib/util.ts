@@ -245,6 +245,7 @@ export function initializeSessionGlobals() {
     Globals.activeSectionId = 0;
     Globals.hoverSectionId = undefined;
     Globals.selectedSectionIds = new Map<number, boolean>();
+    Globals.selectedSectionIds.set(0, true);
     Globals.selectedSectionCandidateKeys = new Map<number, string>();
 }
 
