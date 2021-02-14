@@ -271,6 +271,10 @@ export function eraseGridSquare(grid: GridState, sq: GridSquare, dir: WordDirect
         squares.forEach(wsq => {
             if (wsq.contentType === ContentType.User) return;
             let cross = getWordAtSquare(grid, wsq.row, wsq.col, otherDir(dir))!;
+            if (wsq.contentType === ContentType.ChosenWord && !cross) {
+                wsq.contentType = ContentType.Autofill;
+                return;
+            }
             let crossSquares = getSquaresForWord(grid, cross);
             if (crossSquares.find(csq => [ContentType.Autofill, ContentType.ChosenSection].includes(csq.contentType))) {
                 if (isInSection)

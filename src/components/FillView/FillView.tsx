@@ -33,8 +33,6 @@ function FillView() {
     }
 
     function handleToggleFill() {
-        if (Globals.fillStatus === FillStatus.Complete) return;
-
         if (isFillRunning) {
             clearFill(getGrid());
             setFillStatus(FillStatus.Ready);
@@ -73,6 +71,7 @@ function FillView() {
 
     function handleIffyLengthChange(event: any) {
         Globals.maxIffyLength = +event.target[event.target.selectedIndex].value;
+        Globals.manualIffyKey = undefined;
     }
 
     function getSymmetryTypeString(type: string): string {
@@ -196,17 +195,17 @@ function FillView() {
 
     function handleSectionCheckClick(event: any) {
         return;
-        let target = event.target;
-        while (target.classList.length < 1 || target.classList[0] !== "fill-list-row-wrapper") {
-            target = target.parentElement;
-            if (!target) return;
-        }
+        // let target = event.target;
+        // while (target.classList.length < 1 || target.classList[0] !== "fill-list-row-wrapper") {
+        //     target = target.parentElement;
+        //     if (!target) return;
+        // }
 
-        let sectionId = +target.attributes["data-id"].value;
-        if (Globals.selectedSectionIds!.get(sectionId))
-            Globals.selectedSectionIds!.delete(sectionId);
-        else
-            Globals.selectedSectionIds!.set(sectionId, true);
+        // let sectionId = +target.attributes["data-id"].value;
+        // if (Globals.selectedSectionIds!.get(sectionId))
+        //     Globals.selectedSectionIds!.delete(sectionId);
+        // else
+        //     Globals.selectedSectionIds!.set(sectionId, true);
     }
 
     function handleSectionHover(event: any) {

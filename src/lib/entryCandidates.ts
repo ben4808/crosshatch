@@ -3,7 +3,7 @@ import { FillNode } from "../models/FillNode";
 import { GridSquare } from "../models/GridSquare";
 import { getAllCrosses, getEligibleCandidates, getWordScore } from "./fill";
 import { getLettersFromSquares } from "./grid";
-import { constraintLetterCount, deepClone, fullAlphabet, getSquaresForWord, getWordAtSquare, isUserFilled, 
+import { constraintLetterCount, deepClone, fullAlphabet, getSquaresForWord, getWordAtSquare,
     isWordFull, letterMatrixToLetterList, otherDir, squareKey, sum, wordKey, wordLength } from "./util";
 import { queryIndexedWordList } from "./wordList";
 import Globals from './windowService';
@@ -37,12 +37,12 @@ export function populateAndScoreEntryCandidates(node: FillNode, isForManualFill:
     return true;
 }
 
-export function populateNoHeuristicEntryCandidates(node: FillNode) {
+export function populateNoHeuristicEntryCandidates(node: FillNode, dontRecalc?: boolean) {
+    if (dontRecalc === undefined) dontRecalc = false;
+    if (node.entryCandidates.length > 0 && dontRecalc) return;
+
     let word = node.fillWord!;
     let squares = deepClone(getSquaresForWord(node.startGrid, word)) as GridSquare[];
-    squares.forEach(sq => {
-        if (!isUserFilled(sq)) sq.content = undefined;
-    });
     let pattern = getLettersFromSquares(squares);
     let entries = queryIndexedWordList(pattern).sort((a, b) => Globals.qualityClasses!.get(b)! - Globals.qualityClasses!.get(a)!);
 
@@ -111,7 +111,7 @@ function generateAnchorCombos(squares: GridSquare[], anchorSquareKeys: string[],
     calculatedSquares?: Map<string, string[]>): [string, string][] {
     let constraintLetters = anchorSquareKeys
         .map(sqKey => squares.find(sq => squareKey(sq) === sqKey)!)
-        .map(sq => (calculatedSquares && calculatedSquares.has(squareKey(sq))) ? 
+        .map(sq => sq.content ? [sq.content!] : (calculatedSquares && calculatedSquares.has(squareKey(sq))) ? 
         calculatedSquares!.get(squareKey(sq))! : sq.viableLetters || fullAlphabet);
 
     let combos = [] as [string, string][];
@@ -141,6 +141,7 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean, heuristics
         patternWithAnchor = insertLetterIntoPattern(patternWithAnchor, combo[i], wordSquares, sqKey);
     });
     if (isForManualFill && isWordFull(wordSquares)) {
+        node.entryCandidates = [];
         node.entryCandidates.push({
             word: patternWithAnchor,
             score: 1,
@@ -158,7 +159,8 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean, heuristics
     getAllCrosses(grid, node.fillWord!).forEach(cross => {
         crossKeys.set(wordKey(cross), true);
         getAllCrosses(grid, cross).forEach(crossCross => {
-            crossCrossKeys.set(wordKey(crossCross), true);
+            if (wordKey(crossCross) !== fillWordKey)
+                crossCrossKeys.set(wordKey(crossCross), true);
         });
     });
 
@@ -168,17 +170,22 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean, heuristics
         heuristicsLevel = 2;
 
     let iffyWordKey = isForManualFill ? Globals.manualIffyKey : node.iffyWordKey;
-    if (iffyWordKey) {
-        wordSquares.forEach(sq => {
-            let cross = getWordAtSquare(grid, sq.row, sq.col, otherDir(node.fillWord!.direction))!;
-            if (wordKey(cross) === iffyWordKey) {
-                let crossSquares = getSquaresForWord(grid, cross);
-                crossSquares.forEach(csq => {
-                    if (!csq.content)
-                        csq.viableLetters = deepClone(fullAlphabet);
-                });
-            }
-        });
+    wordSquares.forEach(sq => {
+        let cross = getWordAtSquare(grid, sq.row, sq.col, otherDir(node.fillWord!.direction))!;
+        if (!cross) return;
+        let crossSquares = getSquaresForWord(grid, cross);
+        if (wordKey(cross) === iffyWordKey) {
+            crossSquares.forEach(csq => {
+                if (!csq.content)
+                    csq.viableLetters = deepClone(fullAlphabet);
+            });
+        }
+        if (isWordFull(crossSquares))
+            crossKeys.delete(wordKey(cross));
+    });
+    if (crossKeys.size === 0) {
+        populateNoHeuristicEntryCandidates(node, true);
+        return;
     }
 
     let entries = getFilteredEntries(wordSquares, patternWithAnchor, undefined, grid.usedWords);
