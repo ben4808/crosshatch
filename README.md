@@ -20,17 +20,17 @@ Second, enter your theme/seed entries and design your grid. Grid width and heigh
 
 As you select words in the grid, CrossHatch will populate the Entry Candidates box with entries ranked by how well they fit with the entries around them in the grid and by their quality score. 
 
-![Screenshot 1](/screen1.png)
+![Screenshot 1](/public/screen1.png)
 
 In some cases, this calculation can take a few seconds, which can be annoying when performing lots of operations quickly. You can uncheck "Use Heuristics" and the Entry Candidates box will be populated with everything that fits in the selected slot regardless of the entries around it, which is a much faster operation.
 
 Third, build out your fill. This can be done word by word in many cases using the Entry Candidates box with heuristics. You can also use the autofill mode to find complete fills for the entire grid or just a section of the grid at a time. Potential fills will show up in the Fills box, ranked by how many Good quality words they contain. You can manually enter letters into the grid after generating fills to filter the fills down to more attractive options. If your list of fills gets long, you can also uncheck the "Show" box to hide them and keep the fill algorithm running faster.
 
-![Screenshot 2](/screen2.png)
+![Screenshot 2](/public/screen2.png)
 
 Fourth, switch to the the Clues tab and write the clues for your words. Clues can be edited by clicking a clue, entering the new value, and pressing enter.
 
-![Screenshot 3](/screen3.png)
+![Screenshot 3](/public/screen3.png)
 
 Finally, export a .puz file and share it with your friends! I recommend https://squares.io/ for fun collaborative solving, https://crosshare.org/ for sharing with friends, and https://crosswordnexus.com/apps/puz-to-pdf/ for converting your puzzle into a printable PDF.
 
