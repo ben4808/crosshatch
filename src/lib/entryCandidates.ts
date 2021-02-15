@@ -407,7 +407,7 @@ function calculateEntryCandidateScore(node: FillNode, ec: EntryCandidate): numbe
     let wordScore = getWordScore(ec.word);
     let crossScore = node.topCrossScore > 0 ? ec.crossScore / node.topCrossScore : 1;
     let minCrossScore = node.topMinCrossScore > 0 ? ec.minCrossScore / node.topMinCrossScore : 1;
-    let ret = (crossScore + minCrossScore) * wordScore * (ec.iffyWordKey ? 1 : 10);
+    let ret = (crossScore + minCrossScore) * wordScore * (ec.iffyWordKey ? 1 : 100);
     return ret;
 }
 
