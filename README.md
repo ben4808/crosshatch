@@ -35,7 +35,7 @@ Third, build out your fill. This can be done word by word in many cases using th
 
 Fourth, switch to the the Clues tab and write the clues for your words. Clues can be edited by clicking a clue, entering the new value, and pressing enter.
 
-![Screenshot 3](/public/screen3.png)
+![Screenshot 4](/public/screen4.png)
 
 Finally, export a .puz file and share it with your friends! I recommend https://squares.io/ for fun collaborative solving, https://crosshare.org/ for sharing with friends, and https://crosswordnexus.com/apps/puz-to-pdf/ for converting your puzzle into a printable PDF.
 
