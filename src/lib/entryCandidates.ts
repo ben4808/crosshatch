@@ -119,7 +119,7 @@ function generateAnchorCombos(squares: GridSquare[], anchorSquareKeys: string[],
     for (var letter1 of constraintLetters[0]) {
         for (var letter2 of constraintLetters[1]) {
             combos.push([letter1, letter2]);
-            comboScores.set(`[${letter1},${letter2}]`, letterFrequencies[letter1] * letterFrequencies[letter2] * Math.random());
+            comboScores.set(`[${letter1},${letter2}]`, (letterFrequencies[letter1] + letterFrequencies[letter2]) * Math.random());
         }
     }
 
@@ -203,9 +203,7 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean, heuristics
     });
 
     node.entryCandidates.forEach(ec => {
-        if(ec.score === -1) {
-            ec.score = calculateEntryCandidateScore(node, ec);
-        }
+        ec.score = calculateEntryCandidateScore(node, ec);
     });
 
     function processEntry(entry: string, iffyWordKey?: string): boolean {
