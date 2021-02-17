@@ -71,7 +71,6 @@ function FillView() {
 
     function handleIffyLengthChange(event: any) {
         Globals.maxIffyLength = +event.target[event.target.selectedIndex].value;
-        Globals.manualIffyKey = undefined;
     }
 
     function getSymmetryTypeString(type: string): string {
@@ -132,8 +131,6 @@ function FillView() {
         let iffyWordKey = target.attributes["data-iffykey"].value as string | undefined;
         if (iffyWordKey === "na") iffyWordKey = undefined;
         let node = getManualEntryNode(entry, iffyWordKey, false);
-
-        Globals.manualIffyKey = iffyWordKey;
 
         updateManualEntryCandidates(node.endGrid);
 

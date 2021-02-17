@@ -134,6 +134,9 @@ function invalidateChainNode(node: FillNode, newSecCandidateFound?: boolean) {
             node.chainBaseNode!.chainGoodCandidates++;
             return;
         }
+        
+        node.chainBaseNode!.chainGoodCandidates = 0;
+        node.chainBaseNode!.chainIffyCandidates = 0;
 
         let curNode = parent;
         while (curNode.parent && (curNode.parent.isChainNode || curNode.parent.isSectionBase)) {
@@ -290,6 +293,7 @@ function selectWordToFill(node: FillNode, section: Section): GridWord | undefine
 
     for (let key of section.wordOrder) {
         let word = grid.words.get(key)!;
+        if (key === section.wordOrder[section.wordOrder.length - 1]) return word;
         let squares = getSquaresForWord(grid, word);
         if (wordKey(word) !== node.iffyWordKey && !isWordFull(squares))
             return word;

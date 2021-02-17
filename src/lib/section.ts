@@ -313,29 +313,27 @@ function getNeighboringSquares(grid: GridState, sq: GridSquare): GridSquare[] {
 }
 
 export function newSectionCandidate(node: FillNode, section: Section): SectionCandidate {
-    let grid = node.endGrid;
+    let grid = deepClone(node.endGrid) as GridState;
     return {
         sectionId: section.id,
         grid: grid,
-        score: calculateSectionCandidateScore(grid, section),
+        score: calculateSectionCandidateScore(node, grid, section),
         iffyEntry: node.iffyWordKey ? getEntryAtWordKey(grid, node.iffyWordKey) : undefined,
         isFilteredOut: false,
     } as SectionCandidate;
 }
 
-export function calculateSectionCandidateScore(grid: GridState, section: Section): number {
+export function calculateSectionCandidateScore(node: FillNode, grid: GridState, section: Section): number {
     let total = 0;
-    let foundIffy = false;
     section.words.forEach((_, wordKey) => {
         let word = grid.words.get(wordKey)!;
         let squares = getSquaresForWord(grid, word);
         let str = getLettersFromSquares(squares);
         let score = getWordScore(str);
-        if (score < 3) foundIffy = true;
         total += score;
     });
 
-    if (!foundIffy) total *= 10;
+    if (!node.iffyWordKey) total *= 10;
     return total / section.words.size;
 }
 

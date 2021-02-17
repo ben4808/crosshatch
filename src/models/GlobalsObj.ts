@@ -17,7 +17,6 @@ export interface GlobalsObj {
     selectedWordDir?: WordDirection;
     selectedWordNode?: FillNode;
     curChainId?: number;
-    manualIffyKey?: string;
 
     sections?: Map<number, Section>;
     activeSectionId?: number;

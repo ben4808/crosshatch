@@ -7,6 +7,7 @@ import { constraintLetterCount, deepClone, fullAlphabet, getSquaresForWord,
     isWordFull, letterMatrixToLetterList, squareKey, sum, wordKey, wordLength } from "./util";
 import { queryIndexedWordList } from "./wordList";
 import Globals from './windowService';
+import { GridState } from "../models/GridState";
 
 // returns false if no viable candidates were found or iffy was set
 export function populateAndScoreEntryCandidates(node: FillNode, isForManualFill: boolean): boolean {
@@ -129,8 +130,20 @@ function generateAnchorCombos(squares: GridSquare[], anchorSquareKeys: string[],
 }
 
 function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
+    function setIffySquares(iffyWordKey: string) {
+        grid = deepClone(node.startGrid) as GridState;
+        let iffyWord = grid.words.get(iffyWordKey)!;
+        let iffySquares = getSquaresForWord(grid, iffyWord);
+        iffySquares.forEach(sq => {
+            if (!sq.content)
+                sq.viableLetters = fullAlphabet;
+        });
+    }
+
     let grid = node.startGrid;
     let combo = node.anchorCombosLeft.pop()!;
+    let iffyWordKey = node.iffyWordKey;
+    if (iffyWordKey) setIffySquares(iffyWordKey);
 
     let fillWordKey = wordKey(node.fillWord!);
     let wordSquares = getSquaresForWord(grid, node.fillWord!);
@@ -153,17 +166,44 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
     }
 
     let entries = getFilteredEntries(wordSquares, patternWithAnchor, undefined, grid.usedWords);
-    let iffyWordKey = isForManualFill ? Globals.manualIffyKey : node.iffyWordKey;
+    if (entries.length === 0 && !isForManualFill && !iffyWordKey && Globals.maxIffyLength! >= wordSquares.length) {
+        node.iffyWordKey = fillWordKey;
+        node.anchorCombosLeft.push(combo);
+        return;
+    }
+    if (entries.length === 0 && isForManualFill && !iffyWordKey && Globals.maxIffyLength! > 0) {
+        let crossKeys = getUnfilledCrosses(grid, node.fillWord!).map(wordKey);
+        for (let ck of crossKeys) {
+            let cross = grid.words.get(ck)!;
+            if (wordLength(cross) > Globals.maxIffyLength!) return;
+            node.iffyWordKey = ck;
+            node.anchorCombosLeft.push(combo);
+            return;
+        }
+    }
+
     let maxFilteredEntryCount = entries.length > 0 ? 100_000 / entries.length : 1;
     entries.forEach(entry => {
         let success = processEntry(entry, maxFilteredEntryCount, iffyWordKey);
 
         if (!success && !node.iffyWordKey && Globals.maxIffyLength! > 0) {
             let crossKeys = getUnfilledCrosses(grid, node.fillWord!).map(wordKey);
+            let crossCrossKeys = new Map<string, boolean>();
             crossKeys.forEach(ck => {
                 let cross = grid.words.get(ck)!;
+                getUnfilledCrosses(grid, cross).forEach(cc => {
+                    if (wordKey(cc) !== fillWordKey)
+                        crossCrossKeys.set(wordKey(cc), true);
+                });
                 if (wordLength(cross) > Globals.maxIffyLength!) return;
+                setIffySquares(ck);
                 processEntry(entry, maxFilteredEntryCount, ck);
+            });
+            crossCrossKeys.forEach((_, cck) => {
+                let cc = grid.words.get(cck)!;
+                if (wordLength(cc) > Globals.maxIffyLength!) return;
+                setIffySquares(cck);
+                processEntry(entry, maxFilteredEntryCount, cck);
             });
         }
     });
@@ -184,26 +224,19 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
         batchKeys.set(fillWordKey, true);
         let filledCrosses = new Map<string, boolean>();
         let filteredEntriesCount = 0;
-
+        
         while(true) {
             let foundCountReduction = false;
-            let processedIffy = false;
             let nextBatchKeys = new Map<string, boolean>();
     
             // eslint-disable-next-line
             batchKeys.forEach((_, wKey) => {
                 if (!isViable) return;
                 if (distillIndex > 1 && filteredEntriesCount > maxCount) return;
+                if (wKey === iffyWordKey) return;
 
                 let word = grid.words.get(wKey)!;
                 let wordSquares = getSquaresForWord(grid, word);
-                if (wKey === iffyWordKey && !processedIffy) {
-                    wordSquares.forEach(sq => {
-                        if (!sq.content)
-                            sq.viableLetters = deepClone(fullAlphabet);
-                    });
-                    processedIffy = true;
-                }
                 if (distillIndex === 1) {
                     wordSquares.forEach((sq, i) => {
                         calculatedSquares.set(squareKey(sq), [entry[i]]);
@@ -215,6 +248,7 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
                     if (!isViable) return;
                     let crossKey = wordKey(cross);
                     if (nextBatchKeys.has(crossKey)) return;
+                    if (crossKey === iffyWordKey) return;
                     if (crossKey === fillWordKey || filledCrosses.has(crossKey)) return;
 
                     let crossSquares = getSquaresForWord(grid, cross);
@@ -271,7 +305,6 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
                 });
             });
 
-            //console.log(`${distillIndex} ${filteredEntriesCount}`)
             if (!foundCountReduction) break;
             if (!isViable) break;
 
