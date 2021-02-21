@@ -1,10 +1,10 @@
 # CrossHatch
 
+**Link to app**: https://ben4808.github.io/
+
 CrossHatch is a crossword construction app. Its goal is to provide a free yet capable tool that allows anyone to make puzzles they can be proud of.
 
 It runs entirely within the browser, meaning it is cross platform and no installation is required. It also requires no backend server and runs perfectly offline.
-
-github.io link: https://ben4808.github.io/
 
 Sample word list: https://raw.githubusercontent.com/ben4808/crosswords-dicts/master/sources/Ben/sampleWordList.txt
 This word list is based on the Peter Broda word list. https://peterbroda.me/crosswords/wordlist/, with the words 5 letters and shorter hand curated/scored by myself. Soon I hope to expand the hand curation.
