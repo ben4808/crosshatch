@@ -7,7 +7,7 @@ CrossHatch is a crossword construction app. Its goal is to provide a free yet ca
 It runs entirely within the browser, meaning it is cross platform and no installation is required. It also requires no backend server and runs perfectly offline.
 
 Sample word list: https://raw.githubusercontent.com/ben4808/crosswords-dicts/master/sources/Ben/sampleWordList.txt
-This word list is based on the Peter Broda word list. https://peterbroda.me/crosswords/wordlist/, with the words 5 letters and shorter hand curated/scored by myself. Soon I hope to expand the hand curation.
+This word list is based on Mark Diehl's trimmed version of the Peter Broda word list. https://www.facebook.com/groups/1515117638602016/permalink/2997721820341583, with the words 7 letters and shorter hand curated/scored by myself.
 
 There is no registration fee, and the source code is freely available. https://github.com/ben4808/crosshatch
 
