@@ -196,7 +196,7 @@ export function generatePuzFile(puzzle: Puzzle): Blob {
     });
 
     insertString(bytes, puzzle.notes + "\0", pos);
-    pos++;
+    pos += puzzle.notes.length + 1;
 
     if (areCircledSquares) {
         let sectionSize = grid.width * grid.height;
