@@ -6,8 +6,8 @@ import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
 import Globals from './windowService';
 import { getSquaresForWord, isBlackSquare, newWord, forAllGridSquares, isWordFull, isWordEmpty, getGrid, 
-    isUserFilled, deepClone, wordKey, getWordAtSquare, getSquareAtKey, otherDir, squareKey, getSection, mapKeys, 
-    fullAlphabet, letterListToLetterMatrix, letterMatrixToLetterList } from "./util";
+    isUserFilled, wordKey, getWordAtSquare, getSquareAtKey, otherDir, squareKey, getSection, mapKeys, 
+    fullAlphabet, letterListToLetterMatrix, letterMatrixToLetterList, cloneGridForFill } from "./util";
 import { SymmetryType } from "../models/SymmetryType";
 import { makeNewNode } from "./fill";
 import { ContentType } from "../models/ContentType";
@@ -59,6 +59,32 @@ export function populateWords(grid: GridState) {
             processSquare(grid, row, col, WordDirection.Down);
         }
     }
+
+    rebuildWordAtSquare(grid);
+}
+
+function rebuildWordAtSquare(grid: GridState) {
+    const h = grid.height;
+    const w = grid.width;
+    const acrossWordAt: (GridWord | undefined)[][] = [];
+    const downWordAt: (GridWord | undefined)[][] = [];
+    for (let row = 0; row < h; row++) {
+        acrossWordAt.push(new Array(w));
+        downWordAt.push(new Array(w));
+    }
+    grid.words.forEach(word => {
+        const target = word.direction === WordDirection.Across ? acrossWordAt : downWordAt;
+        let row = word.start[0];
+        let col = word.start[1];
+        while (true) {
+            target[row][col] = word;
+            if (row === word.end[0] && col === word.end[1]) break;
+            if (word.direction === WordDirection.Across) col++;
+            else row++;
+        }
+    });
+    grid.acrossWordAt = acrossWordAt;
+    grid.downWordAt = downWordAt;
 }
 
 export function updateGridConstraintInfo(grid: GridState) {
@@ -71,7 +97,10 @@ export function updateGridConstraintInfo(grid: GridState) {
     let sortedWordKeys = wordKeys.filter(k => k.includes("A")).concat(wordKeys.filter(k => k.includes("D")));
     sortedWordKeys.forEach(wordKey => {
         let word = grid.words.get(wordKey)!;
-        let newSquares = deepClone(getSquaresForWord(grid, word)) as GridSquare[];
+        let newSquares = getSquaresForWord(grid, word).map(sq => ({
+            ...sq,
+            viableLetters: sq.viableLetters ? sq.viableLetters.slice() : undefined,
+        })) as GridSquare[];
         let letters = getLettersFromSquares(newSquares);
         if (!letters.includes("-")) grid.usedWords.set(letters, true);
         generateConstraintInfoForSquares(newSquares);
@@ -116,7 +145,7 @@ export function generateConstraintInfoForSquares(squares: GridSquare[]) {
             sq.viableLetters = [sq.content];
         }
         else if (!sq.viableLetters) {
-            sq.viableLetters = deepClone(fullAlphabet);
+            sq.viableLetters = fullAlphabet.slice();
         }
     });
     if (isWordEmpty(squares) || isWordFull(squares)) return;

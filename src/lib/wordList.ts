@@ -75,13 +75,43 @@ export function queryIndexedWordList(pattern: string): string[] {
         words = Globals.qualityClasses?.has(pattern) ? [pattern] : [];
     }
     else if (letters.length > 1) {
-        let pos1 = letters[0][0];
-        let pos2 = letters[1][0];
-        let val1 = letters[0][1];
-        let val2 = letters[1][1];
+        let pos1: number;
+        let pos2: number;
+        let val1: string;
+        let val2: string;
+
+        if (letters.length === 2) {
+            pos1 = letters[0][0];
+            pos2 = letters[1][0];
+            val1 = letters[0][1];
+            val2 = letters[1][1];
+        } else {
+            let bestSize = Infinity;
+            let bestI = 0;
+            let bestJ = 1;
+            for (let i = 0; i < letters.length; i++) {
+                for (let j = i + 1; j < letters.length; j++) {
+                    const p1 = letters[i][0];
+                    const p2 = letters[j][0];
+                    const bucket = wl.buckets.twoVal[length-2][p1-1][p2-(p1+1)]
+                        [letters[i][1].charCodeAt(0)-65][letters[j][1].charCodeAt(0)-65];
+                    if (bucket.length < bestSize) {
+                        bestSize = bucket.length;
+                        bestI = i;
+                        bestJ = j;
+                    }
+                }
+            }
+            pos1 = letters[bestI][0];
+            pos2 = letters[bestJ][0];
+            val1 = letters[bestI][1];
+            val2 = letters[bestJ][1];
+        }
+
         words = wl.buckets.twoVal[length-2][pos1-1][pos2-(pos1+1)][val1.charCodeAt(0)-65][val2.charCodeAt(0)-65];
 
-        for (let i = 2; i < letters.length; i++) {
+        for (let i = 0; i < letters.length; i++) {
+            if (letters[i][0] === pos1 || letters[i][0] === pos2) continue;
             words = words.filter(w => w[letters[i][0]-1] === letters[i][1]);
         }
     }

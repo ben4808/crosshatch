@@ -5,14 +5,14 @@ import { GridState } from "../models/GridState";
 import { getAllCrosses } from "./fill";
 import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
 import { sectionCandidateKey } from "./section";
-import { deepClone, getSectionCandidatesFromKeys, getSquaresForWord, isWordFull, mapKeys } from "./util";
+import { cloneGridForFill, getSectionCandidatesFromKeys, getSquaresForWord, isWordFull, mapKeys } from "./util";
 import Globals from './windowService';
 
 export function processAndInsertChosenEntry(node: FillNode, contentType?: ContentType) {
     if (contentType === undefined) contentType = ContentType.Autofill;
     if (!node.chosenEntry) return false;
 
-    let grid = deepClone(node.startGrid) as GridState;
+    let grid = cloneGridForFill(node.startGrid);
     let word = node.fillWord!;
     let wordSquares = getSquaresForWord(grid, word);
     let crosses = getAllCrosses(grid, word);

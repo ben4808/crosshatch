@@ -3,11 +3,14 @@ import { FillNode } from "../models/FillNode";
 import { GridSquare } from "../models/GridSquare";
 import { getAllCrosses, getEligibleCandidates, getUnfilledCrosses, getWordScore } from "./fill";
 import { getLettersFromSquares } from "./grid";
-import { constraintLetterCount, deepClone, fullAlphabet, getSquaresForWord, 
+import { constraintLetterCount, cloneGridForFill, fullAlphabet, getSquaresForWord,
     isWordFull, letterMatrixToLetterList, squareKey, sum, wordKey, wordLength } from "./util";
 import { queryIndexedWordList } from "./wordList";
 import Globals from './windowService';
 import { GridState } from "../models/GridState";
+
+const MAX_ANCHOR_COMBOS = 40;
+const MAX_NON_IFFY_CANDIDATES_MANUAL = 100;
 
 // returns false if no viable candidates were found or iffy was set
 export function populateAndScoreEntryCandidates(node: FillNode, isForManualFill: boolean): boolean {
@@ -29,7 +32,11 @@ export function populateAndScoreEntryCandidates(node: FillNode, isForManualFill:
         processAnchorCombo(node, isForManualFill);
         eligibleCandidates = getEligibleCandidates(node);
         if (node.anchorCombosLeft.length === 0) break;
-        if (eligibleCandidates.filter(ec => !ec.iffyWordKey).length > (isForManualFill ? 100 : 0)) break;
+        let nonIffyCount = 0;
+        for (let ec of eligibleCandidates) {
+            if (!ec.iffyWordKey) nonIffyCount++;
+        }
+        if (nonIffyCount > (isForManualFill ? MAX_NON_IFFY_CANDIDATES_MANUAL : 0)) break;
     }
 
     node.entryCandidates.sort((a, b) => b.score! - a.score!);
@@ -41,7 +48,7 @@ export function populateNoHeuristicEntryCandidates(node: FillNode, dontRecalc?: 
     if (node.entryCandidates.length > 0 && dontRecalc) return;
 
     let word = node.fillWord!;
-    let squares = deepClone(getSquaresForWord(node.startGrid, word)) as GridSquare[];
+    let squares = getSquaresForWord(node.startGrid, word);
     let pattern = getLettersFromSquares(squares);
     let entries = queryIndexedWordList(pattern).sort((a, b) => Globals.qualityClasses!.get(b)! - Globals.qualityClasses!.get(a)!);
 
@@ -126,12 +133,12 @@ function generateAnchorCombos(squares: GridSquare[], anchorSquareKeys: string[],
         return comboScores.get(`[${a[0]},${a[1]}]`)! - comboScores.get(`[${b[0]},${b[1]}]`)!;
     });
 
-    return combos;
+    return combos.slice(0, MAX_ANCHOR_COMBOS);
 }
 
 function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
     function setIffySquares(iffyWordKey: string) {
-        grid = deepClone(node.startGrid) as GridState;
+        grid = cloneGridForFill(node.startGrid);
         let iffyWord = grid.words.get(iffyWordKey)!;
         let iffySquares = getSquaresForWord(grid, iffyWord);
         iffySquares.forEach(sq => {
@@ -218,7 +225,7 @@ function processAnchorCombo(node: FillNode, isForManualFill: boolean) {
         let calculatedSquares = new Map<string, string[]>();
         let crossScore = 0;
         let minCrossScore = 1e8;
-        let usedWords = deepClone(grid.usedWords) as Map<string, boolean>;
+        let usedWords = new Map(grid.usedWords);
         usedWords.set(entry, true);
         let batchKeys = new Map<string, boolean>();
         batchKeys.set(fillWordKey, true);

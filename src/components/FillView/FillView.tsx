@@ -1,4 +1,4 @@
-import React, { useContext, useState } from 'react';
+import React, { useContext, useRef, useState } from 'react';
 import { SymmetryType } from '../../models/SymmetryType';
 import "./FillView.scss";
 import Globals from '../../lib/windowService';
@@ -17,11 +17,15 @@ import { useInterval } from '../../lib/useInterval';
 import { SectionCandidate } from '../../models/SectionCandidate';
 import { QualityClass } from '../../models/QualityClass';
 
+const FILL_STEPS_PER_TICK = 8;
+const FILL_UI_INTERVAL_MS = 150;
+
 function FillView() {
     const appContext = useContext(AppContext);
     const [showSectionCandidates, setShowSectionCandidates] = useState(true);
     const [isWordListLoading, setIsWordListLoading] = useState(false);
     const [isFillRunning, setIsFillRunning] = useState(false);
+    const fillUiLastUpdateRef = useRef(0);
 
     function triggerUpdate() {
         appContext.triggerUpdate();
@@ -40,6 +44,7 @@ function FillView() {
             triggerUpdate();
         }
         else {
+            fillUiLastUpdateRef.current = 0;
             setFillStatus(FillStatus.Running);
             setIsFillRunning(true);
         }
@@ -47,12 +52,27 @@ function FillView() {
     
     function doFillWord() {
         if (Globals.fillStatus === FillStatus.Complete) return;
-        if (!fillSectionWord()) {
+
+        let completed = false;
+        for (let i = 0; i < FILL_STEPS_PER_TICK && !completed; i++) {
+            if (!fillSectionWord()) {
+                completed = true;
+            }
+        }
+
+        if (completed) {
             clearFill(getGrid());
             setFillStatus(FillStatus.Complete);
             setIsFillRunning(false);
+            triggerUpdate();
+            return;
         }
-        triggerUpdate();
+
+        const now = performance.now();
+        if (now - fillUiLastUpdateRef.current >= FILL_UI_INTERVAL_MS) {
+            fillUiLastUpdateRef.current = now;
+            triggerUpdate();
+        }
     }
 
     function handleFillWordClick(event: any) {

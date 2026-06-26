@@ -11,7 +11,7 @@ import { populateAndScoreEntryCandidates } from './entryCandidates';
 import { processAndInsertChosenEntry } from './insertEntry';
 import { PriorityQueue, priorityQueue } from './priorityQueue';
 import { getSectionString, getSectionsWithWord, insertSectionCandidateIntoGrid, newSectionCandidate } from './section';
-import { deepClone, getSquaresForWord, mapKeys, isWordFull, 
+import { cloneGridForFill, getSquaresForWord, mapKeys, isWordFull,
     getWordAtSquare, otherDir, mapValues, getSection, getGrid, wordKey } from './util';
 import Globals from './windowService';
 
@@ -113,7 +113,7 @@ function invalidateChainNode(node: FillNode, newSecCandidateFound?: boolean) {
 
     parent.chosenEntry = undefined;
     parent.iffyWordKey = parent.parent ? parent.parent.iffyWordKey : undefined;
-    parent.endGrid = deepClone(parent.startGrid);
+    parent.endGrid = cloneGridForFill(parent.startGrid);
 
     if (parent.backtracks >= 3) {
         if (parent.parent && !parent.parent.isChainNode) {
@@ -229,7 +229,7 @@ function getNewPermutations(candidateCounts: number[], section: Section) {
         for(let i = 0; i < perm.length; i++) {
             if (perm[i] === candidateCounts[i] - 1) continue;
     
-            let newPerm = deepClone(perm);
+            let newPerm = perm.slice();
             newPerm[i]++;
             let newPermKey = comboKey(newPerm);
             if (section.comboPermsUsed.has(newPermKey)) continue;
@@ -264,9 +264,10 @@ export function processSectionNode(node: FillNode, section: Section): boolean {
 
 export function makeNewNode(grid: GridState, depth: number, isChainNode: boolean, parent: FillNode | undefined, 
     isSectionBase?: boolean): FillNode {
+    const cloned = cloneGridForFill(grid);
     return {
-        startGrid: deepClone(grid),
-        endGrid: deepClone(grid),
+        startGrid: cloned,
+        endGrid: cloned,
         entryCandidates: [],
         depth: depth,
         isChainNode: isChainNode,

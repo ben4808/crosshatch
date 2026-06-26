@@ -9,7 +9,7 @@ import { WordDirection } from "../models/WordDirection";
 import { getAllCrosses, getWordScore } from "./fill";
 import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
 import { forAllGridSquares, getEntryAtWordKey, getGrid, getSquaresForWord, getWordAtSquare, getSquareAtKey, isAcross, 
-    isBlackSquare, mapKeys, squareKey, wordKey, wordLength, mapValues, isUserOrWordFilled, deepClone } from "./util";
+    isBlackSquare, mapKeys, squareKey, wordKey, wordLength, mapValues, isUserOrWordFilled, cloneGridForFill } from "./util";
 import Globals from './windowService';
 
 export function updateSectionFilters() {
@@ -42,7 +42,7 @@ export function getSectionString(grid: GridState, section: Section): string {
 // returns whether it was a success
 export function insertSectionCandidateIntoGrid(grid: GridState, candidate: SectionCandidate, contentType?: ContentType): boolean {
     if (contentType === undefined) contentType = ContentType.ChosenSection;
-    let newGrid = deepClone(grid) as GridState;
+    let newGrid = cloneGridForFill(grid);
     let section = Globals.sections!.get(candidate.sectionId)!;
     let foundDiscrepancy = false;
     section.squares.forEach((_, sqKey) => {
@@ -313,7 +313,7 @@ function getNeighboringSquares(grid: GridState, sq: GridSquare): GridSquare[] {
 }
 
 export function newSectionCandidate(node: FillNode, section: Section): SectionCandidate {
-    let grid = deepClone(node.endGrid) as GridState;
+    let grid = cloneGridForFill(node.endGrid);
     return {
         sectionId: section.id,
         grid: grid,

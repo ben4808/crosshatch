@@ -76,6 +76,11 @@ export function getSquaresForWord(grid: GridState, word: GridWord): GridSquare[]
 }
 
 export function getWordAtSquare(grid: GridState, row: number, col: number, dir: WordDirection): GridWord | undefined {
+    if (dir === WordDirection.Across && grid.acrossWordAt)
+        return grid.acrossWordAt[row][col];
+    if (dir === WordDirection.Down && grid.downWordAt)
+        return grid.downWordAt[row][col];
+
     let ret = undefined as GridWord | undefined;
 
     grid.words.forEach((word, _) => {
@@ -88,6 +93,26 @@ export function getWordAtSquare(grid: GridState, row: number, col: number, dir: 
     });
 
     return ret;
+}
+
+/** Fast grid clone for fill search — copies mutable square state, shares immutable word structure. */
+export function cloneGridForFill(grid: GridState): GridState {
+    const squares = grid.squares.map(row =>
+        row.map(sq => ({
+            ...sq,
+            viableLetters: sq.viableLetters ? sq.viableLetters.slice() : undefined,
+        }))
+    );
+    return {
+        height: grid.height,
+        width: grid.width,
+        squares,
+        words: grid.words,
+        usedWords: new Map(grid.usedWords),
+        userFilledSectionCandidates: new Map(grid.userFilledSectionCandidates),
+        acrossWordAt: grid.acrossWordAt,
+        downWordAt: grid.downWordAt,
+    };
 }
 
 export function newWord(): GridWord {
@@ -256,7 +281,7 @@ export function letterMatrixToLetterList(matrix: boolean[]): string[] {
 export function letterListToLetterMatrix(list: string[]): boolean[] {
     let matrix = Array<boolean>(26).fill(false);
     list.forEach(ltr => {
-        matrix[ltr.charCodeAt(0)] = true;
+        matrix[ltr.charCodeAt(0) - 65] = true;
     });
     return matrix;
 }
