@@ -23,7 +23,6 @@ export function processAndInsertChosenEntry(node: FillNode, contentType?: Conten
             sq.contentType = contentType!;
     });
     grid.usedWords.set(getLettersFromSquares(wordSquares), true);
-    node.iffyWordKey = node.chosenEntry!.iffyWordKey;
 
     if (contentType === ContentType.ChosenWord) {
         removeNonmatchingSectionCandidates(grid, wordSquares, node.chosenEntry!.word);

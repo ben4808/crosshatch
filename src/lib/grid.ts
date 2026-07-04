@@ -273,10 +273,10 @@ export function getSymmetrySquares(initSquare: [number, number]): [number, numbe
     return ret;
 }
 
-export function insertEntryIntoGrid(node: FillNode, wordKey: string, entry: string, iffyWordKey?: string, contentType?: ContentType) {
+export function insertEntryIntoGrid(node: FillNode, wordKey: string, entry: string, contentType?: ContentType) {
     let grid = node.startGrid;
     node.fillWord = grid.words.get(wordKey)!;
-    node.chosenEntry = node.entryCandidates.find(ec => ec.word === entry && ec.iffyWordKey === iffyWordKey);
+    node.chosenEntry = node.entryCandidates.find(ec => ec.word === entry);
     processAndInsertChosenEntry(node, contentType);
 }
 

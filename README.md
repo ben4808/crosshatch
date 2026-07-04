@@ -39,8 +39,6 @@ Fourth, switch to the the Clues tab and write the clues for your words. Clues ca
 
 Finally, export a .puz file and share it with your friends! I recommend https://squares.io/ for fun collaborative solving, https://crosshare.org/ for sharing with friends, and https://crosswordnexus.com/apps/puz-to-pdf/ for converting your puzzle into a printable PDF.
 
-### Iffies
-Many times there is no fill possible for a certain section using the words in your word list, but there are fills possible with the use of one "word" not in your list, i.e. a random string of letters. This random "word" is an iffy. Short iffies, especially 3-4 letters, might be workable as an acronyms or even a real words you have neglected in your word list. After changing the Max Iffy Length dropdown, the algorithm will start considering one iffy per section. This can slow down performance somewhat.
 ### Entry Quality
 CrossHatch uses a simplified approach to grading entry quality.
 
@@ -48,7 +46,6 @@ CrossHatch uses a simplified approach to grading entry quality.
 
 *Okay* are entries scored 40-49 in your word list. They appear in orange in the grid.
 
-*Iffies* are entries not in your word list that might help the fill succeed. They appear in rusty red in the grid.
 ## Contributing
 CrossHatch is an open source project under the MIT License. You are welcome to use modify the code for your own purposes and submit pull requests to the repo.
 

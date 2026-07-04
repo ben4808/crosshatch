@@ -221,19 +221,6 @@ export function getSquareAtKey(grid: GridState, squareKey: string): GridSquare {
     return grid.squares[+tokens[0]][+tokens[1]];
 }
 
-export function isPartOfIffyWord(sq: GridSquare): boolean {
-    if (!sq.viableLetters) return false;
-    return sq.viableLetters.length === 0;
-}
-
-// https://stackoverflow.com/questions/2450954/how-to-randomize-shuffle-a-javascript-array
-export function shuffle(array: any[]) {
-    for (let i = array.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [array[i], array[j]] = [array[j], array[i]];
-    }
-}
-
 export function getEntryAtWordKey(grid: GridState, wordKey: string): string {
     return getLettersFromSquares(getSquaresForWord(grid, grid.words.get(wordKey)!));
 }

@@ -80,7 +80,6 @@ function App(props: AppProps) {
     Globals.selectedWordDir = WordDirection.Across;
     if (!Globals.gridSymmetry) Globals.gridSymmetry = SymmetryType.Rotate180;
     if (Globals.useManualHeuristics === undefined) Globals.useManualHeuristics = true;
-    if (Globals.maxIffyLength === undefined) Globals.maxIffyLength = 0;
     Globals.selectedWordNode = undefined;
     Globals.curChainId = 1;
     if (Globals.wordLists === undefined) Globals.wordLists = [];

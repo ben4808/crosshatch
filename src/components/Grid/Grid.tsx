@@ -264,7 +264,7 @@ function Grid() {
                 let qc = Globals.qualityClasses ? Globals.qualityClasses!.get(letters) : QualityClass.Normal;
                 squares.forEach(sq => {
                     if (sq.contentType === ContentType.Autofill)
-                        ret.set(squareKey(sq), qc || QualityClass.Iffy);
+                        ret.set(squareKey(sq), qc || QualityClass.Crosswordese);
                 });
             }
         });
@@ -279,7 +279,7 @@ function Grid() {
                     if (sq.contentType === ContentType.Autofill) {
                         let curQc = ret.get(squareKey(sq)) || QualityClass.Normal;
                         if (!qc || qc < curQc)
-                            ret.set(squareKey(sq), qc || QualityClass.Iffy);
+                            ret.set(squareKey(sq), qc || QualityClass.Crosswordese);
                     }
                 });
             }

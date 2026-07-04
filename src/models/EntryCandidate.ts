@@ -4,8 +4,6 @@ export interface EntryCandidate {
     isViable: boolean;
     hasBeenChained: boolean;
     wasChainFailure: boolean;
-    iffyEntry?: string;
-    iffyWordKey?: string;
     crossScore: number;
     minCrossScore: number;
 }

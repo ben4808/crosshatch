@@ -39,7 +39,6 @@ function getSquareElement(props: SquareProps) {
                          props.qualityClass === QualityClass.Lively ? " grid-content-lively" :
                          props.qualityClass === QualityClass.Normal ? " grid-content-normal" :
                          props.qualityClass === QualityClass.Crosswordese ? " grid-content-crosswordese" :
-                         props.qualityClass === QualityClass.Iffy ? " grid-content-iffy" :
                          props.qualityClass === QualityClass.NotAThing ? " grid-content-notathing" : ""
                         )}>
                     {content}

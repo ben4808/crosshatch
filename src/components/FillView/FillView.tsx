@@ -89,10 +89,6 @@ function FillView() {
         Globals.gridSymmetry = +SymmetryType[event.target[event.target.selectedIndex].value] as SymmetryType;
     }
 
-    function handleIffyLengthChange(event: any) {
-        Globals.maxIffyLength = +event.target[event.target.selectedIndex].value;
-    }
-
     function getSymmetryTypeString(type: string): string {
         switch(type) {
             case "None": return "None";
@@ -120,10 +116,10 @@ function FillView() {
         }
     }
 
-    function getManualEntryNode(entry: string, iffyWordKey?: string, isHover?: boolean): FillNode {
+    function getManualEntryNode(entry: string, isHover?: boolean): FillNode {
         let node = Globals.selectedWordNode!;
         let wordKey = Globals.selectedWordKey!;
-        insertEntryIntoGrid(node, wordKey, entry, iffyWordKey, isHover ? ContentType.HoverChosenWord : ContentType.ChosenWord);
+        insertEntryIntoGrid(node, wordKey, entry, isHover ? ContentType.HoverChosenWord : ContentType.ChosenWord);
         return node;
     }
 
@@ -148,9 +144,7 @@ function FillView() {
         if (!Globals.selectedWordKey) return;
 
         let entry = target.attributes["data-word"].value as string;
-        let iffyWordKey = target.attributes["data-iffykey"].value as string | undefined;
-        if (iffyWordKey === "na") iffyWordKey = undefined;
-        let node = getManualEntryNode(entry, iffyWordKey, false);
+        let node = getManualEntryNode(entry, false);
 
         updateManualEntryCandidates(node.endGrid);
 
@@ -170,9 +164,7 @@ function FillView() {
         if (!Globals.selectedWordKey) return;
 
         let entry = target.attributes["data-word"].value as string;
-        let iffyWordKey = target.attributes["data-iffykey"].value as string | undefined;
-        if (iffyWordKey === "na") iffyWordKey = undefined;
-        let node = getManualEntryNode(entry, iffyWordKey, true);
+        let node = getManualEntryNode(entry, true);
 
         Globals.hoverGrid = node.endGrid;
         triggerUpdate();
@@ -387,7 +379,6 @@ function FillView() {
     let sectionCandidates = mapValues(activeSection.candidates)
         .filter(sc => !sc.isFilteredOut).sort((a, b) => b.score - a.score);
     let selectedEntry = Globals.selectedWordKey ? getEntryAtWordKey(grid, Globals.selectedWordKey!) : "";
-    let selectedMaxIffyLength = Globals.maxIffyLength || 0;
     let useManualHeuristics = Globals.useManualHeuristics !== undefined ? Globals.useManualHeuristics : true;
 
     let wordListsStyle = {
@@ -395,7 +386,7 @@ function FillView() {
     } as React.CSSProperties;
 
     let entryCandidatesStyle = {
-        gridTemplateColumns: `4fr 1fr 2fr`
+        gridTemplateColumns: `4fr 1fr`
     } as React.CSSProperties;
 
     let sectionsStyle = {
@@ -403,12 +394,12 @@ function FillView() {
     } as React.CSSProperties;
 
     let fillsStyle = {
-        gridTemplateColumns: `4fr 1fr 2fr`
+        gridTemplateColumns: `4fr 1fr`
     } as React.CSSProperties;
 
     return (
         <div id="FillView" className="fill-container">
-            <input id="open-wordlist-input" hidden type="file" accept=".dict,.txt" onChange={onWordListUpload} />
+            <input id="open-wordlist-input" className="d-none" type="file" accept=".dict,.txt" onChange={onWordListUpload} />
             <div id="loader" style={{display: isWordListLoading ? "block" : "none"}}></div>
 
             <div className={"fill-status" +
@@ -416,25 +407,18 @@ function FillView() {
                 Globals.fillStatus! === FillStatus.Running ? " fill-status-green" : "")}>{fillStatusStr}</div>
             {wordLists.length > 0 &&
             <>
-                <div className="custom-control custom-switch fill-switch">
-                    <input type="checkbox" className="custom-control-input" id="fillSwitch" 
+                <div className="form-check form-switch fill-switch">
+                    <input type="checkbox" className="form-check-input" id="fillSwitch" 
                         checked={isFillRunning} onChange={handleToggleFill} />
-                    <label className="custom-control-label" htmlFor="fillSwitch">Fill</label>
+                    <label className="form-check-label" htmlFor="fillSwitch">Fill</label>
                 </div>
                 <br />
-                Max Iffy Length: <br />
-                <select className="custom-select iffy-select" defaultValue={selectedMaxIffyLength} onChange={handleIffyLengthChange}>
-                    <option value={0} key={0}>Off</option>
-                    {[2, 3, 4, 5, 6, 7].map(length => (
-                        <option value={length} key={length}>{length}</option>
-                    ))}
-                </select>
             </>
             }
             
             <br /><br />
             Grid Symmetry: <br />
-            <select className="custom-select symmetry-select" defaultValue={selectedSymmetry} onChange={handleSymmetryChange}>
+            <select className="form-select symmetry-select" defaultValue={selectedSymmetry} onChange={handleSymmetryChange}>
                 {symmetryOptions.map(type => (
                     <option value={type} key={type}>{getSymmetryTypeString(type.toString())}</option>
                 ))}
@@ -473,19 +457,17 @@ function FillView() {
                     <div className="fill-list" style={entryCandidatesStyle}>
                         <div className="fill-list-header">Entry</div>
                         <div className="fill-list-header">Score</div>
-                        <div className="fill-list-header">Iffy</div>
                         { isNoEntryCandidates && useManualHeuristics && (
                             <div className="fill-list-row-wrapper">
-                                <div><i>No viable entries</i></div><div></div><div></div>
+                                <div><i>No viable entries</i></div><div></div>
                             </div>
                         )}
                         { entryCandidates.map(ec => (
                             <div className={"fill-list-row-wrapper" + (selectedEntry === ec.word ? " fill-list-row-selected" : "")} 
-                                key={ec.word + (ec.iffyEntry || "")} data-word={ec.word} data-iffykey={ec.iffyWordKey || "na"}
+                                key={ec.word} data-word={ec.word}
                                 onClick={handleEntryCandidateClick} onMouseOver={handleEntryCandidateHover}>
                                 <div>{ec.word}</div>
                                 <div>{ec.score.toFixed(0)}</div>
-                                <div>{ec.iffyEntry || ""}</div>
                             </div>
                         ))}
                     </div>
@@ -522,15 +504,14 @@ function FillView() {
                     <div className="fill-list" style={fillsStyle}>
                         <div className="fill-list-header">Longest</div>
                         <div className="fill-list-header">Score</div>
-                        <div className="fill-list-header">Iffy</div>
                         {!showSectionCandidates && (
                             <div className="fill-list-row-wrapper">
-                                <div><i>Hidden</i></div><div></div><div></div>
+                                <div><i>Hidden</i></div><div></div>
                             </div>
                         )}
                         {showSectionCandidates && Globals.fillStatus === FillStatus.Complete && sectionCandidates.length === 0 && (
                             <div className="fill-list-row-wrapper">
-                                <div><i>No fills found</i></div><div></div><div></div>
+                                <div><i>No fills found</i></div><div></div>
                             </div>
                         )}
                         {showSectionCandidates && sectionCandidates.map(sc => {
@@ -543,7 +524,6 @@ function FillView() {
                                 onClick={handleSectionCandidateClick} onMouseOver={handleSectionCandidateHover}>
                                 <div>{entry}</div>
                                 <div>{sc.score.toFixed(2)}</div>
-                                <div>{sc.iffyEntry || ""}</div>
                             </div>
                         )})}
                     </div>

@@ -15,8 +15,6 @@ export interface FillNode {
     isSectionBase: boolean;
     backtracks: number;
     chainGoodCandidates: number;
-    chainIffyCandidates: number;
-    iffyWordKey?: string;
     needsNewPriority: boolean;
     shouldBeDeleted: boolean;
     chainId?: number;

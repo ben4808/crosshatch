@@ -49,7 +49,7 @@ function Menu(props: MenuProps) {
 
     return (
         <div id="Menu">
-            <input id="open-puzzle-input" hidden type="file" accept=".puz" onChange={onFileUpload} />
+            <input id="open-puzzle-input" className="d-none" type="file" accept=".puz" onChange={onFileUpload} />
 
             <div className="site-title">CrossHatch</div>
 
@@ -68,16 +68,16 @@ function Menu(props: MenuProps) {
             </div>
             
             <div className="new-grid-group">
-                <div className="btn btn-primary" onClick={handleNewPuzzle}>New Puzzle</div>
+                <button type="button" className="btn btn-primary" onClick={handleNewPuzzle}>New Puzzle</button>
                 <input type="text" className="form-control" defaultValue={props.gridWidth} onFocus={handleFocus}
-                    ref={sizeRefs.current[0]}></input>
+                    ref={sizeRefs.current[0]} />
                 <div className="menu-gridsize-sep"><div style={{height:"6px", float:"none"}}></div>x</div>
                 <input type="text" className="form-control" defaultValue={props.gridHeight} onFocus={handleFocus}
-                    ref={sizeRefs.current[1]}></input>
+                    ref={sizeRefs.current[1]} />
             </div>
             
-            <div id="loadPuz" className="btn btn-primary menu-button" onClick={handleLoadPuz}>Load .puz</div>
-            <div id="exportPuz" className="btn btn-primary menu-button" onClick={handleExportPuz}>Export .puz</div>
+            <button type="button" id="loadPuz" className="btn btn-primary menu-button" onClick={handleLoadPuz}>Load .puz</button>
+            <button type="button" id="exportPuz" className="btn btn-primary menu-button" onClick={handleExportPuz}>Export .puz</button>
         </div>
     );
 }

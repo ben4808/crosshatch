@@ -97,15 +97,15 @@
 .fill-switch {
     margin-left: 10px;
 }
-.custom-control-label {
+.fill-switch .form-check-input {
+    cursor: pointer;
+    transform: scale(1.4);
+}
+.fill-switch .form-check-label {
     display: inline;
     width: 125px;
     cursor: pointer;
     padding-left: 5px;
-}
-.custom-control-label::before {
-    cursor: pointer;
-    transform: scale(1.4);
 }
 
 .fill-status {

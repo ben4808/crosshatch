@@ -12,7 +12,7 @@ import { processAndInsertChosenEntry } from './insertEntry';
 import { PriorityQueue, priorityQueue } from './priorityQueue';
 import { getSectionString, getSectionsWithWord, insertSectionCandidateIntoGrid, newSectionCandidate } from './section';
 import { cloneGridForFill, getSquaresForWord, mapKeys, isWordFull,
-    getWordAtSquare, otherDir, mapValues, getSection, getGrid, wordKey } from './util';
+    getWordAtSquare, otherDir, mapValues, getSection, getGrid } from './util';
 import Globals from './windowService';
 
 export function fillSectionWord(): boolean {
@@ -112,7 +112,6 @@ function invalidateChainNode(node: FillNode, newSecCandidateFound?: boolean) {
     }
 
     parent.chosenEntry = undefined;
-    parent.iffyWordKey = parent.parent ? parent.parent.iffyWordKey : undefined;
     parent.endGrid = cloneGridForFill(parent.startGrid);
 
     if (parent.backtracks >= 3) {
@@ -126,17 +125,12 @@ function invalidateChainNode(node: FillNode, newSecCandidateFound?: boolean) {
     }
 
     if (newSecCandidateFound) {
-        if (node.iffyWordKey && node.chainBaseNode!.chainIffyCandidates < 24) {
-            node.chainBaseNode!.chainIffyCandidates++;
-            return;
-        }
-        else if (!node.iffyWordKey && node.chainBaseNode!.chainGoodCandidates < 4) {
+        if (node.chainBaseNode!.chainGoodCandidates < 4) {
             node.chainBaseNode!.chainGoodCandidates++;
             return;
         }
         
         node.chainBaseNode!.chainGoodCandidates = 0;
-        node.chainBaseNode!.chainIffyCandidates = 0;
 
         let curNode = parent;
         while (curNode.parent && (curNode.parent.isChainNode || curNode.parent.isSectionBase)) {
@@ -280,9 +274,7 @@ export function makeNewNode(grid: GridState, depth: number, isChainNode: boolean
         anchorSquareKeys: [],
         anchorCombosLeft: [],
         viableLetterCounts: new Map<string, Map<string, number>>(),
-        iffyWordKey: parent ? parent.iffyWordKey : undefined,
         chainGoodCandidates: parent ? parent.chainGoodCandidates : 0,
-        chainIffyCandidates: parent ? parent.chainIffyCandidates : 0,
         chainId: Globals.curChainId!,
         topCrossScore: 0,
         topMinCrossScore: 0,
@@ -296,7 +288,7 @@ function selectWordToFill(node: FillNode, section: Section): GridWord | undefine
         let word = grid.words.get(key)!;
         if (key === section.wordOrder[section.wordOrder.length - 1]) return word;
         let squares = getSquaresForWord(grid, word);
-        if (wordKey(word) !== node.iffyWordKey && !isWordFull(squares))
+        if (!isWordFull(squares))
             return word;
     }
 
@@ -361,6 +353,5 @@ export function getWordScore(word: string): number {
         case QualityClass.Lively: return 12;
         case QualityClass.Normal: return 9;
         case QualityClass.Crosswordese: return 3;
-        case QualityClass.Iffy: return 1;
     }
 }

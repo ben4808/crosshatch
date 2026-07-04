@@ -8,7 +8,7 @@ import { SectionCandidate } from "../models/SectionCandidate";
 import { WordDirection } from "../models/WordDirection";
 import { getAllCrosses, getWordScore } from "./fill";
 import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
-import { forAllGridSquares, getEntryAtWordKey, getGrid, getSquaresForWord, getWordAtSquare, getSquareAtKey, isAcross, 
+import { forAllGridSquares, getGrid, getSquaresForWord, getWordAtSquare, getSquareAtKey, isAcross, 
     isBlackSquare, mapKeys, squareKey, wordKey, wordLength, mapValues, isUserOrWordFilled, cloneGridForFill } from "./util";
 import Globals from './windowService';
 
@@ -318,7 +318,6 @@ export function newSectionCandidate(node: FillNode, section: Section): SectionCa
         sectionId: section.id,
         grid: grid,
         score: calculateSectionCandidateScore(node, grid, section),
-        iffyEntry: node.iffyWordKey ? getEntryAtWordKey(grid, node.iffyWordKey) : undefined,
         isFilteredOut: false,
     } as SectionCandidate;
 }
@@ -333,7 +332,6 @@ export function calculateSectionCandidateScore(node: FillNode, grid: GridState, 
         total += score;
     });
 
-    if (!node.iffyWordKey) total *= 10;
     return total / section.words.size;
 }
 

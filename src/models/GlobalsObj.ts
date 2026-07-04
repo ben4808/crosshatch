@@ -25,7 +25,6 @@ export interface GlobalsObj {
     selectedSectionCandidateKeys?: Map<number, string>;
 
     useManualHeuristics?: boolean;
-    maxIffyLength?: number;
     gridSymmetry?: SymmetryType;
     fillStatus?: FillStatus;
 
