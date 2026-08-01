@@ -1,6 +1,5 @@
 import React from 'react';
 import { ContentType } from '../../models/ContentType';
-import { QualityClass } from '../../models/QualityClass';
 import { SquareType } from '../../models/SquareType';
 import { SquareProps } from './SquareProps';
 
@@ -35,11 +34,7 @@ function getSquareElement(props: SquareProps) {
                          props.content && props.contentType === ContentType.ChosenWord ? " grid-content-chosen-word" :
                          props.content && props.contentType === ContentType.HoverChosenWord ? " grid-content-chosen-word-hover" :
                          props.content && props.contentType === ContentType.ChosenSection ? " grid-content-chosen-section" :
-                         props.content && props.contentType === ContentType.HoverChosenSection ? " grid-content-chosen-section-hover" :
-                         props.qualityClass === QualityClass.Lively ? " grid-content-lively" :
-                         props.qualityClass === QualityClass.Normal ? " grid-content-normal" :
-                         props.qualityClass === QualityClass.Crosswordese ? " grid-content-crosswordese" :
-                         props.qualityClass === QualityClass.NotAThing ? " grid-content-notathing" : ""
+                         props.content && props.contentType === ContentType.HoverChosenSection ? " grid-content-chosen-section-hover" : ""
                         )}>
                     {content}
             </div>

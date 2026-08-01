@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useMemo, useState } from 'react';
 import { AppContext } from './AppContext';
 import { AppProps } from './AppProps';
 import CluesView from './components/CluesView/CluesView';
@@ -20,53 +20,17 @@ function App(props: AppProps) {
   const [gridWidth, setGridWidth] = useState(7);
   const [gridHeight, setGridHeight] = useState(7);
   const [updateSemaphore, setUpdateSemaphore] = useState(0);
-  const [appState, setAppState] = useState(getAppContext());
 
-  useEffect(() => {
-    setAppState(getAppContext());
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [updateSemaphore]);
+  // Functional updater so long-lived callbacks (fill worker onProgress) never
+  // close over a stale counter — that made setState a no-op until mouse moves
+  // triggered a fresher Grid triggerUpdate.
+  const triggerUpdate = useCallback(() => {
+    setUpdateSemaphore(s => s + 1);
+  }, []);
 
-  function getAppContext() {
-    return { 
-      triggerUpdate: triggerUpdate,
-      switchActiveView: switchActiveView,
-      setPuzzle: setPuzzle,
-      createNewPuzzle: createNewPuzzle,
-      exportPuz: exportPuz,
-    }
-  }
-
-  function triggerUpdate() {
-    setUpdateSemaphore(updateSemaphore + 1);
-  }
-
-  function switchActiveView(newView: string) {
+  const switchActiveView = useCallback((newView: string) => {
     setActiveView(newView);
-  }
-
-  function createNewPuzzle(width: number, height: number) {
-    initializeGlobals(undefined, width, height);
-    triggerUpdate();
-  }
-
-  function setPuzzle(puzzle: Puzzle) {
-    let grid = getGrid();
-    initializeGlobals(puzzle, grid.width, grid.height);
-    triggerUpdate();
-  }
-
-  function exportPuz() {
-    let puzzle = Globals.puzzle!;
-    let blob = generatePuzFile(puzzle);
-    let filename = (puzzle.title || "Untitled")+".puz";
-    let file = new File([blob], filename);
-    const url= window.URL.createObjectURL(file);
-    let puzzleLink = document.getElementById("download-puzzle-link");
-    puzzleLink!.setAttribute("href", url);
-    puzzleLink!.setAttribute("download", filename);
-    puzzleLink!.click();
-  }
+  }, []);
 
   function initializeGlobals(puzzle?: Puzzle, width?: number, height?: number) {
     let isNewPuzzle = !!puzzle;
@@ -81,7 +45,6 @@ function App(props: AppProps) {
     if (!Globals.gridSymmetry) Globals.gridSymmetry = SymmetryType.Rotate180;
     if (Globals.useManualHeuristics === undefined) Globals.useManualHeuristics = true;
     Globals.selectedWordNode = undefined;
-    Globals.curChainId = 1;
     if (Globals.wordLists === undefined) Globals.wordLists = [];
     Globals.fillStatus = Globals.wordList !== undefined ? FillStatus.Ready : FillStatus.NoWordList;
 
@@ -92,9 +55,41 @@ function App(props: AppProps) {
     setGridHeight(height);
   }
 
+  const createNewPuzzle = useCallback((width: number, height: number) => {
+    initializeGlobals(undefined, width, height);
+    triggerUpdate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [triggerUpdate, gridWidth, gridHeight]);
+
+  const setPuzzle = useCallback((puzzle: Puzzle) => {
+    let grid = getGrid();
+    initializeGlobals(puzzle, grid.width, grid.height);
+    triggerUpdate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [triggerUpdate, gridWidth, gridHeight]);
+
+  const exportPuz = useCallback(() => {
+    let puzzle = Globals.puzzle!;
+    let blob = generatePuzFile(puzzle);
+    let filename = (puzzle.title || "Untitled")+".puz";
+    let file = new File([blob], filename);
+    const url= window.URL.createObjectURL(file);
+    let puzzleLink = document.getElementById("download-puzzle-link");
+    puzzleLink!.setAttribute("href", url);
+    puzzleLink!.setAttribute("download", filename);
+    puzzleLink!.click();
+  }, []);
+
+  const appState = useMemo(() => ({
+    triggerUpdate,
+    switchActiveView,
+    setPuzzle,
+    createNewPuzzle,
+    exportPuz,
+  }), [triggerUpdate, switchActiveView, setPuzzle, createNewPuzzle, exportPuz]);
+
   if (!Globals.puzzle) {
     initializeGlobals();
-    triggerUpdate();
   }
 
   return (

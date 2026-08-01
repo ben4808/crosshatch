@@ -1,5 +1,4 @@
-import { PriorityQueue } from "../lib/priorityQueue";
-import { FillNode } from "./FillNode";
+import { FillSearchState } from "./FillSearchState";
 import { SectionCandidate } from "./SectionCandidate";
 
 export interface Section {
@@ -13,7 +12,5 @@ export interface Section {
     candidates: Map<string, SectionCandidate>;
     selectedCandidate?: string;
     connections: Map<number, boolean>;
-    fillQueue?: PriorityQueue<FillNode>;
-    comboPermsQueue: number[][];
-    comboPermsUsed: Map<string, boolean>;
+    fillState?: FillSearchState;
 }

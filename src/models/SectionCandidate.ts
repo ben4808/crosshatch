@@ -1,8 +1,7 @@
-import { GridState } from "./GridState";
-
 export interface SectionCandidate {
     sectionId: number;
-    grid: GridState;
+    /** Sorted section-square letters (same order as getSectionString). */
+    sectionString: string;
     score: number;
     isFilteredOut: boolean;
 }

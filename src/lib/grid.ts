@@ -7,7 +7,7 @@ import { WordDirection } from "../models/WordDirection";
 import Globals from './windowService';
 import { getSquaresForWord, isBlackSquare, newWord, forAllGridSquares, isWordFull, isWordEmpty, getGrid, 
     isUserFilled, wordKey, getWordAtSquare, getSquareAtKey, otherDir, squareKey, getSection, mapKeys, 
-    fullAlphabet, letterListToLetterMatrix, letterMatrixToLetterList, cloneGridForFill } from "./util";
+    letterBit } from "./util";
 import { SymmetryType } from "../models/SymmetryType";
 import { makeNewNode } from "./fill";
 import { ContentType } from "../models/ContentType";
@@ -63,7 +63,7 @@ export function populateWords(grid: GridState) {
     rebuildWordAtSquare(grid);
 }
 
-function rebuildWordAtSquare(grid: GridState) {
+export function rebuildWordAtSquare(grid: GridState) {
     const h = grid.height;
     const w = grid.width;
     const acrossWordAt: (GridWord | undefined)[][] = [];
@@ -89,7 +89,7 @@ function rebuildWordAtSquare(grid: GridState) {
 
 export function updateGridConstraintInfo(grid: GridState) {
     grid.usedWords = new Map<string, boolean>();
-    forAllGridSquares(grid, sq => { sq.viableLetters = undefined; });
+    forAllGridSquares(grid, sq => { sq.viableMask = undefined; });
 
     if (!Globals.wordList) return;
 
@@ -97,18 +97,10 @@ export function updateGridConstraintInfo(grid: GridState) {
     let sortedWordKeys = wordKeys.filter(k => k.includes("A")).concat(wordKeys.filter(k => k.includes("D")));
     sortedWordKeys.forEach(wordKey => {
         let word = grid.words.get(wordKey)!;
-        let newSquares = getSquaresForWord(grid, word).map(sq => ({
-            ...sq,
-            viableLetters: sq.viableLetters ? sq.viableLetters.slice() : undefined,
-        })) as GridSquare[];
+        let newSquares = getSquaresForWord(grid, word);
         let letters = getLettersFromSquares(newSquares);
         if (!letters.includes("-")) grid.usedWords.set(letters, true);
         generateConstraintInfoForSquares(newSquares);
-        if (newSquares !== undefined && newSquares.length > 0) {
-            newSquares.forEach(ns => {
-                grid.squares[ns.row][ns.col] = ns;
-            });
-        }
     });
 }
 
@@ -139,34 +131,59 @@ function numberizeGrid(grid: GridState) {
     }
 }
 
-export function generateConstraintInfoForSquares(squares: GridSquare[]) {
+/**
+ * Tighten viable letter masks from dictionary support for this word.
+ * Always intersects (no size bailout) so MRV / FC see real domains.
+ * Returns false if any open square ends with an empty domain.
+ */
+export function generateConstraintInfoForSquares(squares: GridSquare[]): boolean {
     squares.forEach(sq => {
         if (sq.content) {
-            sq.viableLetters = [sq.content];
+            sq.viableMask = letterBit(sq.content);
         }
-        else if (!sq.viableLetters) {
-            sq.viableLetters = fullAlphabet.slice();
+        else if (sq.viableMask === undefined) {
+            sq.viableMask = (1 << 26) - 1;
         }
     });
-    if (isWordEmpty(squares) || isWordFull(squares)) return;
+    if (isWordEmpty(squares) || isWordFull(squares)) return true;
 
     let pattern = getLettersFromSquares(squares);
     let entryOptions = queryIndexedWordList(pattern);
-    if (entryOptions.length > 500) return;
 
+    // Per-position support bits among entries that fit current masks.
+    let support = new Array<number>(squares.length).fill(0);
+    let anySupport = false;
+    for (let entry of entryOptions) {
+        let ok = true;
+        for (let i = 0; i < squares.length; i++) {
+            let sq = squares[i];
+            if (sq.content) continue;
+            if ((sq.viableMask! & letterBit(entry[i])) === 0) {
+                ok = false;
+                break;
+            }
+        }
+        if (!ok) continue;
+        anySupport = true;
+        for (let i = 0; i < squares.length; i++) {
+            if (squares[i].content) continue;
+            support[i] |= letterBit(entry[i]);
+        }
+    }
+
+    let viable = true;
     for (let i = 0; i < squares.length; i++) {
         let sq = squares[i];
         if (sq.content) continue;
-        let curViableMatrix = sq.viableLetters ? letterListToLetterMatrix(sq.viableLetters) : Array<boolean>(26).fill(true);
-        let newViableMatrix = Array<boolean>(26).fill(false);
-
-        let letters = entryOptions.map(entry => entry[i]);
-        letters.forEach(ltr => {
-            if (sq.viableLetters && curViableMatrix[ltr.charCodeAt(0) - 65]) return;
-            setLettersArrayVal(newViableMatrix, ltr, true);
-        });
-        sq.viableLetters = letterMatrixToLetterList(newViableMatrix);
+        if (!anySupport) {
+            sq.viableMask = 0;
+            viable = false;
+        } else {
+            sq.viableMask = sq.viableMask! & support[i];
+            if (sq.viableMask === 0) viable = false;
+        }
     }
+    return viable;
 }
 
 export function getLettersArrayVal(arr: boolean[], ltr: string) {
@@ -180,9 +197,19 @@ export function setLettersArrayVal(arr: boolean[], ltr: string, newVal: boolean)
 export function getConstraintSquareSum(squares: GridSquare[]): number {
     let total = 0;
     squares.forEach(sq => {
-        total += sq.viableLetters ? sq.viableLetters.length : 0;
+        total += sq.content ? 1 : (sq.viableMask === undefined ? 26 : popcountLocal(sq.viableMask));
     });
     return total;
+}
+
+function popcountLocal(mask: number): number {
+    let n = 0;
+    let m = mask >>> 0;
+    while (m) {
+        m &= m - 1;
+        n++;
+    }
+    return n;
 }
 
 export function getLettersFromSquares(squares: GridSquare[]): string {
@@ -334,9 +361,7 @@ export function eraseSectionCandidateFromGrid(grid: GridState, sc: SectionCandid
 export function clearFill(grid: GridState) {
     Globals.selectedWordNode = undefined;
     let section = getSection();
-    section.fillQueue = undefined;
-    section.comboPermsQueue = [];
-    section.comboPermsUsed = new Map<string, boolean>();
+    section.fillState = undefined;
     Globals.fillStatus = Globals.wordList !== undefined ? FillStatus.Ready : FillStatus.NoWordList;
 
     forAllGridSquares(grid, sq => {
@@ -354,7 +379,7 @@ export function updateManualEntryCandidates(grid: GridState) {
         return;
     }
 
-    let node = makeNewNode(grid, 0, false, undefined);
+    let node = makeNewNode(grid, 0);
     node.fillWord = grid.words.get(Globals.selectedWordKey!);
     if (Globals.useManualHeuristics!) {
         populateAndScoreEntryCandidates(node, true);

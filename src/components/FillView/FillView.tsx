@@ -3,22 +3,21 @@ import { SymmetryType } from '../../models/SymmetryType';
 import "./FillView.scss";
 import Globals from '../../lib/windowService';
 import { FillStatus } from '../../models/FillStatus';
-import { getEntryAtWordKey, getGrid, getSection, getSquaresForWord, mapKeys, mapValues } from '../../lib/util';
-import { calculateSectionOrder, getLongestStackWord, getPhoneticName, insertSectionCandidateIntoGrid, 
-    makeNewSection, sectionCandidateKey, updateSectionFilters } from '../../lib/section';
-import { clearFill, eraseSectionCandidateFromGrid, getLettersFromSquares, insertEntryIntoGrid, updateGridConstraintInfo, updateManualEntryCandidates } from '../../lib/grid';
+import { getEntryAtWordKey, getGrid, getSection, mapKeys, mapValues } from '../../lib/util';
+import { calculateSectionOrder, entryFromSectionString, getLongestStackWord, getPhoneticName, insertSectionCandidateIntoGrid, 
+    makeNewSection, updateSectionFilters } from '../../lib/section';
+import { clearFill, eraseSectionCandidateFromGrid, insertEntryIntoGrid, updateGridConstraintInfo, updateManualEntryCandidates } from '../../lib/grid';
 import { fillSectionWord, makeNewNode } from '../../lib/fill';
+import { ensureWordList, startFill, stopFill, terminateFillWorkers } from '../../lib/fillWorkerPool';
 import { FillNode } from '../../models/FillNode';
 import { AppContext } from '../../AppContext';
 import { ContentType } from '../../models/ContentType';
 import { Section } from '../../models/Section';
 import { processWordListData } from '../../lib/wordList';
-import { useInterval } from '../../lib/useInterval';
 import { SectionCandidate } from '../../models/SectionCandidate';
-import { QualityClass } from '../../models/QualityClass';
 
-const FILL_STEPS_PER_TICK = 8;
-const FILL_UI_INTERVAL_MS = 150;
+/** Refresh fills list promptly while searching; throttle only to avoid per-fill thrash. */
+const FILL_COUNT_UI_INTERVAL_MS = 100;
 
 function FillView() {
     const appContext = useContext(AppContext);
@@ -38,40 +37,38 @@ function FillView() {
 
     function handleToggleFill() {
         if (isFillRunning) {
+            stopFill();
             clearFill(getGrid());
             setFillStatus(FillStatus.Ready);
             setIsFillRunning(false);
             triggerUpdate();
         }
         else {
+            // Fresh search each run; leave previously found fills unless user clears them.
+            let section = getSection();
+            section.fillState = undefined;
             fillUiLastUpdateRef.current = 0;
             setFillStatus(FillStatus.Running);
             setIsFillRunning(true);
-        }
-    }
-    
-    function doFillWord() {
-        if (Globals.fillStatus === FillStatus.Complete) return;
 
-        let completed = false;
-        for (let i = 0; i < FILL_STEPS_PER_TICK && !completed; i++) {
-            if (!fillSectionWord()) {
-                completed = true;
-            }
-        }
-
-        if (completed) {
-            clearFill(getGrid());
-            setFillStatus(FillStatus.Complete);
-            setIsFillRunning(false);
-            triggerUpdate();
-            return;
-        }
-
-        const now = performance.now();
-        if (now - fillUiLastUpdateRef.current >= FILL_UI_INTERVAL_MS) {
-            fillUiLastUpdateRef.current = now;
-            triggerUpdate();
+            startFill({
+                grid: getGrid(),
+                section,
+                onProgress: () => {
+                    const now = performance.now();
+                    if (now - fillUiLastUpdateRef.current >= FILL_COUNT_UI_INTERVAL_MS) {
+                        fillUiLastUpdateRef.current = now;
+                        // Use context method directly — stable functional setState in App.
+                        appContext.triggerUpdate();
+                    }
+                },
+                onComplete: () => {
+                    clearFill(getGrid());
+                    Globals.fillStatus = FillStatus.Complete;
+                    setIsFillRunning(false);
+                    appContext.triggerUpdate();
+                },
+            });
         }
     }
 
@@ -126,7 +123,7 @@ function FillView() {
     function getManualSectionNode(sectionCandidateKey: string, isHover: boolean): FillNode {
         let grid = getGrid();
 
-        let node = makeNewNode(grid, 0, false, undefined);
+        let node = makeNewNode(grid, 0);
         let section = getSection();
         let candidate = section.candidates.get(sectionCandidateKey)!;
         insertSectionCandidateIntoGrid(node.endGrid, candidate, 
@@ -237,8 +234,6 @@ function FillView() {
     function handleSectionCandidateClick(event: any) {
         function eraseSc() {
             section.selectedCandidate = undefined;
-            section.comboPermsQueue = [];
-            section.comboPermsUsed = new Map<string, boolean>();
             let sc = section.candidates.get(candidateKey)!;
             eraseSectionCandidateFromGrid(grid, sc);
             clearFill(grid);
@@ -324,11 +319,13 @@ function FillView() {
     function clearWordLists() {
         if (!window.confirm("Are you sure you want to clear the word lists?")) return;
 
+        terminateFillWorkers();
         Globals.wordList = undefined;
         Globals.wordLists = [];
+        Globals.knownWords = new Set<string>();
+        ensureWordList(undefined, undefined);
         setFillStatus(FillStatus.NoWordList);
         Globals.selectedWordNode = undefined;
-        Globals.qualityClasses = new Map<string, QualityClass>();
     }
 
     function onWordListUpload(event: any) {
@@ -340,6 +337,7 @@ function FillView() {
             processWordListData(file.name, file).then(wordList => {
                 if (wordList) {
                     Globals.wordLists!.push(wordList);
+                    ensureWordList(Globals.wordList, Globals.knownWords);
                     setFillStatus(FillStatus.Ready);
                     let grid = getGrid();
                     updateGridConstraintInfo(grid);
@@ -350,10 +348,6 @@ function FillView() {
             });
         }, 5);
     }
-
-    useInterval(() => {
-        doFillWord();
-    }, isFillRunning ? 5 : null);
 
     let grid = getGrid();
     let selectedSymmetry = SymmetryType[Globals.gridSymmetry!];
@@ -515,8 +509,8 @@ function FillView() {
                             </div>
                         )}
                         {showSectionCandidates && sectionCandidates.map(sc => {
-                            let entry = getLettersFromSquares(getSquaresForWord(sc.grid, getLongestStackWord(activeSection)));
-                            let candidateKey = sectionCandidateKey(activeSection, sc.grid);
+                            let entry = entryFromSectionString(activeSection, sc.sectionString, getLongestStackWord(activeSection));
+                            let candidateKey = sc.sectionString;
 
                             return (
                             <div className={"fill-list-row-wrapper" + (selectedScKey === candidateKey ? " fill-list-row-selected" : "")}

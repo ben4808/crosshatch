@@ -3,24 +3,12 @@ import { GridState } from "./GridState";
 import { GridWord } from "./GridWord";
 
 export interface FillNode {
-    parent?: FillNode;
-    chainBaseNode?: FillNode;
     startGrid: GridState;
     endGrid: GridState;
     fillWord?: GridWord;
     entryCandidates: EntryCandidate[];
     chosenEntry?: EntryCandidate;
+    /** Next candidate index to expand; remaining candidates stay on the frontier for backtracking. */
+    candidateIndex: number;
     depth: number;
-    isChainNode: boolean;
-    isSectionBase: boolean;
-    backtracks: number;
-    chainGoodCandidates: number;
-    needsNewPriority: boolean;
-    shouldBeDeleted: boolean;
-    chainId?: number;
-    topCrossScore: number;
-    topMinCrossScore: number;
-    
-    anchorSquareKeys: string[];
-    anchorCombosLeft: [string, string][];
 }

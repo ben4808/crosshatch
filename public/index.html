@@ -10,6 +10,8 @@
       content="Crossword creation app"
     />
     <title>CrossHatch</title>
+    <!-- Enables SharedArrayBuffer for fill workers (COOP/COEP via service worker). -->
+    <script src="%PUBLIC_URL%/coi-serviceworker.js"></script>
   </head>
   <body>
     <div id="root"></div>

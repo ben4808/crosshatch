@@ -6,16 +6,15 @@ import Square from '../Square/Square';
 import { GridState } from '../../models/GridState';
 import { WordDirection } from '../../models/WordDirection';
 import Globals from '../../lib/windowService';
-import { compareTuples, doesWordContainSquare, getGrid, getSection, getSelectedWord, getSquaresForWord, 
-    getWordAtSquare, initializeSessionGlobals, isWordFull, mapValues, otherDir, 
-    squareKey, wordKey } from '../../lib/util';
-import { clearFill, eraseGridSquare, getLettersFromSquares, getSymmetrySquares, getUncheckedSquareDir, populateWords, 
+import { compareTuples, doesWordContainSquare, getGrid, getSection, getSelectedWord, 
+    getWordAtSquare, initializeSessionGlobals, otherDir, 
+    squareKey, wordKey, constraintLetterCount } from '../../lib/util';
+import { clearFill, eraseGridSquare, getSymmetrySquares, getUncheckedSquareDir, populateWords, 
     updateGridConstraintInfo, updateManualEntryCandidates } from '../../lib/grid';
 import { GridWord } from '../../models/GridWord';
 import { AppContext } from '../../AppContext';
 import { ContentType } from '../../models/ContentType';
 import { updateSectionFilters } from '../../lib/section';
-import { QualityClass } from '../../models/QualityClass';
 import { GridSquare } from '../../models/GridSquare';
 import { Section } from '../../models/Section';
 
@@ -198,12 +197,11 @@ function Grid() {
             type: square.type,
             content: square.content,
             contentType: square.contentType,
-            qualityClass: qualityClassMap.get(squareKey(square)) || QualityClass.Normal,
             isSelected: isSquareSelected() && compareTuples(selectedSquare, [row, col]),
             isInSelectedWord: isWordSelected() && doesWordContainSquare(selectedWord!, row, col),
             isInSelectedSection: (Globals.activeSectionId !== 0 && isSquareInSection(getSection(), square)) ||
                 (Globals.hoverSectionId !== undefined && isSquareInSection(Globals.sections!.get(Globals.hoverSectionId)!, square)),
-            constraintSum: square.viableLetters ? square.viableLetters.length : 26,
+            constraintSum: constraintLetterCount(square),
             isCircled: square.isCircled,
         };
     }
@@ -253,44 +251,8 @@ function Grid() {
         Globals.puzzle!.notes = newNotes === "(notes)" ? "" : newNotes;
     }
 
-    function generateQualityClassMap(grid: GridState): Map<string, QualityClass> {
-        let ret = new Map<string, QualityClass>();
-
-        let acrossWords = mapValues(grid.words).filter(w => w.direction === WordDirection.Across);
-        acrossWords.forEach(w => {
-            let squares = getSquaresForWord(grid, w);
-            if (isWordFull(squares)) {
-                let letters = getLettersFromSquares(squares);
-                let qc = Globals.qualityClasses ? Globals.qualityClasses!.get(letters) : QualityClass.Normal;
-                squares.forEach(sq => {
-                    if (sq.contentType === ContentType.Autofill)
-                        ret.set(squareKey(sq), qc || QualityClass.Crosswordese);
-                });
-            }
-        });
-
-        let downWords = mapValues(grid.words).filter(w => w.direction === WordDirection.Down);
-        downWords.forEach(w => {
-            let squares = getSquaresForWord(grid, w);
-            if (isWordFull(squares)) {
-                let letters = getLettersFromSquares(squares);
-                let qc = Globals.qualityClasses ? Globals.qualityClasses!.get(letters) : QualityClass.Normal;
-                squares.forEach(sq => {
-                    if (sq.contentType === ContentType.Autofill) {
-                        let curQc = ret.get(squareKey(sq)) || QualityClass.Normal;
-                        if (!qc || qc < curQc)
-                            ret.set(squareKey(sq), qc || QualityClass.Crosswordese);
-                    }
-                });
-            }
-        });
-
-        return ret;
-    }
-
     let puzzle = Globals.puzzle!;
     let grid = Globals.hoverGrid ? Globals.hoverGrid! : getGrid();
-    let qualityClassMap = generateQualityClassMap(grid);
 
     let squareElements = [];
     for (let row = 0; row < grid.height; row++) {

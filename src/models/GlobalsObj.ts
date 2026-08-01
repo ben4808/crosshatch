@@ -3,7 +3,6 @@ import { FillStatus } from "./FillStatus";
 import { GridState } from "./GridState";
 import { IndexedWordList } from "./IndexedWordList";
 import { Puzzle } from "./Puzzle";
-import { QualityClass } from "./QualityClass";
 import { Section } from "./Section";
 import { SymmetryType } from "./SymmetryType";
 import { WordDirection } from "./WordDirection";
@@ -16,7 +15,6 @@ export interface GlobalsObj {
     selectedWordKey?: string;
     selectedWordDir?: WordDirection;
     selectedWordNode?: FillNode;
-    curChainId?: number;
 
     sections?: Map<number, Section>;
     activeSectionId?: number;
@@ -31,5 +29,5 @@ export interface GlobalsObj {
     wordLists?: WordList[];
 
     wordList?: IndexedWordList;
-    qualityClasses?: Map<string, QualityClass>;
+    knownWords?: Set<string>;
 }

@@ -1,9 +1,5 @@
 export interface EntryCandidate {
     word: string;
+    /** Higher = more open crosses (preferred first). */
     score: number;
-    isViable: boolean;
-    hasBeenChained: boolean;
-    wasChainFailure: boolean;
-    crossScore: number;
-    minCrossScore: number;
 }

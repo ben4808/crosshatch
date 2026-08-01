@@ -1,304 +1,230 @@
-import { ContentType } from '../models/ContentType';
-import { EntryCandidate } from '../models/EntryCandidate';
-import { FillNode } from '../models/FillNode';
-import { GridSquare } from '../models/GridSquare';
 import { GridState } from '../models/GridState';
 import { GridWord } from '../models/GridWord';
-import { QualityClass } from '../models/QualityClass';
 import { Section } from '../models/Section';
-import { WordDirection } from '../models/WordDirection';
-import { populateAndScoreEntryCandidates } from './entryCandidates';
-import { processAndInsertChosenEntry } from './insertEntry';
-import { PriorityQueue, priorityQueue } from './priorityQueue';
-import { getSectionString, getSectionsWithWord, insertSectionCandidateIntoGrid, newSectionCandidate } from './section';
+import { FillFrame, FillSearchState } from '../models/FillSearchState';
+import { FillNode } from '../models/FillNode';
+import { ContentType } from '../models/ContentType';
+import { EntryCandidate } from '../models/EntryCandidate';
+import { SectionCandidate } from '../models/SectionCandidate';
+import { buildEntryCandidates, estimateWordOpenness, forwardCheckSection } from './entryCandidates';
+import { placeEntryWithTrail, undoFillTrailTo } from './insertEntry';
+import { getSectionString, newSectionCandidateFromGrid } from './section';
 import { cloneGridForFill, getSquaresForWord, mapKeys, isWordFull,
-    getWordAtSquare, otherDir, mapValues, getSection, getGrid } from './util';
-import Globals from './windowService';
+    getWordAtSquare, otherDir, getSection, getGrid } from './util';
 
+const STEPS_PER_SLICE = 250;
+
+type FillFoundHandler = (sectionString: string, candidate: SectionCandidate) => void;
+let fillFoundHandler: FillFoundHandler | undefined;
+
+export type FillStepResult = "continue" | "found" | "done";
+
+/**
+ * One step of depth-first autofill on a single mutable working grid.
+ * Uses a trail for undo so siblings don't require per-candidate clones.
+ * Does not update the visible active grid — callers collect fills from section.candidates.
+ * @returns false when the search stack is empty (no more work).
+ */
 export function fillSectionWord(): boolean {
+    return fillSectionWordStep() !== "done";
+}
+
+/** Like fillSectionWord, but distinguishes a newly discovered complete fill. */
+export function fillSectionWordStep(): FillStepResult {
     let section = getSection();
-    let fillQueue = section.fillQueue;
-    if (!fillQueue) {
-        let newFillQueue = priorityQueue<FillNode>();
-        populateSeedNodes(newFillQueue);
-        fillQueue = newFillQueue;
-        section.fillQueue = newFillQueue;
+    let state = section.fillState;
+    if (!state) {
+        state = createFillSearchState(getGrid());
+        section.fillState = state;
     }
 
-    let node = fillQueue.peek()!;
-    if (!node) {
-        populateSeedNodes(fillQueue);
-        node = fillQueue.peek()!;
-        if (!node) {
-            return false;
+    let stack = state.stack;
+    if (stack.length === 0) return "done";
+
+    let frame = stack[stack.length - 1];
+
+    // Returning from a finished child: undo the placement that spawned it.
+    if (frame.livePlacementMark !== undefined) {
+        undoFillTrailTo(state, frame.livePlacementMark);
+        frame.livePlacementMark = undefined;
+    }
+
+    if (!frame.fillWord) {
+        frame.fillWord = selectWordToFill(state.grid, section);
+        if (!frame.fillWord) {
+            stack.pop();
+            return "continue";
         }
     }
-    while (node.needsNewPriority || node.shouldBeDeleted) {
-        node.needsNewPriority = false;
-        fillQueue.pop();
-        if (!node.shouldBeDeleted) fillQueue.insert(node, calculateNodePriority(node));
-        node = fillQueue.peek()!;
-        if (!node) return false;
-    }
-    while (node.isChainNode && node.chainId! !== Globals.curChainId!) {
-        fillQueue.pop();
-        node = fillQueue.peek()!;
-        if (!node) return false;
+
+    if (frame.entryCandidates.length === 0 && frame.candidateIndex === 0) {
+        let squares = getSquaresForWord(state.grid, frame.fillWord);
+        frame.entryCandidates = buildEntryCandidates(state.grid, frame.fillWord, squares, false);
+        if (frame.entryCandidates.length === 0) {
+            stack.pop();
+            return "continue";
+        }
     }
 
-    if (!node.isChainNode && Globals.activeGrid !== node.startGrid) {
-        Globals.activeGrid = node.startGrid;
-        return true;
+    if (frame.candidateIndex >= frame.entryCandidates.length) {
+        stack.pop();
+        return "continue";
     }
 
-    let success = processSectionNode(node, section);
-    if (success) {
-        let sectionString = getSectionString(node.endGrid, section);
-        // is section filled?
-        if (!sectionString.includes("-")) {
-            let newSecCandidateFound = false;
-            if (!section.candidates.has(sectionString)) {
-                let newCandidate = newSectionCandidate(node, section);
-                section.candidates.set(sectionString, newCandidate);
-                Globals.activeGrid = node.endGrid;
-                newSecCandidateFound = true;
+    let entry = frame.entryCandidates[frame.candidateIndex++];
+    let mark = state.trail.length;
+    let claimed = placeEntryWithTrail(state, frame.fillWord, entry.word, ContentType.Autofill);
+
+    if (!claimed) {
+        return "continue";
+    }
+
+    let sectionString = getSectionString(state.grid, section);
+    if (!sectionString.includes("-")) {
+        let found = false;
+        if (forwardCheckSection(state.grid, section)) {
+            let candidate = newSectionCandidateFromGrid(state.grid, section);
+            if (fillFoundHandler) {
+                // Worker path: main thread owns storage; avoid duplicating here.
+                fillFoundHandler(sectionString, candidate);
+            } else if (!section.candidates.has(sectionString)) {
+                section.candidates.set(sectionString, candidate);
             }
-            
-            invalidateChainNode(node, newSecCandidateFound);
-            fillQueue.pop();
-            return true;
+            found = true;
+        }
+        undoFillTrailTo(state, mark);
+        return found ? "found" : "continue";
+    }
+
+    if (forwardCheckSection(state.grid, section, claimed)) {
+        frame.livePlacementMark = mark;
+        stack.push(makeEmptyFrame(frame.depth + 1));
+    } else {
+        undoFillTrailTo(state, mark);
+    }
+
+    return "continue";
+}
+
+/**
+ * Run fill steps until the search stack is empty or shouldCancel() is true.
+ * Yields to the event loop between slices so cancel messages can be processed,
+ * and immediately after each discovered fill so workers can report it promptly.
+ */
+export function runFillUntilIdle(
+    shouldCancel: () => boolean,
+    onFound?: FillFoundHandler,
+): Promise<void> {
+    fillFoundHandler = onFound;
+    return new Promise(resolve => {
+        function finish() {
+            fillFoundHandler = undefined;
+            resolve();
         }
 
-        Globals.activeGrid = node.endGrid;
-        let newNode = makeNewNode(node.endGrid, node.depth + 1, true, node);
-        
-        if (section.id === 0) {
-            let nextFillWord = selectWordToFill(node, getSection());
-            let curSections = getSectionsWithWord(node.fillWord!);
-            let nextSections = getSectionsWithWord(nextFillWord!);
-            if (curSections.length > 0 && !curSections.find(cs => nextSections.find(ns => ns.id === cs.id))) {
-                newNode = makeNewNode(node.endGrid, node.depth + 1, false, node, true);
-                Globals.curChainId!++;
+        function slice() {
+            if (shouldCancel()) {
+                finish();
+                return;
             }
+            for (let i = 0; i < STEPS_PER_SLICE; i++) {
+                const result = fillSectionWordStep();
+                if (result === "done") {
+                    finish();
+                    return;
+                }
+                if (shouldCancel()) {
+                    finish();
+                    return;
+                }
+                // Yield right away so postMessage("found") can be delivered/processed
+                // instead of sitting until the worker finishes its search space.
+                if (result === "found") {
+                    setTimeout(slice, 0);
+                    return;
+                }
+            }
+            setTimeout(slice, 0);
         }
-        
-        fillQueue.insert(newNode, calculateNodePriority(newNode));
-    }
-    else {
-        fillQueue.pop();
-        if (node.isChainNode) invalidateChainNode(node);
-        fillSectionWord();
-    }
 
-    Globals.selectedWordNode = undefined;
-    return true;
-}
-
-function invalidateChainNode(node: FillNode, newSecCandidateFound?: boolean) {
-    if (newSecCandidateFound === undefined) newSecCandidateFound = false;
-
-    let parent = node.parent!;
-    if (!parent) return;
-
-    let prevCandidate = parent.chosenEntry!;
-    if (parent.isChainNode) {
-        if (prevCandidate)
-            prevCandidate.wasChainFailure = true;
-        parent.backtracks++;
-    }
-    else {
-        if (prevCandidate)
-            prevCandidate.hasBeenChained = true;
-    }
-
-    parent.chosenEntry = undefined;
-    parent.endGrid = cloneGridForFill(parent.startGrid);
-
-    if (parent.backtracks >= 3) {
-        if (parent.parent && !parent.parent.isChainNode) {
-            parent.isChainNode = false;
-            parent.needsNewPriority = true;
-            Globals.curChainId!++;
-        }
-            
-        invalidateChainNode(parent);
-    }
-
-    if (newSecCandidateFound) {
-        if (node.chainBaseNode!.chainGoodCandidates < 4) {
-            node.chainBaseNode!.chainGoodCandidates++;
-            return;
-        }
-        
-        node.chainBaseNode!.chainGoodCandidates = 0;
-
-        let curNode = parent;
-        while (curNode.parent && (curNode.parent.isChainNode || curNode.parent.isSectionBase)) {
-            if (curNode.isSectionBase) curNode.shouldBeDeleted = true;
-            curNode = curNode.parent!;
-        }
-        curNode.isChainNode = false;
-        curNode.needsNewPriority = true;
-        Globals.curChainId!++;
-    }
-}
-
-function calculateNodePriority(node: FillNode): number {
-    let grid = node.startGrid;
-    let wordScore = 0;
-    grid.usedWords.forEach((_, word) => {
-        wordScore += getWordScore(word);
-    });
-
-    let situationScore: number;
-    if (node.isChainNode)
-        situationScore = 1e8 + 10000*(node.depth+1);
-    else if (node.isSectionBase)
-        situationScore = (10000 + node.depth) * 10000;
-    else
-        situationScore = (10000 - node.depth) * 10000;
-
-    return wordScore + situationScore;
-}
-
-function populateSeedNodes(fillQueue: PriorityQueue<FillNode>) {
-    let grid = getGrid();
-    let selectedSectionIds = [Globals.activeSectionId!]; //Globals.selectedSectionIds!.size > 0 ? mapKeys(Globals.selectedSectionIds!) : [0];
-    let activeSection = getSection();
-    let connectionIds = mapKeys(activeSection.connections)
-        .filter(id => selectedSectionIds.includes(id) && Globals.sections!.get(id)!.selectedCandidate === undefined
-            && Globals.sections!.get(id)!.candidates.size > 0)
-        .sort();
-    let candidateCounts = connectionIds.map(i => Globals.sections!.get(i)!.candidates.size);
-    
-    getNewPermutations(candidateCounts, activeSection);
-    activeSection.comboPermsQueue.forEach(perm => {
-        let node = makeNewNode(grid, 0, false, undefined);
-        if (perm[0] === -1) {
-            fillQueue.insert(node, calculateNodePriority(node));
-            return;
-        }
-        let wasSuccess = true;
-        for (let i = 0; i < perm.length; i++) {
-            let sortedCandidates = mapValues(Globals.sections!.get(connectionIds[i])!.candidates)
-                .sort((a, b) => b.score - a.score);
-            let candidate = sortedCandidates[perm[i]];
-            if (!insertSectionCandidateIntoGrid(node.startGrid, candidate, ContentType.Autofill))
-                wasSuccess = false;
-        }
-        if (wasSuccess)
-            fillQueue.insert(node, calculateNodePriority(node));
+        slice();
     });
 }
 
-function getNewPermutations(candidateCounts: number[], section: Section) {
-    function comboKey(perm: number[]): string {
-        return "[" + perm.map(n => n.toString()).join(",") + "]";
-    }
-
-    if (section.comboPermsUsed.size > 0 && section.comboPermsQueue.length > 0 && section.comboPermsQueue[0][0] === -1)
-        section.comboPermsQueue.shift();
-    if (section.comboPermsUsed.size > 0 && section.comboPermsQueue.length === 0) return;
-
-    if (candidateCounts.length === 0) {
-        let defaultCombo = [-1];
-        section.comboPermsQueue = [defaultCombo];
-        section.comboPermsUsed.set(comboKey(defaultCombo), true);
-        return;
-    }
-
-    if (section.comboPermsUsed.size === 0) {
-        let allOnes = [] as number[];
-        for(let i = 0; i < candidateCounts.length; i++) allOnes.push(1);
-        section.comboPermsQueue = [allOnes];
-        section.comboPermsUsed.set(comboKey(allOnes), true);
-        return;
-    }
-
-    while(true) {
-        let perm = section.comboPermsQueue.shift()!;
-        if (!perm) break;
-        let foundNew = false;
-
-        for(let i = 0; i < perm.length; i++) {
-            if (perm[i] === candidateCounts[i] - 1) continue;
-    
-            let newPerm = perm.slice();
-            newPerm[i]++;
-            let newPermKey = comboKey(newPerm);
-            if (section.comboPermsUsed.has(newPermKey)) continue;
-
-            section.comboPermsUsed.set(newPermKey, true);
-            foundNew = true;
-            section.comboPermsQueue.push(newPerm);
-        }
-
-        if (foundNew) break;
-    }
+export function createFillSearchState(baseGrid: GridState): FillSearchState {
+    return {
+        grid: cloneGridForFill(baseGrid),
+        stack: [makeEmptyFrame(0)],
+        trail: [],
+    };
 }
 
-export function processSectionNode(node: FillNode, section: Section): boolean {
-    if (!node.fillWord)
-        node.fillWord = selectWordToFill(node, section);
-
-    if (node.anchorSquareKeys.length === 0 || node.anchorCombosLeft.length > 0) {
-        let areEligibleCandidates = populateAndScoreEntryCandidates(node, false);
-        if (!areEligibleCandidates) return false;
-    }
-
-    let eligibleCandidates = getEligibleCandidates(node);
-    if (eligibleCandidates.length > 0) {
-        node.chosenEntry = chooseEntryFromCandidates(eligibleCandidates);
-        processAndInsertChosenEntry(node);
-        return true;
-    }
-    
-    return false;
+/** Seed the root frame with a prebuilt candidate slice (for parallel workers). */
+export function createRootFillSearchState(
+    baseGrid: GridState,
+    fillWord: GridWord,
+    entryCandidates: EntryCandidate[],
+): FillSearchState {
+    return {
+        grid: cloneGridForFill(baseGrid),
+        stack: [{
+            fillWord,
+            entryCandidates,
+            candidateIndex: 0,
+            depth: 0,
+        }],
+        trail: [],
+    };
 }
 
-export function makeNewNode(grid: GridState, depth: number, isChainNode: boolean, parent: FillNode | undefined, 
-    isSectionBase?: boolean): FillNode {
+function makeEmptyFrame(depth: number): FillFrame {
+    return {
+        entryCandidates: [],
+        candidateIndex: 0,
+        depth,
+    };
+}
+
+/** Manual-fill helper: still uses an isolated cloned node. */
+export function makeNewNode(grid: GridState, depth: number): FillNode {
     const cloned = cloneGridForFill(grid);
     return {
         startGrid: cloned,
         endGrid: cloned,
         entryCandidates: [],
+        candidateIndex: 0,
         depth: depth,
-        isChainNode: isChainNode,
-        isSectionBase: !!isSectionBase,
-        backtracks: 0,
-        parent: parent,
-        chainBaseNode: isChainNode ? (parent!.isChainNode ? parent!.chainBaseNode : parent!) : undefined,
-        needsNewPriority: false,
-        shouldBeDeleted: false,
-        anchorSquareKeys: [],
-        anchorCombosLeft: [],
-        viableLetterCounts: new Map<string, Map<string, number>>(),
-        chainGoodCandidates: parent ? parent.chainGoodCandidates : 0,
-        chainId: Globals.curChainId!,
-        topCrossScore: 0,
-        topMinCrossScore: 0,
     } as FillNode;
 }
 
-function selectWordToFill(node: FillNode, section: Section): GridWord | undefined {
-    let grid = node.startGrid;
+/**
+ * Most-constrained-variable: pick the unfilled section word with the fewest options.
+ * Ties break toward the word with the most unfilled crosses (degree heuristic)
+ * so a failed placement prunes more of the search tree.
+ */
+export function selectWordToFill(grid: GridState, section: Section): GridWord | undefined {
+    let best: GridWord | undefined;
+    let bestCost = Infinity;
+    let bestDegree = -1;
 
-    for (let key of section.wordOrder) {
+    for (let key of mapKeys(section.words)) {
         let word = grid.words.get(key)!;
-        if (key === section.wordOrder[section.wordOrder.length - 1]) return word;
         let squares = getSquaresForWord(grid, word);
-        if (!isWordFull(squares))
-            return word;
+        if (isWordFull(squares)) continue;
+
+        let cost = estimateWordOpenness(squares, grid.usedWords);
+        if (cost > bestCost) continue;
+
+        let degree = getUnfilledCrosses(grid, word).length;
+        if (cost < bestCost || (cost === bestCost && degree > bestDegree)) {
+            bestCost = cost;
+            bestDegree = degree;
+            best = word;
+            if (cost === 0) return word;
+        }
     }
 
-    return undefined;
-}
-
-export function getPositionOfCross(wordSquares: GridSquare[], crossSquares: GridSquare[], dir: WordDirection): number {
-    return dir === WordDirection.Across ? 
-            wordSquares[0].row - crossSquares[0].row : 
-            wordSquares[0].col - crossSquares[0].col;
+    return best;
 }
 
 export function getAllCrosses(grid: GridState, word: GridWord): GridWord[] {
@@ -316,42 +242,4 @@ export function getUnfilledCrosses(grid: GridState, word: GridWord): GridWord[] 
         .filter(w => w && !isWordFull(getSquaresForWord(grid, w)))
         .map(w => w!);
     return crosses.length > 0 ? crosses : [];
-}
-
-export function getEligibleCandidates(node: FillNode): EntryCandidate[] {
-    if (node.isChainNode) {
-        return node.entryCandidates.filter(ec => ec.isViable && !ec.wasChainFailure);
-    }
-    else {
-        return node.entryCandidates.filter(ec => ec.isViable && !ec.hasBeenChained);
-    }
-}
-
-function chooseEntryFromCandidates(candidates: EntryCandidate[]): EntryCandidate {
-    let topScore = candidates[0].score!;
-    let total = 0;
-    candidates.forEach(c => {
-        total += Math.pow(c.score / topScore, 4);
-    });
-
-    let roll = Math.random() * total;
-    let runningTotal = 0;
-    for (let can of candidates) {
-        runningTotal += Math.pow(can.score / topScore, 4);
-        if (runningTotal >= roll)
-            return can;
-    }
-
-    return candidates[0];
-}
-
-export function getWordScore(word: string): number {
-    let qualityClass = Globals.qualityClasses!.get(word);
-    if (!qualityClass) return 0;
-
-    switch(qualityClass) {
-        case QualityClass.Lively: return 12;
-        case QualityClass.Normal: return 9;
-        case QualityClass.Crosswordese: return 3;
-    }
 }

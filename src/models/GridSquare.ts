@@ -11,5 +11,6 @@ export interface GridSquare {
     content?: string;
     contentType: ContentType;
 
-    viableLetters?: string[];
+    /** Bitmask of remaining letters (bit 0 = A … bit 25 = Z). Undefined = all letters. */
+    viableMask?: number;
 }

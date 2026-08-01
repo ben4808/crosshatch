@@ -12,6 +12,48 @@ import { SectionCandidate } from "../models/SectionCandidate";
 import { generateGridSections } from "./section";
 
 export const fullAlphabet = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
+/** Bits 0–25 = A–Z. */
+export const ALL_LETTERS_MASK = (1 << 26) - 1;
+
+export function letterBit(ch: string): number {
+    return 1 << (ch.charCodeAt(0) - 65);
+}
+
+export function maskContainsLetter(mask: number, ch: string): boolean {
+    return (mask & letterBit(ch)) !== 0;
+}
+
+export function popcount(mask: number): number {
+    let n = 0;
+    let m = mask >>> 0;
+    while (m) {
+        m &= m - 1;
+        n++;
+    }
+    return n;
+}
+
+export function maskToLetterList(mask: number): string[] {
+    let out: string[] = [];
+    for (let i = 0; i < 26; i++) {
+        if (mask & (1 << i)) out.push(String.fromCharCode(65 + i));
+    }
+    return out;
+}
+
+export function letterListToMask(list: string[]): number {
+    let mask = 0;
+    for (let ltr of list) mask |= letterBit(ltr);
+    return mask;
+}
+
+export function squareViableMask(sq: GridSquare): number {
+    return sq.viableMask === undefined ? ALL_LETTERS_MASK : sq.viableMask;
+}
+
+export function squareAllowsLetter(sq: GridSquare, ch: string): boolean {
+    return sq.viableMask === undefined || maskContainsLetter(sq.viableMask, ch);
+}
 
 export function average(arr: number[]): number {
     return arr.reduce((a,b) => a + b, 0) / arr.length;
@@ -98,10 +140,7 @@ export function getWordAtSquare(grid: GridState, row: number, col: number, dir: 
 /** Fast grid clone for fill search — copies mutable square state, shares immutable word structure. */
 export function cloneGridForFill(grid: GridState): GridState {
     const squares = grid.squares.map(row =>
-        row.map(sq => ({
-            ...sq,
-            viableLetters: sq.viableLetters ? sq.viableLetters.slice() : undefined,
-        }))
+        row.map(sq => ({ ...sq }))
     );
     return {
         height: grid.height,
@@ -233,9 +272,8 @@ export function getSectionCandidatesFromKeys(keys: string[]): SectionCandidate[]
 }
 
 export function constraintLetterCount(sq: GridSquare): number {
-    if (!sq.viableLetters) return 26;
-
-    return sq.viableLetters.length;
+    if (sq.viableMask === undefined) return 26;
+    return popcount(sq.viableMask);
 }
 
 export function isPatternFull(pattern: string): boolean {
@@ -271,4 +309,12 @@ export function letterListToLetterMatrix(list: string[]): boolean[] {
         matrix[ltr.charCodeAt(0) - 65] = true;
     });
     return matrix;
+}
+
+export function letterMatrixToMask(matrix: boolean[]): number {
+    let mask = 0;
+    for (let i = 0; i < 26; i++) {
+        if (matrix[i]) mask |= (1 << i);
+    }
+    return mask;
 }
