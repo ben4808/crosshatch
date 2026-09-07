@@ -4,7 +4,7 @@ import { SectionCandidate } from "../models/SectionCandidate";
 import { createRootFillSearchState, runFillUntilIdle } from "./fill";
 import { rebuildWordAtSquare } from "./grid";
 import { MainToWorkerMessage, WorkerToMainMessage } from "./fillWorkerTypes";
-import { installWordIndexFromPayload } from "./wordList";
+import { installFillFilter, installWordIndexFromPayload } from "./wordList";
 import Globals from "./windowService";
 
 const ctx: Worker = self as any;
@@ -67,6 +67,7 @@ async function handleStart(msg: Extract<MainToWorkerMessage, { type: "start" }>)
         Globals.activeGrid = grid as any;
         Globals.sections = new Map([[section.id, section]]);
         Globals.activeSectionId = section.id;
+        installFillFilter(msg.fillFilter);
 
         await runFillUntilIdle(
             () => cancelledJobId === jobId,

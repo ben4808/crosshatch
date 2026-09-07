@@ -261,7 +261,9 @@ export function getSquareAtKey(grid: GridState, squareKey: string): GridSquare {
 }
 
 export function getEntryAtWordKey(grid: GridState, wordKey: string): string {
-    return getLettersFromSquares(getSquaresForWord(grid, grid.words.get(wordKey)!));
+    const word = grid.words.get(wordKey);
+    if (!word) return "";
+    return getLettersFromSquares(getSquaresForWord(grid, word));
 }
 
 export function getSectionCandidatesFromKeys(keys: string[]): SectionCandidate[] {
@@ -297,6 +299,24 @@ export function initializeSessionGlobals() {
     Globals.selectedSectionIds = new Map<number, boolean>();
     Globals.selectedSectionIds.set(0, true);
     Globals.selectedSectionCandidateKeys = new Map<number, string>();
+    if (Globals.selectedWordKey && !grid.words.has(Globals.selectedWordKey)) {
+        Globals.selectedWordKey = undefined;
+        Globals.selectedWordNode = undefined;
+    }
+}
+
+/** Swap the active grid (e.g. a Make 5x5 fill with a different black pattern) without dropping found fills. */
+export function adoptGridKeepingFills(grid: GridState) {
+    const prev = Globals.sections?.get(Globals.activeSectionId ?? 0);
+    const candidates = prev?.candidates;
+    const selectedCandidate = prev?.selectedCandidate;
+    Globals.activeGrid = grid;
+    initializeSessionGlobals();
+    const section = Globals.sections!.get(0)!;
+    if (candidates) {
+        section.candidates = candidates;
+        section.selectedCandidate = selectedCandidate;
+    }
 }
 
 export function letterMatrixToLetterList(matrix: boolean[]): string[] {

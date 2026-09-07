@@ -8,6 +8,7 @@ import { getUnfilledCrosses } from "./fill";
 import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
 import { sectionCandidateKey, sectionCandidateLetterAt } from "./section";
 import { cloneGridForFill, getSectionCandidatesFromKeys, getSquaresForWord, isWordFull, mapKeys, letterBit, squareKey } from "./util";
+import { countLikelyGettableUsed } from "./wordList";
 import Globals from './windowService';
 
 /**
@@ -132,6 +133,10 @@ function placeEntryOnGrid(
             grid.usedWords.set(letters, true);
             claimed.push(letters);
         }
+    }
+
+    if (Globals.fillFilter && countLikelyGettableUsed(grid.usedWords) > Globals.fillFilter.maxLikelyGettable) {
+        return undefined;
     }
 
     return claimed;

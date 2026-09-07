@@ -68,6 +68,23 @@ export function entryFromSectionString(section: Section, sectionString: string, 
     return squares.map(sq => sectionCandidateLetterAt(section, sectionString, squareKey(sq))).join("");
 }
 
+/** All complete fill entries (A–Z) used by a section candidate. */
+export function entriesFromSectionString(section: Section, sectionString: string): string[] {
+    let grid = getGrid();
+    let seen = new Set<string>();
+    let entries: string[] = [];
+    section.words.forEach((_, key) => {
+        let word = grid.words.get(key);
+        if (!word) return;
+        let entry = entryFromSectionString(section, sectionString, word);
+        if (!entry || /[^A-Z]/.test(entry) || seen.has(entry)) return;
+        seen.add(entry);
+        entries.push(entry);
+    });
+    entries.sort();
+    return entries;
+}
+
 // returns whether it was a success
 export function insertSectionCandidateIntoGrid(grid: GridState, candidate: SectionCandidate, contentType?: ContentType): boolean {
     if (contentType === undefined) contentType = ContentType.ChosenSection;

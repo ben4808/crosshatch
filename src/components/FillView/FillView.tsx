@@ -3,18 +3,20 @@ import { SymmetryType } from '../../models/SymmetryType';
 import "./FillView.scss";
 import Globals from '../../lib/windowService';
 import { FillStatus } from '../../models/FillStatus';
-import { getEntryAtWordKey, getGrid, getSection, mapKeys, mapValues } from '../../lib/util';
-import { calculateSectionOrder, entryFromSectionString, getLongestStackWord, getPhoneticName, insertSectionCandidateIntoGrid, 
+import { adoptGridKeepingFills, getEntryAtWordKey, getGrid, getSection, mapKeys, mapValues } from '../../lib/util';
+import { calculateSectionOrder, entriesFromSectionString, entryFromSectionString, getLongestStackWord, getPhoneticName, insertSectionCandidateIntoGrid, 
     makeNewSection, updateSectionFilters } from '../../lib/section';
-import { clearFill, eraseSectionCandidateFromGrid, insertEntryIntoGrid, updateGridConstraintInfo, updateManualEntryCandidates } from '../../lib/grid';
+import { clearFill, eraseSectionCandidateFromGrid, entriesFromGridString, gridFromString, insertEntryIntoGrid, longestEntryFromGridString, updateGridConstraintInfo, updateManualEntryCandidates } from '../../lib/grid';
 import { fillSectionWord, makeNewNode } from '../../lib/fill';
-import { ensureWordList, startFill, stopFill, terminateFillWorkers } from '../../lib/fillWorkerPool';
+import { ensureWordList, startFill, terminateFillWorkers } from '../../lib/fillWorkerPool';
+import { cancelMake5x5, startMake5x5 } from '../../lib/make5x5';
 import { FillNode } from '../../models/FillNode';
 import { AppContext } from '../../AppContext';
 import { ContentType } from '../../models/ContentType';
 import { Section } from '../../models/Section';
 import { processWordListData } from '../../lib/wordList';
 import { SectionCandidate } from '../../models/SectionCandidate';
+import ClassifyModal from './ClassifyModal';
 
 /** Refresh fills list promptly while searching; throttle only to avoid per-fill thrash. */
 const FILL_COUNT_UI_INTERVAL_MS = 100;
@@ -24,6 +26,8 @@ function FillView() {
     const [showSectionCandidates, setShowSectionCandidates] = useState(true);
     const [isWordListLoading, setIsWordListLoading] = useState(false);
     const [isFillRunning, setIsFillRunning] = useState(false);
+    const [make5x5, setMake5x5] = useState(false);
+    const [classifyFillWords, setClassifyFillWords] = useState<string[] | undefined>(undefined);
     const fillUiLastUpdateRef = useRef(0);
 
     function triggerUpdate() {
@@ -37,7 +41,8 @@ function FillView() {
 
     function handleToggleFill() {
         if (isFillRunning) {
-            stopFill();
+            cancelMake5x5();
+            setMake5x5(false);
             clearFill(getGrid());
             setFillStatus(FillStatus.Ready);
             setIsFillRunning(false);
@@ -70,6 +75,48 @@ function FillView() {
                 },
             });
         }
+    }
+
+    function handleMake5x5Toggle() {
+        if (make5x5) {
+            cancelMake5x5();
+            setMake5x5(false);
+            setIsFillRunning(false);
+            setFillStatus(Globals.wordList ? FillStatus.Ready : FillStatus.NoWordList);
+            triggerUpdate();
+            return;
+        }
+
+        setMake5x5(true);
+        fillUiLastUpdateRef.current = 0;
+        setFillStatus(FillStatus.Running);
+        setIsFillRunning(true);
+
+        const started = startMake5x5({
+            onProgress: () => {
+                const now = performance.now();
+                if (now - fillUiLastUpdateRef.current >= FILL_COUNT_UI_INTERVAL_MS) {
+                    fillUiLastUpdateRef.current = now;
+                    appContext.triggerUpdate();
+                }
+            },
+            onComplete: () => {
+                setIsFillRunning(false);
+                appContext.triggerUpdate();
+            },
+            onNoSeed: () => {
+                setMake5x5(false);
+                setIsFillRunning(false);
+                setFillStatus(FillStatus.Ready);
+                window.alert("No 5-letter Maybe Gettable / Prefer entries found in the word list.");
+                appContext.triggerUpdate();
+            },
+        });
+
+        if (!started) {
+            setIsFillRunning(false);
+        }
+        triggerUpdate();
     }
 
     function handleFillWordClick(event: any) {
@@ -123,9 +170,24 @@ function FillView() {
     function getManualSectionNode(sectionCandidateKey: string, isHover: boolean): FillNode {
         let grid = getGrid();
 
-        let node = makeNewNode(grid, 0);
         let section = getSection();
         let candidate = section.candidates.get(sectionCandidateKey)!;
+        if (!candidate) {
+            let node = makeNewNode(grid, 0);
+            return node;
+        }
+        if (candidate.gridString) {
+            let filled = gridFromString(candidate.gridString);
+            return {
+                startGrid: filled,
+                endGrid: filled,
+                entryCandidates: [],
+                candidateIndex: 0,
+                depth: 0,
+            } as FillNode;
+        }
+
+        let node = makeNewNode(grid, 0);
         insertSectionCandidateIntoGrid(node.endGrid, candidate, 
             isHover ? ContentType.HoverChosenSection : ContentType.ChosenSection);
         return node;
@@ -261,7 +323,14 @@ function FillView() {
 
             updateManualEntryCandidates(node.endGrid);
 
-            Globals.activeGrid = node.endGrid;
+            if (section.candidates.get(candidateKey)?.gridString) {
+                adoptGridKeepingFills(node.endGrid);
+                let adopted = getSection();
+                adopted.selectedCandidate = candidateKey;
+                Globals.selectedSectionCandidateKeys!.set(adopted.id, candidateKey);
+            } else {
+                Globals.activeGrid = node.endGrid;
+            }
         }
         
         updateSectionFilters();
@@ -285,6 +354,19 @@ function FillView() {
 
     function handleShowSectionCandidatesToggle() {
         setShowSectionCandidates(!showSectionCandidates);
+    }
+
+    function handleClassifyClick(event: any) {
+        event.preventDefault();
+        event.stopPropagation();
+        let section = getSection();
+        if (!section.selectedCandidate) return;
+        let sc = section.candidates.get(section.selectedCandidate);
+        if (sc?.gridString) {
+            setClassifyFillWords(entriesFromGridString(sc.gridString));
+        } else {
+            setClassifyFillWords(entriesFromSectionString(section, section.selectedCandidate));
+        }
     }
 
     function clearSectionCandidates() {
@@ -320,9 +402,15 @@ function FillView() {
         if (!window.confirm("Are you sure you want to clear the word lists?")) return;
 
         terminateFillWorkers();
+        cancelMake5x5();
+        setMake5x5(false);
+        setIsFillRunning(false);
         Globals.wordList = undefined;
         Globals.wordLists = [];
         Globals.knownWords = new Set<string>();
+        Globals.wordGettable = undefined;
+        Globals.wordDesirability = undefined;
+        Globals.likelyGettableSet = undefined;
         ensureWordList(undefined, undefined);
         setFillStatus(FillStatus.NoWordList);
         Globals.selectedWordNode = undefined;
@@ -393,7 +481,7 @@ function FillView() {
 
     return (
         <div id="FillView" className="fill-container">
-            <input id="open-wordlist-input" className="d-none" type="file" accept=".dict,.txt" onChange={onWordListUpload} />
+            <input id="open-wordlist-input" className="d-none" type="file" accept=".csv" onChange={onWordListUpload} />
             <div id="loader" style={{display: isWordListLoading ? "block" : "none"}}></div>
 
             <div className={"fill-status" +
@@ -406,6 +494,13 @@ function FillView() {
                         checked={isFillRunning} onChange={handleToggleFill} />
                     <label className="form-check-label" htmlFor="fillSwitch">Fill</label>
                 </div>
+                {grid.width === 5 && grid.height === 5 &&
+                <div className="form-check form-switch fill-switch">
+                    <input type="checkbox" className="form-check-input" id="make5x5Switch"
+                        checked={make5x5} onChange={handleMake5x5Toggle} />
+                    <label className="form-check-label" htmlFor="make5x5Switch">Make 5x5</label>
+                </div>
+                }
                 <br />
             </>
             }
@@ -491,6 +586,9 @@ function FillView() {
                     <div className="fill-list-title">Fills {sectionCandidates.length > 0 ? `(${sectionCandidates.length})` : ""}</div>
                     <div className="fill-list-button" onClick={clearSectionCandidates}>Clear</div>
                     <div className="fill-sec-checkbox">
+                        {selectedScKey && (
+                            <button type="button" className="fill-classify-button" onClick={handleClassifyClick}>Classify</button>
+                        )}
                         <input type="checkbox" className="section-checkbox" id="show-fills-box"
                                     checked={showSectionCandidates} onChange={handleShowSectionCandidatesToggle} />
                         <label htmlFor="show-fills-box">Show</label>
@@ -509,8 +607,10 @@ function FillView() {
                             </div>
                         )}
                         {showSectionCandidates && sectionCandidates.map(sc => {
-                            let entry = entryFromSectionString(activeSection, sc.sectionString, getLongestStackWord(activeSection));
-                            let candidateKey = sc.sectionString;
+                            let entry = sc.gridString
+                                ? longestEntryFromGridString(sc.gridString)
+                                : entryFromSectionString(activeSection, sc.sectionString, getLongestStackWord(activeSection));
+                            let candidateKey = sc.gridString || sc.sectionString;
 
                             return (
                             <div className={"fill-list-row-wrapper" + (selectedScKey === candidateKey ? " fill-list-row-selected" : "")}
@@ -523,6 +623,13 @@ function FillView() {
                     </div>
                 </div>
             </div>
+            {classifyFillWords && (
+                <ClassifyModal
+                    fillWords={classifyFillWords}
+                    onClose={() => setClassifyFillWords(undefined)}
+                    onSaved={triggerUpdate}
+                />
+            )}
         </div>
     );
 }

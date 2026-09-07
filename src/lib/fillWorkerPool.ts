@@ -4,13 +4,14 @@ import { SectionCandidate } from "../models/SectionCandidate";
 import { buildEntryCandidates } from "./entryCandidates";
 import { createRootFillSearchState, selectWordToFill } from "./fill";
 import {
+    FillWordFilterPayload,
     MainToWorkerMessage,
     sectionForWorker,
     stripGridLookups,
     WorkerToMainMessage,
 } from "./fillWorkerTypes";
 import { getSquaresForWord } from "./util";
-import { getWordIndexInitPayload } from "./wordList";
+import { getWordIndexInitPayload, installFillFilter } from "./wordList";
 import Globals from "./windowService";
 
 const MAX_WORKERS_HARD = 8;
@@ -23,6 +24,7 @@ export interface StartFillOptions {
     onFound?: (sectionString: string, candidate: SectionCandidate) => void;
     onComplete: () => void;
     onProgress?: () => void;
+    fillFilter?: FillWordFilterPayload;
 }
 
 let workers: Worker[] = [];
@@ -202,6 +204,7 @@ export function stopFill() {
  */
 export function startFill(options: StartFillOptions): boolean {
     stopFill();
+    installFillFilter(options.fillFilter);
 
     const { grid, section } = options;
     if (!Globals.wordList) {
@@ -248,6 +251,7 @@ export function startFill(options: StartFillOptions): boolean {
             section: workerSection,
             fillWord,
             entryCandidates: slices[i],
+            fillFilter: options.fillFilter,
         });
     }
 

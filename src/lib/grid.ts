@@ -12,7 +12,7 @@ import { SymmetryType } from "../models/SymmetryType";
 import { makeNewNode } from "./fill";
 import { ContentType } from "../models/ContentType";
 import { processAndInsertChosenEntry } from "./insertEntry";
-import { queryIndexedWordList } from "./wordList";
+import { isAllowedFillWord, queryIndexedWordList } from "./wordList";
 import { populateAndScoreEntryCandidates, populateNoHeuristicEntryCandidates } from "./entryCandidates";
 import { getSectionsWithSelectedCandidate, getSectionWithCandidate, 
     getSelectedSectionCandidatesWithSquare } from "./section";
@@ -148,7 +148,7 @@ export function generateConstraintInfoForSquares(squares: GridSquare[]): boolean
     if (isWordEmpty(squares) || isWordFull(squares)) return true;
 
     let pattern = getLettersFromSquares(squares);
-    let entryOptions = queryIndexedWordList(pattern);
+    let entryOptions = queryIndexedWordList(pattern).filter(entry => isAllowedFillWord(entry));
 
     // Per-position support bits among entries that fit current masks.
     let support = new Array<number>(squares.length).fill(0);
@@ -222,6 +222,77 @@ export function gridToString(grid: GridState): string {
         chs.push(isBlackSquare(sq) ? "." : sq.content ? sq.content : "-");
     });
     return chs.join("");
+}
+
+/** Build a grid from a row-major string ('.' = black). */
+export function gridFromString(s: string): GridState {
+    const n = Math.round(Math.sqrt(s.length));
+    const grid = createNewGrid(n, n);
+    let i = 0;
+    for (let row = 0; row < n; row++) {
+        for (let col = 0; col < n; col++) {
+            const ch = s[i++];
+            const sq = grid.squares[row][col];
+            if (ch === ".") {
+                sq.type = SquareType.Black;
+                sq.content = undefined;
+                sq.viableMask = undefined;
+            } else if (ch && ch !== "-") {
+                sq.type = SquareType.White;
+                sq.content = ch;
+                sq.contentType = ContentType.ChosenSection;
+                sq.viableMask = letterBit(ch);
+            }
+        }
+    }
+    populateWords(grid);
+    updateGridConstraintInfo(grid);
+    return grid;
+}
+
+function addGridStringRun(entries: string[], seen: Set<string>, run: string) {
+    if (run.length < 3 || /[^A-Z]/.test(run) || seen.has(run)) return;
+    seen.add(run);
+    entries.push(run);
+}
+
+export function entriesFromGridString(s: string): string[] {
+    const n = Math.round(Math.sqrt(s.length));
+    const seen = new Set<string>();
+    const entries: string[] = [];
+    for (let r = 0; r < n; r++) {
+        let run = "";
+        for (let c = 0; c < n; c++) {
+            const ch = s[r * n + c];
+            if (ch === ".") {
+                addGridStringRun(entries, seen, run);
+                run = "";
+            } else run += ch;
+        }
+        addGridStringRun(entries, seen, run);
+    }
+    for (let c = 0; c < n; c++) {
+        let run = "";
+        for (let r = 0; r < n; r++) {
+            const ch = s[r * n + c];
+            if (ch === ".") {
+                addGridStringRun(entries, seen, run);
+                run = "";
+            } else run += ch;
+        }
+        addGridStringRun(entries, seen, run);
+    }
+    entries.sort();
+    return entries;
+}
+
+export function longestEntryFromGridString(s: string): string {
+    const entries = entriesFromGridString(s);
+    let best = "";
+    for (const e of entries) {
+        if (e.length > best.length || (e.length === best.length && e < best)) best = e;
+    }
+    return best;
 }
 
 export function createNewGrid(width: number, height: number): GridState {

@@ -122,6 +122,196 @@
     margin-left: 10px;
 }
 
+.fill-classify-button {
+    display: inline-block;
+    border: 1px solid black;
+    font-size: 12px;
+    padding: 0 6px;
+    cursor: pointer;
+    background-color: #ddd;
+    margin-right: 4px;
+    vertical-align: middle;
+}
+.fill-classify-button:hover {
+    background-color: #bbb;
+}
+
+.classify-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+    z-index: 1000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.classify-modal {
+    background: #1e1e1e;
+    color: #e6e6e6;
+    max-width: 1280px;
+    width: 96%;
+    max-height: 90vh;
+    overflow: auto;
+    padding: 12px 16px 16px;
+    border: 1px solid #3a3a3a;
+    border-radius: 6px;
+    box-shadow: 0 12px 32px rgba(0, 0, 0, 0.55);
+}
+
+.classify-modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 10px;
+}
+
+.classify-modal-title {
+    font-size: 16px;
+    font-weight: bold;
+    color: #f2f2f2;
+}
+
+.classify-modal-close {
+    border: none;
+    background: transparent;
+    color: #c8c8c8;
+    font-size: 22px;
+    cursor: pointer;
+    line-height: 1;
+}
+.classify-modal-close:hover {
+    color: #fff;
+}
+
+.classify-table-wrap {
+    overflow-x: auto;
+}
+
+.classify-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 12px;
+    color: #e6e6e6;
+}
+
+.classify-table th,
+.classify-table td {
+    border: 1px solid #3d3d3d;
+    padding: 4px 6px;
+    vertical-align: middle;
+}
+
+.classify-table th {
+    background: #2a2a2a;
+    color: #d0d0d0;
+    white-space: nowrap;
+}
+
+.classify-table tbody tr:nth-child(even) {
+    background: #242424;
+}
+
+.classify-table tbody tr:hover {
+    background: #2f2f2f;
+}
+
+.classify-table input[type="text"],
+.classify-table select {
+    width: 100%;
+    min-width: 110px;
+    background: #141414;
+    color: #e6e6e6;
+    border: 1px solid #4a4a4a;
+    border-radius: 3px;
+    padding: 2px 4px;
+}
+.classify-table input[type="text"]:disabled,
+.classify-table select:disabled {
+    opacity: 0.55;
+}
+.classify-table select option {
+    background: #1e1e1e;
+    color: #e6e6e6;
+}
+
+.classify-check-cell {
+    text-align: center;
+}
+
+.classify-delete-cell {
+    text-align: center;
+    width: 28px;
+}
+
+.classify-delete-button {
+    background: transparent;
+    border: none;
+    color: #c8c8c8;
+    cursor: pointer;
+    padding: 2px 4px;
+    line-height: 1;
+}
+.classify-delete-button:hover:not(:disabled) {
+    color: #ff8a8a;
+}
+.classify-delete-button:disabled {
+    opacity: 0.4;
+    cursor: default;
+}
+
+.classify-missing {
+    color: #ff8a8a;
+    font-size: 10px;
+}
+
+.classify-modal-footer {
+    margin-top: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.classify-modal-status {
+    font-size: 13px;
+    color: #c8c8c8;
+}
+
+.classify-modal-error {
+    color: #ff8a8a;
+    margin-bottom: 8px;
+}
+
+.classify-save-button {
+    background: #3b6ea5;
+    color: #f5f5f5;
+    border: 1px solid #4d82bc;
+    border-radius: 4px;
+    padding: 6px 12px;
+    cursor: pointer;
+}
+.classify-save-button:hover:not(:disabled) {
+    background: #4a7fb8;
+}
+.classify-save-button:disabled {
+    opacity: 0.5;
+    cursor: default;
+}
+
+.classify-add-button {
+    margin-top: 10px;
+    background: #2f2f2f;
+    color: #e6e6e6;
+    border: 1px solid #5a5a5a;
+    border-radius: 4px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+.classify-add-button:hover {
+    background: #3a3a3a;
+}
+
 #loader {
     position: absolute;
     left: 290px;

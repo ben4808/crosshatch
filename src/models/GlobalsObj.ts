@@ -30,4 +30,14 @@ export interface GlobalsObj {
 
     wordList?: IndexedWordList;
     knownWords?: Set<string>;
+    /** Per-entry gettable-ness from the word-list CSV (e.g. "Very Gettable"). */
+    wordGettable?: Map<string, string>;
+    /** Per-entry desirability from the word-list CSV (e.g. "Prefer"). */
+    wordDesirability?: Map<string, string>;
+    /** Active fill constraint used by Make 5x5 (and workers). */
+    fillFilter?: {
+        maxLikelyGettable: number;
+        likelyWords: string[];
+    };
+    likelyGettableSet?: Set<string>;
 }

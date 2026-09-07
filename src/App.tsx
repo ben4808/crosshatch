@@ -17,8 +17,8 @@ import { FillStatus } from './models/FillStatus';
 
 function App(props: AppProps) {
   const [activeView, setActiveView] = useState(props.activeView);
-  const [gridWidth, setGridWidth] = useState(7);
-  const [gridHeight, setGridHeight] = useState(7);
+  const [gridWidth, setGridWidth] = useState(5);
+  const [gridHeight, setGridHeight] = useState(5);
   const [updateSemaphore, setUpdateSemaphore] = useState(0);
 
   // Functional updater so long-lived callbacks (fill worker onProgress) never

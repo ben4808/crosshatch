@@ -10,7 +10,7 @@ import {
     constraintLetterCount, getSquaresForWord, isWordFull, mapKeys, squareKey,
     squareAllowsLetter, squareViableMask, maskToLetterList,
 } from "./util";
-import { isKnownWord, queryIndexedWordList, queryWordsByLength } from "./wordList";
+import { isAllowedFillWord, isKnownWord, queryIndexedWordList, queryWordsByLength } from "./wordList";
 
 const MAX_CANDIDATES_MANUAL = 100;
 /** Cap match counting used only for manual ranking. */
@@ -168,6 +168,7 @@ function getPatternEntries(
 
     return raw.filter(entry => {
         if (usedWords && usedWords.has(entry)) return false;
+        if (!isAllowedFillWord(entry, usedWords)) return false;
         for (let i = 0; i < squares.length; i++) {
             if (!squareAllowsLetter(squares[i], entry[i])) return false;
         }
@@ -197,6 +198,7 @@ function countPatternEntries(
     let count = 0;
     for (let entry of raw) {
         if (usedWords.has(entry)) continue;
+        if (!isAllowedFillWord(entry, usedWords)) continue;
         let ok = true;
         for (let i = 0; i < squares.length; i++) {
             if (!squareAllowsLetter(squares[i], entry[i])) {

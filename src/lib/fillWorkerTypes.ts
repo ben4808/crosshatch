@@ -12,6 +12,11 @@ export type WorkerSection = Pick<
     "id" | "openSquareCount" | "squares" | "words" | "stackWords" | "neighboringCrosses"
 >;
 
+export type FillWordFilterPayload = {
+    maxLikelyGettable: number;
+    likelyWords: string[];
+};
+
 export type MainToWorkerMessage =
     | { type: "initWordList"; index: WordIndexInitPayload }
     | {
@@ -21,6 +26,7 @@ export type MainToWorkerMessage =
         section: WorkerSection;
         fillWord: GridWord;
         entryCandidates: EntryCandidate[];
+        fillFilter?: FillWordFilterPayload;
     }
     | { type: "cancel"; jobId: number }
     | { type: "stopReporting"; jobId: number };
