@@ -8,17 +8,17 @@ const {
 } = require("cruzi-db");
 
 const MANUAL_TAGS = {
-  baseForm: "manual_base",
   displayText: "manual_display",
-  entryType: "manual_classification",
+  classification: "manual_classification",
   unityBucket: "manual unity",
   familiarityBucket: "manual familiarity",
   qualityBucket: "manual quality",
-  isVulgar: "manual_vulgar",
 };
 
 const CROSSWORDESE_TAG = "crosswordese";
 const BREAKFAST_TAG = "breakfast_test";
+const SENSITIVE_TAG = "sensitive";
+const VULGAR_TAG = "vulgar";
 
 function textVal(value) {
   return value == null ? "" : String(value);
@@ -41,23 +41,11 @@ function collectManualTags(original, updated) {
     }
   };
 
-  pushIfChanged("baseForm", original && original.baseForm, updated.baseForm);
   pushIfChanged("displayText", original && original.displayText, updated.displayText);
-  pushIfChanged("entryType", original && original.entryType, updated.entryType);
+  pushIfChanged("classification", original && original.classification, updated.classification);
   pushIfChanged("unityBucket", original && original.unityBucket, updated.unityBucket);
   pushIfChanged("familiarityBucket", original && original.familiarityBucket, updated.familiarityBucket);
   pushIfChanged("qualityBucket", original && original.qualityBucket, updated.qualityBucket);
-
-  const originalVulgar = original ? original.isVulgar === true : false;
-  const updatedVulgar = !!updated.isVulgar;
-  if (originalVulgar !== updatedVulgar) {
-    tags.push({
-      entry: updated.entry,
-      lang: updated.lang,
-      tag: MANUAL_TAGS.isVulgar,
-      value: `${originalVulgar} -> ${updatedVulgar}`,
-    });
-  }
 
   return tags;
 }
@@ -112,9 +100,9 @@ function handleClassifyRoutes(app) {
         updates.push({
           entry: row.entry,
           lang: row.lang,
-          baseForm: row.baseForm || null,
+          baseForm: null,
           displayText: row.displayText || null,
-          entryType: row.entryType || null,
+          classification: row.classification || null,
           unityBucket: row.unityBucket || null,
           familiarityBucket: row.familiarityBucket || null,
           qualityBucket: row.qualityBucket || null,
@@ -123,6 +111,8 @@ function handleClassifyRoutes(app) {
         tags.push(...collectManualTags(original, row));
         applyFlagTagChange(original, row, "isCrosswordese", CROSSWORDESE_TAG, flagAdds, flagDeletes);
         applyFlagTagChange(original, row, "isBreakfast", BREAKFAST_TAG, flagAdds, flagDeletes);
+        applyFlagTagChange(original, row, "isVulgar", VULGAR_TAG, flagAdds, flagDeletes);
+        applyFlagTagChange(original, row, "isSensitive", SENSITIVE_TAG, flagAdds, flagDeletes);
       }
 
       await updateEntryClassifications(updates);
@@ -159,6 +149,13 @@ function handleClassifyRoutes(app) {
 
 module.exports = function (app) {
   const express = require("express");
+  // Cross-origin isolation on first load (matches public/coi-serviceworker.js) so the
+  // fill workers can share the word index via SharedArrayBuffer.
+  app.use((req, res, next) => {
+    res.setHeader("Cross-Origin-Opener-Policy", "same-origin");
+    res.setHeader("Cross-Origin-Embedder-Policy", "require-corp");
+    next();
+  });
   app.use(express.json({ limit: "2mb" }));
   handleClassifyRoutes(app);
 };

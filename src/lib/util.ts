@@ -104,16 +104,27 @@ export function otherDir(dir: WordDirection): WordDirection {
     return dir === WordDirection.Across ? WordDirection.Down : WordDirection.Across;
 }
 
+/** Callers must not mutate the returned array (it may be cached on fill grids). */
 export function getSquaresForWord(grid: GridState, word: GridWord): GridSquare[] {
+    const cache = grid.squaresCache;
+    if (cache) {
+        const hit = cache.get(word);
+        if (hit) return hit;
+    }
+
+    const across = word.direction === WordDirection.Across;
+    const endRow = word.end[0];
+    const endCol = word.end[1];
     let row = word.start[0];
     let col = word.start[1];
     let squares = [grid.squares[row][col]];
-    while (!compareTuples([row, col], word.end)) {
-        row = word.direction === WordDirection.Across ? row : row+1;
-        col = word.direction === WordDirection.Across ? col+1 : col;
+    while (row !== endRow || col !== endCol) {
+        if (across) col++;
+        else row++;
         squares.push(grid.squares[row][col]);
     }
 
+    if (cache) cache.set(word, squares);
     return squares;
 }
 
@@ -177,7 +188,11 @@ export function isWordEmpty(squares: GridSquare[]): boolean {
 }
 
 export function isWordFull(squares: GridSquare[]): boolean {
-    return !squares.find(x => !isBlackSquare(x) && !x.content);
+    for (let i = 0; i < squares.length; i++) {
+        const sq = squares[i];
+        if (!sq.content && !isBlackSquare(sq)) return false;
+    }
+    return true;
 }
 
 export function shuffleArray(array: any[]) {
@@ -302,20 +317,6 @@ export function initializeSessionGlobals() {
     if (Globals.selectedWordKey && !grid.words.has(Globals.selectedWordKey)) {
         Globals.selectedWordKey = undefined;
         Globals.selectedWordNode = undefined;
-    }
-}
-
-/** Swap the active grid (e.g. a Make 5x5 fill with a different black pattern) without dropping found fills. */
-export function adoptGridKeepingFills(grid: GridState) {
-    const prev = Globals.sections?.get(Globals.activeSectionId ?? 0);
-    const candidates = prev?.candidates;
-    const selectedCandidate = prev?.selectedCandidate;
-    Globals.activeGrid = grid;
-    initializeSessionGlobals();
-    const section = Globals.sections!.get(0)!;
-    if (candidates) {
-        section.candidates = candidates;
-        section.selectedCandidate = selectedCandidate;
     }
 }
 

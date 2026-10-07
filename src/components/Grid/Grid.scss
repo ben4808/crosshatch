@@ -62,6 +62,15 @@
 .grid-square-constrained-5 {
     background-color: #aaa;
 }
+.grid-square-crossing-likely {
+    background-color: #fff3a8;
+}
+.grid-square-crossing-maybe {
+    background-color: #ffd8a8;
+}
+.grid-square-crossing-not {
+    background-color: #ffc4c4;
+}
 
 .grid-number {
     font-size: 9px;
@@ -86,6 +95,21 @@
 }
 .grid-content-chosen-section-hover {
     color: lighten(darkgoldenrod, 10%);
+}
+.grid-content-very-gettable {
+    color: #555;
+}
+.grid-content-likely-gettable {
+    color: #b39400;
+}
+.grid-content-maybe-gettable {
+    color: #d96b00;
+}
+.grid-content-not-gettable {
+    color: #e00000;
+}
+.grid-content-not-a-thing {
+    color: #8b0000;
 }
 .grid-content-lively {
     color: seagreen;

@@ -31,7 +31,7 @@ const LIKELY_GETTABLE_FAMILIARITY = new Set(["Common Name", "Easy Collocation", 
 const MAYBE_GETTABLE_FAMILIARITY = new Set(["General Knowledge", "Niche", "Variant"]);
 const NOT_GETTABLE_FAMILIARITY = new Set(["Obscure", "Barely Exists"]);
 
-const PREFER_QUALITY = new Set(["Idiomatic", "Interesting", "Appealing", "Positive", "Trendy"]);
+const PREFER_QUALITY = new Set(["Idiomatic", "Interesting", "Feel-Good", "Trendy"]);
 const NORMAL_QUALITY = new Set(["Normal", "Sensitive"]);
 const AVOID_QUALITY = new Set(["Non-unit", "Uncommon Inflection", "Clunky"]);
 

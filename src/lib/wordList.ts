@@ -1,19 +1,23 @@
+import { FillFilter } from "../models/FillFilter";
 import { WordList } from "../models/WordList";
 import {
     DESIRABILITY_AVOID,
     DESIRABILITY_PREFER,
     GETTABLE_LIKELY,
     GETTABLE_MAYBE,
-    GETTABLE_VERY,
     classifyDesirability,
     classifyGettableNess,
 } from "./crosswordListRatings";
 import {
     attachPackedWordIndex,
     buildPackedWordIndex,
+    findPackedWordId,
+    getWordString,
     hasPackedWord,
+    PackedWordIndex,
     queryPackedWordList,
     queryPackedWordsByLength,
+    scanPackedSlot,
     wordIndexInitPayload,
     WordIndexInitPayload,
 } from "./sharedWordIndex";
@@ -129,31 +133,33 @@ export function wordsWithGettable(gettable: string): string[] {
     return out;
 }
 
-export function pickRandomMaybePrefer5(): string | undefined {
-    const candidates: string[] = [];
-    const gettable = Globals.wordGettable;
+/** Maybe Gettable entries with Prefer desirability (fill seed words). */
+export function maybePreferWords(): string[] {
+    const out: string[] = [];
     const desirability = Globals.wordDesirability;
-    if (!gettable || !desirability) return undefined;
-
-    gettable.forEach((value, word) => {
-        if (word.length !== 5) return;
-        if (value !== GETTABLE_MAYBE) return;
-        if (desirability.get(word) !== DESIRABILITY_PREFER) return;
-        candidates.push(word);
+    Globals.wordGettable?.forEach((value, word) => {
+        if (value === GETTABLE_MAYBE && desirability?.get(word) === DESIRABILITY_PREFER) out.push(word);
     });
-    if (candidates.length === 0) return undefined;
-    return candidates[Math.floor(Math.random() * candidates.length)];
+    return out;
 }
+
+let fillSeedSet = new Set<string>();
+let fillExemptSet = new Set<string>();
 
 export function isLikelyGettable(word: string): boolean {
     if (Globals.likelyGettableSet) return Globals.likelyGettableSet.has(word);
     return Globals.wordGettable?.get(word) === GETTABLE_LIKELY;
 }
 
+/** Whether a used `word` counts toward the active fill's Likely Gettable quota. */
+export function countsTowardLikelyQuota(word: string): boolean {
+    return !fillExemptSet.has(word) && isLikelyGettable(word);
+}
+
 export function countLikelyGettableUsed(usedWords: Map<string, boolean>): number {
     let n = 0;
     usedWords.forEach((_, word) => {
-        if (isLikelyGettable(word)) n++;
+        if (countsTowardLikelyQuota(word)) n++;
     });
     return n;
 }
@@ -162,29 +168,84 @@ function isAvoidDesirability(word: string): boolean {
     return Globals.wordDesirability?.get(word) === DESIRABILITY_AVOID;
 }
 
-/** Whether `word` may be used as a new fill entry under the active Make 5x5 filter. */
-export function isAllowedFillWord(word: string, usedWords?: Map<string, boolean>): boolean {
+/**
+ * Whether `word` may be placed by the active fill outside the seed slot.
+ * The fill dictionary is already limited to Very / Likely / seed words.
+ */
+export function isAllowedFillWord(word: string, likelyUsedCount?: number): boolean {
     const filter = Globals.fillFilter;
     if (!filter) return true;
-    if (isAvoidDesirability(word)) return false;
+    if (fillSeedSet.has(word)) return false;
 
     if (isLikelyGettable(word)) {
         if (filter.maxLikelyGettable <= 0) return false;
-        if (!usedWords) return true;
-        return countLikelyGettableUsed(usedWords) < filter.maxLikelyGettable;
+        if (likelyUsedCount === undefined) return true;
+        return likelyUsedCount < filter.maxLikelyGettable;
     }
+    return true;
+}
 
-    const gettable = Globals.wordGettable?.get(word);
-    if (gettable === GETTABLE_VERY || gettable === undefined) return true;
-    return false;
+const FLAG_LIKELY = 1;
+const FLAG_SEED = 2;
+
+let wordFlags: Uint8Array | undefined;
+let wordFlagsIndex: PackedWordIndex | undefined;
+let wordFlagsFilter: FillFilter | undefined;
+
+function getWordFlags(index: PackedWordIndex, filter: FillFilter): Uint8Array {
+    if (wordFlags && wordFlagsIndex === index && wordFlagsFilter === filter) return wordFlags;
+    const flags = new Uint8Array(index.wordCount);
+    const mark = (words: Iterable<string>, bit: number) => {
+        for (const word of words) {
+            const id = findPackedWordId(index, word);
+            if (id >= 0) flags[id] |= bit;
+        }
+    };
+    mark(Globals.likelyGettableSet ?? filter.likelyWords, FLAG_LIKELY);
+    mark(fillSeedSet, FLAG_SEED);
+    wordFlags = flags;
+    wordFlagsIndex = index;
+    wordFlagsFilter = filter;
+    return flags;
+}
+
+/**
+ * Id-based equivalent of isAllowedFillWord for the current index and fill filter.
+ * Returns undefined when every word is allowed (no filter active).
+ */
+export function fillWordIdFilter(likelyUsedCount: number): ((id: number) => boolean) | undefined {
+    const filter = Globals.fillFilter;
+    const index = Globals.wordList;
+    if (!filter || !index) return undefined;
+    const flags = getWordFlags(index, filter);
+    const likelyAllowed = filter.maxLikelyGettable > 0 && likelyUsedCount < filter.maxLikelyGettable;
+    return id => {
+        const f = flags[id];
+        if (f & FLAG_SEED) return false;
+        if (f & FLAG_LIKELY) return likelyAllowed;
+        return true;
+    };
+}
+
+/** Whether the Likely Gettable quota is full, so no further Likely entries are allowed. */
+export function isLikelyQuotaFull(likelyUsedCount: number): boolean {
+    const filter = Globals.fillFilter;
+    return !!filter && likelyUsedCount >= filter.maxLikelyGettable;
+}
+
+export function isFillSeedWord(word: string): boolean {
+    return fillSeedSet.has(word);
 }
 
 export function wordsWithoutAvoid(words: string[]): string[] {
     return words.filter(word => !isAvoidDesirability(word));
 }
 
-export function installFillFilter(filter?: { maxLikelyGettable: number; likelyWords: string[] }) {
+export function installFillFilter(filter?: FillFilter) {
+    if (filter && filter === Globals.fillFilter) return;
     Globals.fillFilter = filter;
+    fillSeedSet = new Set(filter?.seedWords ?? []);
+    fillExemptSet = new Set(filter?.exemptWords ?? []);
     if (filter) {
         Globals.likelyGettableSet = new Set(filter.likelyWords);
     } else {
@@ -243,7 +304,8 @@ export function getWordIndexInitPayload(): WordIndexInitPayload | undefined {
 }
 
 export function isKnownWord(word: string): boolean {
-    if (Globals.knownWords) return Globals.knownWords.has(word);
+    // During a fill the packed index holds the restricted fill dictionary.
+    if (Globals.knownWords && !Globals.fillFilter) return Globals.knownWords.has(word);
     if (!Globals.wordList) return false;
     return hasPackedWord(Globals.wordList, word);
 }
@@ -257,6 +319,21 @@ export function queryIndexedWordList(pattern: string): string[] {
 export function queryWordsByLength(length: number): string[] {
     if (!Globals.wordList) return [];
     return queryPackedWordsByLength(Globals.wordList, length);
+}
+
+/** Visit ids of dictionary words fitting per-position letter masks; see scanPackedSlot. */
+export function scanWordIds(masks: ArrayLike<number>, visit: (id: number) => boolean | void): boolean {
+    if (!Globals.wordList) return false;
+    return scanPackedSlot(Globals.wordList, masks, visit);
+}
+
+export function wordIdOf(word: string): number {
+    if (!Globals.wordList) return -1;
+    return findPackedWordId(Globals.wordList, word);
+}
+
+export function wordOfId(id: number): string {
+    return getWordString(Globals.wordList!, id);
 }
 
 export type { WordIndexInitPayload };

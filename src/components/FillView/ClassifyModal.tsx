@@ -37,8 +37,7 @@ export const FAMILIARITY_OPTIONS = [
 export const QUALITY_OPTIONS = [
     "Idiomatic",
     "Interesting",
-    "Appealing",
-    "Positive",
+    "Feel-Good",
     "Trendy",
     "Normal",
     "Sensitive",
@@ -53,13 +52,13 @@ export interface ClassifyRow {
     fillWord: string;
     entry: string | null;
     lang: string | null;
-    baseForm: string;
     displayText: string;
-    entryType: string;
+    classification: string;
     unityBucket: string;
     familiarityBucket: string;
     qualityBucket: string;
     isVulgar: boolean;
+    isSensitive: boolean;
     isCrosswordese: boolean;
     isBreakfast: boolean;
     nytValue: string;
@@ -83,13 +82,13 @@ function asText(value: string | null | undefined): string {
 function rowsEqual(a: ClassifyRow, b: ClassifyRow): boolean {
     return a.fillWord === b.fillWord
         && a.entry === b.entry
-        && a.baseForm === b.baseForm
         && a.displayText === b.displayText
-        && a.entryType === b.entryType
+        && a.classification === b.classification
         && a.unityBucket === b.unityBucket
         && a.familiarityBucket === b.familiarityBucket
         && a.qualityBucket === b.qualityBucket
         && a.isVulgar === b.isVulgar
+        && a.isSensitive === b.isSensitive
         && a.isCrosswordese === b.isCrosswordese
         && a.isBreakfast === b.isBreakfast;
 }
@@ -106,13 +105,13 @@ function makeBlankRow(): ClassifyRow {
         fillWord: "",
         entry: "",
         lang: "en",
-        baseForm: "",
         displayText: "",
-        entryType: "",
+        classification: "",
         unityBucket: "Concept",
         familiarityBucket: "General Knowledge",
         qualityBucket: "Normal",
         isVulgar: false,
+        isSensitive: false,
         isCrosswordese: false,
         isBreakfast: false,
         nytValue: "None",
@@ -148,14 +147,14 @@ function ClassifyModal(props: ClassifyModalProps) {
                     entry: string | null;
                     lang: string | null;
                     displayText: string | null;
-                    entryType: string | null;
+                    classification: string | null;
                     unityBucket: string | null;
                     familiarityBucket: string | null;
                     qualityBucket: string | null;
                     isVulgar: boolean | null;
                     isCrosswordese?: boolean;
                     isBreakfast?: boolean;
-                    baseForm?: string | null;
+                    isSensitive?: boolean;
                     nytValue?: string | null;
                 }[];
             })
@@ -168,13 +167,13 @@ function ClassifyModal(props: ClassifyModalProps) {
                         fillWord,
                         entry: match?.entry ?? null,
                         lang: match?.lang ?? null,
-                        baseForm: asText(match?.baseForm),
                         displayText: asText(match?.displayText),
-                        entryType: asText(match?.entryType),
+                        classification: asText(match?.classification),
                         unityBucket: asText(match?.unityBucket),
                         familiarityBucket: asText(match?.familiarityBucket),
                         qualityBucket: asText(match?.qualityBucket),
                         isVulgar: match?.isVulgar === true,
+                        isSensitive: match?.isSensitive === true,
                         isCrosswordese: match?.isCrosswordese === true,
                         isBreakfast: match?.isBreakfast === true,
                         nytValue: nytDisplay(match?.nytValue),
@@ -211,9 +210,10 @@ function ClassifyModal(props: ClassifyModalProps) {
     async function handleDelete(rowId: string) {
         const row = rows.find((item) => item.rowId === rowId);
         if (!row) return;
-        if (!window.confirm("Are you sure?")) return;
-
         const entry = (row.entry || "").trim();
+        const label = entry || row.fillWord || "this row";
+        if (!window.confirm(`Delete "${label}" from the database? This cannot be undone.`)) return;
+
         if (entry && !row.isNew) {
             try {
                 setSaving(true);
@@ -329,13 +329,13 @@ function ClassifyModal(props: ClassifyModalProps) {
                             <thead>
                                 <tr>
                                     <th>Entry</th>
-                                    <th>Base Form</th>
                                     <th>Display</th>
                                     <th>Classification</th>
                                     <th>Unity</th>
                                     <th>Familiarity</th>
                                     <th>Quality</th>
                                     <th>Vulgar</th>
+                                    <th>Sensitive</th>
                                     <th>Crosswordese</th>
                                     <th>Breakfast</th>
                                     <th>NYT</th>
@@ -366,24 +366,17 @@ function ClassifyModal(props: ClassifyModalProps) {
                                         <td>
                                             <input
                                                 type="text"
-                                                value={row.baseForm}
-                                                onChange={(event) => updateRow(index, { baseForm: event.target.value })}
-                                            />
-                                        </td>
-                                        <td>
-                                            <input
-                                                type="text"
                                                 value={row.displayText}
                                                 onChange={(event) => updateRow(index, { displayText: event.target.value })}
                                             />
                                         </td>
                                         <td>
                                             <select
-                                                value={row.entryType}
-                                                onChange={(event) => updateRow(index, { entryType: event.target.value })}
+                                                value={row.classification}
+                                                onChange={(event) => updateRow(index, { classification: event.target.value })}
                                             >
                                                 <option value=""></option>
-                                                {optionsWithCurrent(ENTRY_TYPE_OPTIONS, row.entryType).map((option) => (
+                                                {optionsWithCurrent(ENTRY_TYPE_OPTIONS, row.classification).map((option) => (
                                                     <option key={option} value={option}>{option}</option>
                                                 ))}
                                             </select>
@@ -431,6 +424,13 @@ function ClassifyModal(props: ClassifyModalProps) {
                                         <td className="classify-check-cell">
                                             <input
                                                 type="checkbox"
+                                                checked={row.isSensitive}
+                                                onChange={(event) => updateRow(index, { isSensitive: event.target.checked })}
+                                            />
+                                        </td>
+                                        <td className="classify-check-cell">
+                                            <input
+                                                type="checkbox"
                                                 checked={row.isCrosswordese}
                                                 onChange={(event) => updateRow(index, { isCrosswordese: event.target.checked })}
                                             />
@@ -451,12 +451,7 @@ function ClassifyModal(props: ClassifyModalProps) {
                                                 onClick={() => handleDelete(row.rowId)}
                                                 disabled={saving}
                                             >
-                                                <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true">
-                                                    <path
-                                                        fill="currentColor"
-                                                        d="M9 3h6l1 2h4v2H4V5h4l1-2zm1 6h2v9h-2V9zm4 0h2v9h-2V9zM7 9h2v9H7V9zm-1 12h12a1 1 0 0 0 1-1V8H5v12a1 1 0 0 0 1 1z"
-                                                    />
-                                                </svg>
+                                                <span aria-hidden="true">🗑️</span>
                                             </button>
                                         </td>
                                     </tr>

@@ -17,6 +17,7 @@ import { ContentType } from '../../models/ContentType';
 import { updateSectionFilters } from '../../lib/section';
 import { GridSquare } from '../../models/GridSquare';
 import { Section } from '../../models/Section';
+import { getGridGettableClasses, SquareGettableClasses } from '../../lib/gettableDisplay';
 
 function Grid() {
     const [selectedSquare, setSelectedSquare] = useState([-1, -1] as [number, number]);
@@ -186,7 +187,8 @@ function Grid() {
     }
 
     function getSquareProps(grid: GridState, row: number, col: number, 
-        selectedSquare: [number, number], selectedWord: GridWord | undefined): SquareProps {
+        selectedSquare: [number, number], selectedWord: GridWord | undefined,
+        gettableClasses: SquareGettableClasses): SquareProps {
         let square = grid.squares[row][col];
     
         return {
@@ -203,6 +205,8 @@ function Grid() {
                 (Globals.hoverSectionId !== undefined && isSquareInSection(Globals.sections!.get(Globals.hoverSectionId)!, square)),
             constraintSum: constraintLetterCount(square),
             isCircled: square.isCircled,
+            gettableLetterClass: gettableClasses.letterClass,
+            gettableCrossingClass: gettableClasses.crossingClass,
         };
     }
 
@@ -254,10 +258,11 @@ function Grid() {
     let puzzle = Globals.puzzle!;
     let grid = Globals.hoverGrid ? Globals.hoverGrid! : getGrid();
 
+    let gettableClasses = getGridGettableClasses(grid);
     let squareElements = [];
     for (let row = 0; row < grid.height; row++) {
         for (let col = 0; col < grid.width; col++) {
-            let sqProps = getSquareProps(grid, row, col, selectedSquare, getSelectedWord());
+            let sqProps = getSquareProps(grid, row, col, selectedSquare, getSelectedWord(), gettableClasses[row][col]);
             squareElements.push(getSquareElement(sqProps));
         }
     }

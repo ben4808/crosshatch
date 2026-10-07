@@ -14,4 +14,6 @@ export interface SquareProps {
     isInSelectedSection: boolean;
     constraintSum: number;
     isCircled: boolean;
+    gettableLetterClass?: string;
+    gettableCrossingClass?: string;
 }

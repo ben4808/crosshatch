@@ -12,7 +12,7 @@ import { SymmetryType } from "../models/SymmetryType";
 import { makeNewNode } from "./fill";
 import { ContentType } from "../models/ContentType";
 import { processAndInsertChosenEntry } from "./insertEntry";
-import { isAllowedFillWord, queryIndexedWordList } from "./wordList";
+import { scanPackedSlot } from "./sharedWordIndex";
 import { populateAndScoreEntryCandidates, populateNoHeuristicEntryCandidates } from "./entryCandidates";
 import { getSectionsWithSelectedCandidate, getSectionWithCandidate, 
     getSelectedSectionCandidatesWithSquare } from "./section";
@@ -146,30 +146,30 @@ export function generateConstraintInfoForSquares(squares: GridSquare[]): boolean
         }
     });
     if (isWordEmpty(squares) || isWordFull(squares)) return true;
+    let index = Globals.wordList;
+    if (!index) return true;
 
-    let pattern = getLettersFromSquares(squares);
-    let entryOptions = queryIndexedWordList(pattern).filter(entry => isAllowedFillWord(entry));
+    let length = squares.length;
+    let masks = new Int32Array(length);
+    for (let i = 0; i < length; i++) masks[i] = squares[i].viableMask!;
 
     // Per-position support bits among entries that fit current masks.
-    let support = new Array<number>(squares.length).fill(0);
+    let support = new Int32Array(length);
     let anySupport = false;
-    for (let entry of entryOptions) {
-        let ok = true;
-        for (let i = 0; i < squares.length; i++) {
-            let sq = squares[i];
-            if (sq.content) continue;
-            if ((sq.viableMask! & letterBit(entry[i])) === 0) {
-                ok = false;
-                break;
-            }
-        }
-        if (!ok) continue;
+    let chars = index.wordChars;
+    let offsets = index.wordOffsets;
+    let matches = 0;
+    scanPackedSlot(index, masks, id => {
         anySupport = true;
-        for (let i = 0; i < squares.length; i++) {
-            if (squares[i].content) continue;
-            support[i] |= letterBit(entry[i]);
+        let o = offsets[id];
+        for (let i = 0; i < length; i++) support[i] |= 1 << chars[o + i];
+        // Stop once every open square already supports all of its viable letters.
+        if ((++matches & 31) !== 0) return false;
+        for (let i = 0; i < length; i++) {
+            if (!squares[i].content && support[i] !== masks[i]) return false;
         }
-    }
+        return true;
+    });
 
     let viable = true;
     for (let i = 0; i < squares.length; i++) {
@@ -214,85 +214,6 @@ function popcountLocal(mask: number): number {
 
 export function getLettersFromSquares(squares: GridSquare[]): string {
     return squares.map(sq => sq.content ? sq.content! : "-").join("");
-}
-
-export function gridToString(grid: GridState): string {
-    let chs: string[] = [];
-    forAllGridSquares(grid, sq => {
-        chs.push(isBlackSquare(sq) ? "." : sq.content ? sq.content : "-");
-    });
-    return chs.join("");
-}
-
-/** Build a grid from a row-major string ('.' = black). */
-export function gridFromString(s: string): GridState {
-    const n = Math.round(Math.sqrt(s.length));
-    const grid = createNewGrid(n, n);
-    let i = 0;
-    for (let row = 0; row < n; row++) {
-        for (let col = 0; col < n; col++) {
-            const ch = s[i++];
-            const sq = grid.squares[row][col];
-            if (ch === ".") {
-                sq.type = SquareType.Black;
-                sq.content = undefined;
-                sq.viableMask = undefined;
-            } else if (ch && ch !== "-") {
-                sq.type = SquareType.White;
-                sq.content = ch;
-                sq.contentType = ContentType.ChosenSection;
-                sq.viableMask = letterBit(ch);
-            }
-        }
-    }
-    populateWords(grid);
-    updateGridConstraintInfo(grid);
-    return grid;
-}
-
-function addGridStringRun(entries: string[], seen: Set<string>, run: string) {
-    if (run.length < 3 || /[^A-Z]/.test(run) || seen.has(run)) return;
-    seen.add(run);
-    entries.push(run);
-}
-
-export function entriesFromGridString(s: string): string[] {
-    const n = Math.round(Math.sqrt(s.length));
-    const seen = new Set<string>();
-    const entries: string[] = [];
-    for (let r = 0; r < n; r++) {
-        let run = "";
-        for (let c = 0; c < n; c++) {
-            const ch = s[r * n + c];
-            if (ch === ".") {
-                addGridStringRun(entries, seen, run);
-                run = "";
-            } else run += ch;
-        }
-        addGridStringRun(entries, seen, run);
-    }
-    for (let c = 0; c < n; c++) {
-        let run = "";
-        for (let r = 0; r < n; r++) {
-            const ch = s[r * n + c];
-            if (ch === ".") {
-                addGridStringRun(entries, seen, run);
-                run = "";
-            } else run += ch;
-        }
-        addGridStringRun(entries, seen, run);
-    }
-    entries.sort();
-    return entries;
-}
-
-export function longestEntryFromGridString(s: string): string {
-    const entries = entriesFromGridString(s);
-    let best = "";
-    for (const e of entries) {
-        if (e.length > best.length || (e.length === best.length && e < best)) best = e;
-    }
-    return best;
 }
 
 export function createNewGrid(width: number, height: number): GridState {

@@ -1,4 +1,6 @@
+import { EntryCandidate } from "../models/EntryCandidate";
 import { GridState } from "../models/GridState";
+import { GridWord } from "../models/GridWord";
 import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
 import { buildEntryCandidates } from "./entryCandidates";
@@ -21,20 +23,34 @@ export const MAX_STORED_FILLS = 2000;
 export interface StartFillOptions {
     grid: GridState;
     section: Section;
-    onFound?: (sectionString: string, candidate: SectionCandidate) => void;
+    /** Called for every reported fill, including ones already stored. */
+    onFound?: (sectionString: string) => void;
     onComplete: () => void;
     onProgress?: () => void;
     fillFilter?: FillWordFilterPayload;
+    /** Fill this word first using rootCandidates instead of picking by MRV. */
+    rootWord?: GridWord;
+    rootCandidates?: EntryCandidate[];
+}
+
+/** Aim for this many root-candidate chunks per worker so idle workers can pick up slack. */
+const CHUNKS_PER_WORKER = 16;
+const MAX_CHUNK_SIZE = 32;
+
+interface ActiveJob {
+    jobId: number;
+    options: StartFillOptions;
+    /** Root-candidate chunks not yet handed to a worker. */
+    queue: EntryCandidate[][];
+    /** Workers currently searching a chunk of this job. */
+    busy: Set<Worker>;
 }
 
 let workers: Worker[] = [];
 let wordListVersion = 0;
 let postedWordListVersion = -1;
 let nextJobId = 1;
-let activeJobId: number | undefined;
-let outstandingWorkers = 0;
-let activeOptions: StartFillOptions | undefined;
-let reportingStopped = false;
+let activeJob: ActiveJob | undefined;
 let loggedNonSharedIndex = false;
 
 function memoryWorkerCap(): number {
@@ -58,9 +74,9 @@ function createWorker(): Worker {
     return new Worker(new URL("./fill.worker.ts", import.meta.url));
 }
 
-function handleWorkerError(err: ErrorEvent) {
+function handleWorkerError(worker: Worker, err: ErrorEvent) {
     console.error("Fill worker error", err);
-    handleWorkerFinished(activeJobId);
+    if (activeJob) handleWorkerIdle(activeJob, worker, false);
 }
 
 function postInitWordList(worker: Worker) {
@@ -72,8 +88,8 @@ function postInitWordList(worker: Worker) {
 function ensureWorkers(count: number) {
     while (workers.length < count) {
         const worker = createWorker();
-        worker.onmessage = handleWorkerMessage;
-        worker.onerror = handleWorkerError;
+        worker.onmessage = event => handleWorkerMessage(worker, event);
+        worker.onerror = err => handleWorkerError(worker, err);
         workers.push(worker);
         if (Globals.wordList) {
             postInitWordList(worker);
@@ -112,94 +128,86 @@ function syncWordListIfNeeded() {
     ensureWordList(Globals.wordList, Globals.knownWords);
 }
 
-function partitionCandidates<T>(items: T[], parts: number): T[][] {
-    const buckets: T[][] = [];
-    for (let i = 0; i < parts; i++) buckets.push([]);
-    for (let i = 0; i < items.length; i++) {
-        buckets[i % parts].push(items[i]);
-    }
-    return buckets.filter(b => b.length > 0);
+function chunkCandidates<T>(items: T[], workerCount: number): T[][] {
+    const size = Math.max(1, Math.min(MAX_CHUNK_SIZE, Math.ceil(items.length / (workerCount * CHUNKS_PER_WORKER))));
+    const chunks: T[][] = [];
+    for (let i = 0; i < items.length; i += size) chunks.push(items.slice(i, i + size));
+    return chunks;
 }
 
-function stopReportingFills() {
-    if (reportingStopped || activeJobId === undefined) return;
-    reportingStopped = true;
-    const jobId = activeJobId;
-    for (const worker of workers) {
-        postToWorker(worker, { type: "stopReporting", jobId });
+/** Hand the worker its next chunk, or retire it from the job (completing the job when all are idle). */
+function handleWorkerIdle(job: ActiveJob, worker: Worker, canTakeMore: boolean) {
+    const next = canTakeMore ? job.queue.shift() : undefined;
+    if (next) {
+        postToWorker(worker, { type: "chunk", jobId: job.jobId, entryCandidates: next });
+        return;
     }
+    job.busy.delete(worker);
+    if (job.busy.size === 0) finishJob(job, false);
 }
 
-function handleWorkerMessage(event: MessageEvent<WorkerToMainMessage>) {
+function finishJob(job: ActiveJob, cancelWorkers: boolean) {
+    if (activeJob !== job) return;
+    activeJob = undefined;
+    if (cancelWorkers) {
+        for (const worker of workers) postToWorker(worker, { type: "cancel", jobId: job.jobId });
+    }
+    job.options.onComplete();
+}
+
+function handleWorkerMessage(worker: Worker, event: MessageEvent<WorkerToMainMessage>) {
     const msg = event.data;
-    if (msg.jobId !== activeJobId) return;
+    const job = activeJob;
+    if (!job || msg.jobId !== job.jobId) return;
 
     if (msg.type === "found") {
-        const section = activeOptions?.section;
-        if (!section) return;
-
-        if (section.candidates.size >= MAX_STORED_FILLS) {
-            stopReportingFills();
-            return;
-        }
-
-        if (!section.candidates.has(msg.sectionString)) {
-            const candidate: SectionCandidate = {
-                sectionId: section.id,
-                sectionString: msg.sectionString,
-                score: msg.score,
-                isFilteredOut: false,
-            };
-            section.candidates.set(msg.sectionString, candidate);
-            activeOptions?.onFound?.(msg.sectionString, candidate);
-
+        const { section, onFound, onProgress } = job.options;
+        for (const fill of msg.fills) {
+            onFound?.(fill.sectionString);
+            if (!section.candidates.has(fill.sectionString)) {
+                const candidate: SectionCandidate = {
+                    sectionId: section.id,
+                    sectionString: fill.sectionString,
+                    score: fill.score,
+                    isFilteredOut: false,
+                };
+                section.candidates.set(fill.sectionString, candidate);
+            }
             if (section.candidates.size >= MAX_STORED_FILLS) {
-                stopReportingFills();
+                onProgress?.();
+                finishJob(job, true);
+                return;
             }
         }
-        activeOptions?.onProgress?.();
+        onProgress?.();
         return;
     }
 
     if (msg.type === "error") {
         console.error("Fill worker failed:", msg.message);
-        handleWorkerFinished(msg.jobId);
+        handleWorkerIdle(job, worker, false);
         return;
     }
 
-    if (msg.type === "done") {
-        handleWorkerFinished(msg.jobId);
-    }
-}
-
-function handleWorkerFinished(jobId: number | undefined) {
-    if (jobId === undefined || jobId !== activeJobId) return;
-    outstandingWorkers--;
-    if (outstandingWorkers <= 0) {
-        const opts = activeOptions;
-        activeJobId = undefined;
-        activeOptions = undefined;
-        outstandingWorkers = 0;
-        reportingStopped = false;
-        opts?.onComplete();
+    if (msg.type === "chunkDone") {
+        handleWorkerIdle(job, worker, true);
     }
 }
 
 /** Cancel any in-flight fill job. */
 export function stopFill() {
-    if (activeJobId === undefined) return;
-    const jobId = activeJobId;
-    activeJobId = undefined;
-    activeOptions = undefined;
-    outstandingWorkers = 0;
-    reportingStopped = false;
+    const job = activeJob;
+    if (!job) return;
+    activeJob = undefined;
     for (const worker of workers) {
-        postToWorker(worker, { type: "cancel", jobId });
+        postToWorker(worker, { type: "cancel", jobId: job.jobId });
     }
 }
 
 /**
- * Start a parallel section fill. Partitions root entry candidates across workers.
+ * Start a parallel section fill. Root entry candidates are split into small chunks
+ * that workers pull from a shared queue as they finish earlier ones.
+ * Completes when every chunk is searched or MAX_STORED_FILLS fills are stored.
  * Returns false if there was nothing to search (already complete / no candidates).
  */
 export function startFill(options: StartFillOptions): boolean {
@@ -214,14 +222,14 @@ export function startFill(options: StartFillOptions): boolean {
 
     syncWordListIfNeeded();
 
-    const fillWord = selectWordToFill(grid, section);
+    const fillWord = options.rootWord ?? selectWordToFill(grid, section);
     if (!fillWord) {
         options.onComplete();
         return false;
     }
 
-    const squares = getSquaresForWord(grid, fillWord);
-    const entryCandidates = buildEntryCandidates(grid, fillWord, squares, false);
+    const entryCandidates = options.rootCandidates
+        ?? buildEntryCandidates(grid, fillWord, getSquaresForWord(grid, fillWord), false);
     if (entryCandidates.length === 0) {
         options.onComplete();
         return false;
@@ -231,28 +239,31 @@ export function startFill(options: StartFillOptions): boolean {
     ensureWorkers(n);
     syncWordListIfNeeded();
 
-    const slices = partitionCandidates(entryCandidates, n);
-    const jobId = nextJobId++;
-    activeJobId = jobId;
-    activeOptions = options;
-    outstandingWorkers = slices.length;
-    reportingStopped = false;
+    const job: ActiveJob = {
+        jobId: nextJobId++,
+        options,
+        queue: chunkCandidates(entryCandidates, n),
+        busy: new Set(),
+    };
+    activeJob = job;
 
-    section.fillState = createRootFillSearchState(grid, fillWord, entryCandidates);
+    section.fillState = createRootFillSearchState(grid, section, fillWord, entryCandidates);
 
     const workerGrid = stripGridLookups(grid);
     const workerSection = sectionForWorker(section);
 
-    for (let i = 0; i < slices.length; i++) {
-        postToWorker(workers[i], {
-            type: "start",
-            jobId,
+    for (let i = 0; i < n && job.queue.length > 0; i++) {
+        const worker = workers[i];
+        job.busy.add(worker);
+        postToWorker(worker, {
+            type: "startJob",
+            jobId: job.jobId,
             grid: workerGrid,
             section: workerSection,
             fillWord,
-            entryCandidates: slices[i],
             fillFilter: options.fillFilter,
         });
+        postToWorker(worker, { type: "chunk", jobId: job.jobId, entryCandidates: job.queue.shift()! });
     }
 
     return true;

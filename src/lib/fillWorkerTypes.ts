@@ -1,4 +1,5 @@
 import { EntryCandidate } from "../models/EntryCandidate";
+import { FillFilter } from "../models/FillFilter";
 import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { Section } from "../models/Section";
@@ -12,33 +13,31 @@ export type WorkerSection = Pick<
     "id" | "openSquareCount" | "squares" | "words" | "stackWords" | "neighboringCrosses"
 >;
 
-export type FillWordFilterPayload = {
-    maxLikelyGettable: number;
-    likelyWords: string[];
-};
+export type FillWordFilterPayload = FillFilter;
 
 export type MainToWorkerMessage =
     | { type: "initWordList"; index: WordIndexInitPayload }
+    /** Job context, sent once per worker per job; root candidates follow as chunks. */
     | {
-        type: "start";
+        type: "startJob";
         jobId: number;
         grid: WorkerGrid;
         section: WorkerSection;
         fillWord: GridWord;
-        entryCandidates: EntryCandidate[];
         fillFilter?: FillWordFilterPayload;
     }
-    | { type: "cancel"; jobId: number }
-    | { type: "stopReporting"; jobId: number };
+    /** Search the subtrees of these root candidates; reply with chunkDone. */
+    | { type: "chunk"; jobId: number; entryCandidates: EntryCandidate[] }
+    | { type: "cancel"; jobId: number };
+
+export interface FoundFillPayload {
+    sectionString: string;
+    score: number;
+}
 
 export type WorkerToMainMessage =
-    | {
-        type: "found";
-        jobId: number;
-        sectionString: string;
-        score: number;
-    }
-    | { type: "done"; jobId: number }
+    | { type: "found"; jobId: number; fills: FoundFillPayload[] }
+    | { type: "chunkDone"; jobId: number }
     | { type: "error"; jobId: number; message: string };
 
 export function stripGridLookups(grid: GridState): WorkerGrid {

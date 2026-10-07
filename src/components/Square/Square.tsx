@@ -22,7 +22,8 @@ function getSquareElement(props: SquareProps) {
                         between(props.constraintSum, 1, 5) ? " grid-square-constrained-3" : 
                         between(props.constraintSum, 1, 10) ? " grid-square-constrained-2" : 
                         between(props.constraintSum, 1, 15) ? " grid-square-constrained-1" : ""
-                        )} 
+                        ) +
+                        (props.gettableCrossingClass ? " " + props.gettableCrossingClass : "")} 
                     data-row={props.row} data-col={props.col}>
             {props.isCircled && 
                 <div className="grid-square-circled"></div>
@@ -30,7 +31,8 @@ function getSquareElement(props: SquareProps) {
             <div className="grid-number">{props.number ?? ""}</div>
             <div className={"grid-content" + 
                         (content.length > 1 ? " grid-content-rebus" : "") +
-                        (props.content && props.contentType === ContentType.User ? "" :
+                        (props.content && props.gettableLetterClass ? " " + props.gettableLetterClass :
+                         props.content && props.contentType === ContentType.User ? "" :
                          props.content && props.contentType === ContentType.ChosenWord ? " grid-content-chosen-word" :
                          props.content && props.contentType === ContentType.HoverChosenWord ? " grid-content-chosen-word-hover" :
                          props.content && props.contentType === ContentType.ChosenSection ? " grid-content-chosen-section" :

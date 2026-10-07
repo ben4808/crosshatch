@@ -6,17 +6,18 @@ import { GridWord } from "../models/GridWord";
 import { Section } from "../models/Section";
 import { getUnfilledCrosses } from "./fill";
 import { getLettersFromSquares } from "./grid";
+import { getSectionWordList } from "./section";
 import {
-    constraintLetterCount, getSquaresForWord, isWordFull, mapKeys, squareKey,
-    squareAllowsLetter, squareViableMask, maskToLetterList,
+    constraintLetterCount, getSquaresForWord, isWordFull, letterBit, squareViableMask,
 } from "./util";
-import { isAllowedFillWord, isKnownWord, queryIndexedWordList, queryWordsByLength } from "./wordList";
+import {
+    countLikelyGettableUsed, fillWordIdFilter, queryIndexedWordList, scanWordIds, wordIdOf, wordOfId,
+} from "./wordList";
+import Globals from "./windowService";
 
 const MAX_CANDIDATES_MANUAL = 100;
 /** Cap match counting used only for manual ranking. */
 const RANK_MATCH_CAP = 20;
-/** Prefer length-bucket scan over 2-letter combo explosion when open. */
-const MAX_ANCHOR_COMBOS_BEFORE_LENGTH_SCAN = 40;
 /** Cap used by MRV estimates so open slots stay cheap. */
 const MRV_COUNT_CAP = 50;
 /** Forward-check only needs existence of one legal entry. */
@@ -29,35 +30,87 @@ export function populateAndScoreEntryCandidates(node: FillNode, isForManualFill:
     return node.entryCandidates.length > 0;
 }
 
-/** Build candidates for autofill frames without allocating a FillNode. */
+type AllowWordFn = (word: string) => boolean;
+type IdPredicate = (id: number) => boolean;
+
+/** Likely Gettable entries the grid already uses toward the fill quota. */
+export function getLikelyUsedCount(grid: GridState): number {
+    if (!Globals.fillFilter) return 0;
+    return grid.likelyUsedCount ?? countLikelyGettableUsed(grid.usedWords);
+}
+
+function makeUsedCheck(grid: GridState): IdPredicate {
+    const ids = grid.usedWordIds;
+    if (ids && grid.usedWordIdsIndex === Globals.wordList) return id => ids[id] === 1;
+    const used = grid.usedWords;
+    return id => used.size > 0 && used.has(wordOfId(id));
+}
+
+/** Per-position letter masks: placed letters are single bits. */
+function slotMasks(squares: GridSquare[]): Int32Array {
+    const masks = new Int32Array(squares.length);
+    for (let i = 0; i < squares.length; i++) {
+        const sq = squares[i];
+        masks[i] = sq.content ? letterBit(sq.content) : squareViableMask(sq);
+    }
+    return masks;
+}
+
+/**
+ * Build candidates for autofill frames without allocating a FillNode.
+ * allowWord overrides the fill filter for this word only (crosses still use the filter).
+ */
 export function buildEntryCandidates(
     grid: GridState,
     word: GridWord,
     squares: GridSquare[],
     isForManualFill: boolean,
+    allowWord?: AllowWordFn,
 ): EntryCandidate[] {
     if (isForManualFill && isWordFull(squares)) {
         return [{ word: getLettersFromSquares(squares), score: 1 }];
     }
+    if (!Globals.wordList) return [];
 
-    let pattern = getLettersFromSquares(squares);
-    let usedWords = grid.usedWords;
-    let entries = getPatternEntries(squares, pattern, usedWords);
-    let crosses = prepareCrossInfos(grid, word, squares);
-    let candidates: EntryCandidate[] = [];
+    const isUsed = makeUsedCheck(grid);
+    const allowed = fillWordIdFilter(getLikelyUsedCount(grid));
+    const crosses = prepareCrossInfos(grid, word, squares);
+    const candidates: EntryCandidate[] = [];
 
-    for (let entry of entries) {
-        let scored = scoreEntryAgainstCrosses(grid, squares, entry, crosses, isForManualFill);
-        if (scored === undefined) continue;
+    scanWordIds(slotMasks(squares), id => {
+        if (isUsed(id)) return false;
+        let entry: string | undefined;
+        if (allowWord) {
+            entry = wordOfId(id);
+            if (!allowWord(entry)) return false;
+        } else if (allowed && !allowed(id)) {
+            return false;
+        }
+        entry = entry ?? wordOfId(id);
 
-        candidates.push({ word: entry, score: scored });
-        if (isForManualFill && candidates.length >= MAX_CANDIDATES_MANUAL) break;
-    }
+        const score = scoreEntryAgainstCrosses(id, entry, crosses, isForManualFill, isUsed, allowed);
+        if (score === undefined) return false;
+        candidates.push({ word: entry, score, id });
+        return isForManualFill && candidates.length >= MAX_CANDIDATES_MANUAL;
+    });
 
     if (isForManualFill) {
         candidates.sort((a, b) => b.score - a.score);
     }
     return candidates;
+}
+
+/** Unused, filter-allowed dictionary words fitting the squares' letters and masks. */
+function getPatternEntries(grid: GridState, squares: GridSquare[]): string[] {
+    const isUsed = makeUsedCheck(grid);
+    const allowed = fillWordIdFilter(getLikelyUsedCount(grid));
+    const out: string[] = [];
+    scanWordIds(slotMasks(squares), id => {
+        if (isUsed(id) || (allowed && !allowed(id))) return false;
+        out.push(wordOfId(id));
+        return false;
+    });
+    return out;
 }
 
 export function populateNoHeuristicEntryCandidates(node: FillNode, dontRecalc?: boolean) {
@@ -71,7 +124,7 @@ export function populateNoHeuristicEntryCandidates(node: FillNode, dontRecalc?: 
     let entries = queryIndexedWordList(pattern).filter(e => !usedWords.has(e));
 
     if (entries.length === 0 && pattern.includes("-")) {
-        entries = getPatternEntries(squares, pattern, usedWords);
+        entries = getPatternEntries(node.startGrid, squares);
     }
 
     node.entryCandidates = entries.map(entry => ({
@@ -84,8 +137,7 @@ export function populateNoHeuristicEntryCandidates(node: FillNode, dontRecalc?: 
  * Cheap MRV heuristic: fewer remaining options → fill this word first.
  * Fully open slots use a letter-product estimate; partial patterns query with a cap.
  */
-export function estimateWordOpenness(squares: GridSquare[], usedWords: Map<string, boolean>): number {
-    let pattern = getLettersFromSquares(squares);
+export function estimateWordOpenness(grid: GridState, squares: GridSquare[]): number {
     let openCount = 0;
     let letterProd = 1;
 
@@ -100,184 +152,80 @@ export function estimateWordOpenness(squares: GridSquare[], usedWords: Map<strin
     if (openCount === 0) return Infinity;
     if (openCount === squares.length) return letterProd;
 
-    return countPatternEntries(squares, pattern, usedWords, MRV_COUNT_CAP);
+    return countPatternEntries(grid, squares, MRV_COUNT_CAP);
+}
+
+export interface ForwardCheckFailure {
+    /** The word left without entries, or the two completed words that duplicate each other. */
+    words: GridWord[];
+    duplicate: boolean;
 }
 
 /**
  * After placing a word, reject the branch if any remaining section word has
  * zero legal (non-duplicate) entries — fail-first forward checking.
- * Also rejects in-section duplicated completed words.
  *
  * newlyClaimed: words added by the latest placement. When provided, only
  * unfilled words of those lengths are re-queried (others can't have lost
- * candidates via the used-word set). Empty viable-letter squares are
- * always checked.
+ * candidates via the used-word set), and completed words aren't re-compared
+ * (placement already rejects duplicates). Without it, completed section words
+ * are checked for duplicates. Empty viable-letter squares are always checked.
  */
 export function forwardCheckSection(
     grid: GridState,
     section: Section,
     newlyClaimed?: string[],
-): boolean {
-    let seenFilled = new Set<string>();
+): ForwardCheckFailure | undefined {
     let checkLengths = newlyClaimed
         ? new Set(newlyClaimed.map(w => w.length))
         : undefined;
+    let seenFilled = newlyClaimed ? undefined : new Map<string, GridWord>();
 
-    for (let key of mapKeys(section.words)) {
-        let word = grid.words.get(key)!;
+    for (let word of getSectionWordList(grid, section)) {
         let squares = getSquaresForWord(grid, word);
         if (isWordFull(squares)) {
-            let letters = getLettersFromSquares(squares);
-            if (seenFilled.has(letters)) return false;
-            seenFilled.add(letters);
+            if (seenFilled) {
+                let letters = getLettersFromSquares(squares);
+                let other = seenFilled.get(letters);
+                if (other) return { words: [other, word], duplicate: true };
+                seenFilled.set(letters, word);
+            }
             continue;
         }
 
         for (let sq of squares) {
             if (!sq.content && sq.viableMask === 0) {
-                return false;
+                return { words: [word], duplicate: false };
             }
         }
 
         if (checkLengths && !checkLengths.has(squares.length)) continue;
 
-        if (countPatternEntries(squares, getLettersFromSquares(squares), grid.usedWords, FORWARD_CHECK_CAP) === 0) {
-            return false;
+        if (countPatternEntries(grid, squares, FORWARD_CHECK_CAP) === 0) {
+            return { words: [word], duplicate: false };
         }
     }
-    return true;
+    return undefined;
 }
 
-function getPatternEntries(
-    squares: GridSquare[],
-    pattern: string,
-    usedWords?: Map<string, boolean>,
-): string[] {
-    let fixedCount = 0;
-    for (let i = 0; i < pattern.length; i++) {
-        if (pattern[i] !== "-") fixedCount++;
-    }
-
-    let raw: string[];
-    if (fixedCount >= 1) {
-        raw = queryIndexedWordList(pattern);
-    }
-    else {
-        raw = entriesViaAnchorCombos(squares, pattern);
-    }
-
-    return raw.filter(entry => {
-        if (usedWords && usedWords.has(entry)) return false;
-        if (!isAllowedFillWord(entry, usedWords)) return false;
-        for (let i = 0; i < squares.length; i++) {
-            if (!squareAllowsLetter(squares[i], entry[i])) return false;
-        }
-        return true;
-    });
-}
-
-function countPatternEntries(
-    squares: GridSquare[],
-    pattern: string,
-    usedWords: Map<string, boolean>,
-    cap: number,
-): number {
-    let fixedCount = 0;
-    for (let i = 0; i < pattern.length; i++) {
-        if (pattern[i] !== "-") fixedCount++;
-    }
-
-    let raw: string[];
-    if (fixedCount >= 1) {
-        raw = queryIndexedWordList(pattern);
-    }
-    else {
-        raw = entriesViaAnchorCombos(squares, pattern);
-    }
-
+function countPatternEntries(grid: GridState, squares: GridSquare[], cap: number): number {
+    const isUsed = makeUsedCheck(grid);
+    const allowed = fillWordIdFilter(getLikelyUsedCount(grid));
     let count = 0;
-    for (let entry of raw) {
-        if (usedWords.has(entry)) continue;
-        if (!isAllowedFillWord(entry, usedWords)) continue;
-        let ok = true;
-        for (let i = 0; i < squares.length; i++) {
-            if (!squareAllowsLetter(squares[i], entry[i])) {
-                ok = false;
-                break;
-            }
-        }
-        if (!ok) continue;
-        count++;
-        if (count >= cap) return cap;
-    }
-    return count;
-}
-
-function entriesViaAnchorCombos(squares: GridSquare[], pattern: string): string[] {
-    let anchors = pickAnchorSquares(squares);
-    if (anchors.length === 0) {
-        return queryWordsByLength(pattern.length);
-    }
-
-    let combos = generateAllAnchorCombos(squares, anchors);
-    if (combos.length > MAX_ANCHOR_COMBOS_BEFORE_LENGTH_SCAN) {
-        return queryWordsByLength(pattern.length);
-    }
-
-    let seen = new Map<string, boolean>();
-    let results: string[] = [];
-
-    for (let combo of combos) {
-        let anchored = pattern;
-        for (let i = 0; i < anchors.length; i++) {
-            anchored = insertLetterIntoPattern(anchored, combo[i], squares, anchors[i]);
-        }
-        for (let entry of queryIndexedWordList(anchored)) {
-            if (!seen.has(entry)) {
-                seen.set(entry, true);
-                results.push(entry);
-            }
-        }
-    }
-    return results;
-}
-
-function pickAnchorSquares(squares: GridSquare[]): string[] {
-    let ranked: [string, number][] = [];
-    for (let sq of squares) {
-        let count = constraintLetterCount(sq);
-        if (count === 0) continue;
-        ranked.push([squareKey(sq), count]);
-    }
-    ranked.sort((a, b) => a[1] - b[1]);
-
-    if (ranked.length >= 2) return [ranked[0][0], ranked[1][0]];
-    if (ranked.length === 1) return [ranked[0][0]];
-    return [];
-}
-
-function generateAllAnchorCombos(squares: GridSquare[], anchorSquareKeys: string[]): string[][] {
-    let constraintLetters = anchorSquareKeys.map(sqKey => {
-        let sq = squares.find(s => squareKey(s) === sqKey)!;
-        if (sq.content) return [sq.content];
-        return maskToLetterList(squareViableMask(sq));
+    scanWordIds(slotMasks(squares), id => {
+        if (isUsed(id) || (allowed && !allowed(id))) return false;
+        return ++count >= cap;
     });
-
-    let combos: string[][] = [[]];
-    for (let letters of constraintLetters) {
-        let next: string[][] = [];
-        for (let prefix of combos) {
-            for (let letter of letters) {
-                next.push([...prefix, letter]);
-            }
-        }
-        combos = next;
-    }
-    return combos;
+    return count;
 }
 
 interface CrossInfo {
     squares: GridSquare[];
+    /** Cross masks before the candidate's letters are applied. */
+    baseMasks: Int32Array;
+    /** Working copy of baseMasks for the candidate being scored. */
+    masks: Int32Array;
+    openCount: number;
     /** For each index in the fill word, the index in this cross (-1 if no intersection). */
     wordToCrossIdx: Int8Array;
 }
@@ -289,16 +237,18 @@ function prepareCrossInfos(grid: GridState, word: GridWord, wordSquares: GridSqu
         let wordToCrossIdx = new Int8Array(wordSquares.length);
         wordToCrossIdx.fill(-1);
         for (let i = 0; i < wordSquares.length; i++) {
-            let sq = wordSquares[i];
-            for (let j = 0; j < crossSquares.length; j++) {
-                if (crossSquares[j].row === sq.row && crossSquares[j].col === sq.col) {
-                    wordToCrossIdx[i] = j;
-                    break;
-                }
-            }
+            let j = crossSquares.indexOf(wordSquares[i]);
+            if (j >= 0) wordToCrossIdx[i] = j;
         }
-        return { squares: crossSquares, wordToCrossIdx };
+        let baseMasks = slotMasks(crossSquares);
+        let openCount = 0;
+        for (let sq of crossSquares) if (!sq.content) openCount++;
+        return { squares: crossSquares, baseMasks, masks: new Int32Array(crossSquares.length), openCount, wordToCrossIdx };
     });
+}
+
+function letterOfMask(mask: number): string {
+    return String.fromCharCode(65 + 31 - Math.clz32(mask));
 }
 
 /**
@@ -307,42 +257,38 @@ function prepareCrossInfos(grid: GridState, word: GridWord, wordSquares: GridSqu
  * (or completed by this same placement).
  */
 function scoreEntryAgainstCrosses(
-    grid: GridState,
-    wordSquares: GridSquare[],
+    entryId: number,
     entry: string,
     crosses: CrossInfo[],
     includeDetailedScore: boolean,
+    isUsed: IdPredicate,
+    allowed: IdPredicate | undefined,
 ): number | undefined {
     let crossScore = 0;
     let minCrossScore = 1e8;
     let matchCap = includeDetailedScore ? RANK_MATCH_CAP : 1;
-    let usedWords = grid.usedWords;
-    let claimed = new Set<string>([entry]);
+    let claimedIds = [entryId];
 
     for (let cross of crosses) {
-        let crossSquares = cross.squares;
-        let crossPatternChars = new Array<string>(crossSquares.length);
-        for (let j = 0; j < crossSquares.length; j++) {
-            crossPatternChars[j] = crossSquares[j].content || "-";
-        }
-        for (let i = 0; i < wordSquares.length; i++) {
+        let masks = cross.masks;
+        masks.set(cross.baseMasks);
+        let open = cross.openCount;
+        for (let i = 0; i < entry.length; i++) {
             let idx = cross.wordToCrossIdx[i];
-            if (idx >= 0) crossPatternChars[idx] = entry[i];
+            if (idx < 0 || cross.squares[idx].content) continue;
+            let bit = letterBit(entry[i]);
+            if ((masks[idx] & bit) === 0) return undefined;
+            masks[idx] = bit;
+            open--;
         }
 
-        let fullyDetermined = true;
-        for (let j = 0; j < crossPatternChars.length; j++) {
-            if (crossPatternChars[j] === "-") {
-                fullyDetermined = false;
-                break;
-            }
-        }
-
-        if (fullyDetermined) {
-            let crossPattern = crossPatternChars.join("");
-            if (usedWords.has(crossPattern) || claimed.has(crossPattern)) return undefined;
-            if (!isKnownWord(crossPattern)) return undefined;
-            claimed.add(crossPattern);
+        if (open === 0) {
+            let crossWord = "";
+            for (let j = 0; j < masks.length; j++) crossWord += letterOfMask(masks[j]);
+            let id = wordIdOf(crossWord);
+            if (id < 0 || isUsed(id) || claimedIds.includes(id)) return undefined;
+            if (allowed && !allowed(id)) return undefined;
+            claimedIds.push(id);
             if (includeDetailedScore) {
                 crossScore += 1;
                 if (1 < minCrossScore) minCrossScore = 1;
@@ -350,36 +296,12 @@ function scoreEntryAgainstCrosses(
             continue;
         }
 
-        // Cheap domain check: each newly fixed letter must be allowed on that square.
-        for (let i = 0; i < wordSquares.length; i++) {
-            let idx = cross.wordToCrossIdx[i];
-            if (idx < 0) continue;
-            let sq = crossSquares[idx];
-            if (sq.content) continue;
-            if (!squareAllowsLetter(sq, entry[i])) return undefined;
-        }
-
-        let crossPattern = crossPatternChars.join("");
         let matchCount = 0;
-        for (let match of queryIndexedWordList(crossPattern)) {
-            if (usedWords.has(match) || claimed.has(match)) continue;
-            let ok = true;
-            for (let i = 0; i < crossSquares.length; i++) {
-                let sq = crossSquares[i];
-                if (sq.content) continue;
-                if (crossPatternChars[i] !== "-" && crossPatternChars[i] !== match[i]) {
-                    ok = false;
-                    break;
-                }
-                if (!squareAllowsLetter(sq, match[i])) {
-                    ok = false;
-                    break;
-                }
-            }
-            if (!ok) continue;
-            matchCount++;
-            if (matchCount >= matchCap) break;
-        }
+        scanWordIds(masks, id => {
+            if (isUsed(id) || claimedIds.includes(id)) return false;
+            if (allowed && !allowed(id)) return false;
+            return ++matchCount >= matchCap;
+        });
 
         if (matchCount === 0) return undefined;
 
@@ -392,9 +314,4 @@ function scoreEntryAgainstCrosses(
     if (!includeDetailedScore) return 1;
     if (crosses.length === 0) return 1;
     return minCrossScore * 1000 + crossScore;
-}
-
-function insertLetterIntoPattern(pattern: string, newLetter: string, squares: GridSquare[], sqKey: string): string {
-    let i = squares.findIndex(sq => squareKey(sq) === sqKey);
-    return pattern.substring(0, i) + newLetter + pattern.substring(i + 1);
 }

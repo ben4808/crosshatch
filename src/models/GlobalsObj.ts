@@ -1,3 +1,4 @@
+import { FillFilter } from "./FillFilter";
 import { FillNode } from "./FillNode";
 import { FillStatus } from "./FillStatus";
 import { GridState } from "./GridState";
@@ -34,10 +35,7 @@ export interface GlobalsObj {
     wordGettable?: Map<string, string>;
     /** Per-entry desirability from the word-list CSV (e.g. "Prefer"). */
     wordDesirability?: Map<string, string>;
-    /** Active fill constraint used by Make 5x5 (and workers). */
-    fillFilter?: {
-        maxLikelyGettable: number;
-        likelyWords: string[];
-    };
+    /** Active gettability constraint used by the fill (and workers). */
+    fillFilter?: FillFilter;
     likelyGettableSet?: Set<string>;
 }

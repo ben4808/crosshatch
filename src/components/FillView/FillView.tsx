@@ -3,13 +3,13 @@ import { SymmetryType } from '../../models/SymmetryType';
 import "./FillView.scss";
 import Globals from '../../lib/windowService';
 import { FillStatus } from '../../models/FillStatus';
-import { adoptGridKeepingFills, getEntryAtWordKey, getGrid, getSection, mapKeys, mapValues } from '../../lib/util';
+import { getEntryAtWordKey, getGrid, getSection, mapKeys, mapValues } from '../../lib/util';
 import { calculateSectionOrder, entriesFromSectionString, entryFromSectionString, getLongestStackWord, getPhoneticName, insertSectionCandidateIntoGrid, 
     makeNewSection, updateSectionFilters } from '../../lib/section';
-import { clearFill, eraseSectionCandidateFromGrid, entriesFromGridString, gridFromString, insertEntryIntoGrid, longestEntryFromGridString, updateGridConstraintInfo, updateManualEntryCandidates } from '../../lib/grid';
+import { clearFill, eraseSectionCandidateFromGrid, insertEntryIntoGrid, updateGridConstraintInfo, updateManualEntryCandidates } from '../../lib/grid';
 import { fillSectionWord, makeNewNode } from '../../lib/fill';
-import { ensureWordList, startFill, terminateFillWorkers } from '../../lib/fillWorkerPool';
-import { cancelMake5x5, startMake5x5 } from '../../lib/make5x5';
+import { ensureWordList, terminateFillWorkers } from '../../lib/fillWorkerPool';
+import { cancelGettableFill, startGettableFill } from '../../lib/gettableFill';
 import { FillNode } from '../../models/FillNode';
 import { AppContext } from '../../AppContext';
 import { ContentType } from '../../models/ContentType';
@@ -26,7 +26,7 @@ function FillView() {
     const [showSectionCandidates, setShowSectionCandidates] = useState(true);
     const [isWordListLoading, setIsWordListLoading] = useState(false);
     const [isFillRunning, setIsFillRunning] = useState(false);
-    const [make5x5, setMake5x5] = useState(false);
+    const [useMaybeGettableSeed, setUseMaybeGettableSeed] = useState(false);
     const [classifyFillWords, setClassifyFillWords] = useState<string[] | undefined>(undefined);
     const fillUiLastUpdateRef = useRef(0);
 
@@ -41,62 +41,22 @@ function FillView() {
 
     function handleToggleFill() {
         if (isFillRunning) {
-            cancelMake5x5();
-            setMake5x5(false);
+            cancelGettableFill();
             clearFill(getGrid());
             setFillStatus(FillStatus.Ready);
             setIsFillRunning(false);
             triggerUpdate();
-        }
-        else {
-            // Fresh search each run; leave previously found fills unless user clears them.
-            let section = getSection();
-            section.fillState = undefined;
-            fillUiLastUpdateRef.current = 0;
-            setFillStatus(FillStatus.Running);
-            setIsFillRunning(true);
-
-            startFill({
-                grid: getGrid(),
-                section,
-                onProgress: () => {
-                    const now = performance.now();
-                    if (now - fillUiLastUpdateRef.current >= FILL_COUNT_UI_INTERVAL_MS) {
-                        fillUiLastUpdateRef.current = now;
-                        // Use context method directly — stable functional setState in App.
-                        appContext.triggerUpdate();
-                    }
-                },
-                onComplete: () => {
-                    clearFill(getGrid());
-                    Globals.fillStatus = FillStatus.Complete;
-                    setIsFillRunning(false);
-                    appContext.triggerUpdate();
-                },
-            });
-        }
-    }
-
-    function handleMake5x5Toggle() {
-        if (make5x5) {
-            cancelMake5x5();
-            setMake5x5(false);
-            setIsFillRunning(false);
-            setFillStatus(Globals.wordList ? FillStatus.Ready : FillStatus.NoWordList);
-            triggerUpdate();
             return;
         }
 
-        setMake5x5(true);
+        // Fresh search each run; leave previously found fills unless user clears them.
         fillUiLastUpdateRef.current = 0;
-        setFillStatus(FillStatus.Running);
-        setIsFillRunning(true);
-
-        const started = startMake5x5({
+        const result = startGettableFill({
             onProgress: () => {
                 const now = performance.now();
                 if (now - fillUiLastUpdateRef.current >= FILL_COUNT_UI_INTERVAL_MS) {
                     fillUiLastUpdateRef.current = now;
+                    // Use context method directly — stable functional setState in App.
                     appContext.triggerUpdate();
                 }
             },
@@ -104,18 +64,17 @@ function FillView() {
                 setIsFillRunning(false);
                 appContext.triggerUpdate();
             },
-            onNoSeed: () => {
-                setMake5x5(false);
-                setIsFillRunning(false);
-                setFillStatus(FillStatus.Ready);
-                window.alert("No 5-letter Maybe Gettable / Prefer entries found in the word list.");
-                appContext.triggerUpdate();
-            },
-        });
+        }, { useMaybeGettableSeed });
 
-        if (!started) {
-            setIsFillRunning(false);
+        if (result === "noSeedWords") {
+            window.alert("No Maybe Gettable / Prefer entries found in the word list.");
+            return;
         }
+        if (result === "nothingToFill") {
+            window.alert("There are no open entries to fill.");
+            return;
+        }
+        setIsFillRunning(true);
         triggerUpdate();
     }
 
@@ -175,16 +134,6 @@ function FillView() {
         if (!candidate) {
             let node = makeNewNode(grid, 0);
             return node;
-        }
-        if (candidate.gridString) {
-            let filled = gridFromString(candidate.gridString);
-            return {
-                startGrid: filled,
-                endGrid: filled,
-                entryCandidates: [],
-                candidateIndex: 0,
-                depth: 0,
-            } as FillNode;
         }
 
         let node = makeNewNode(grid, 0);
@@ -322,15 +271,7 @@ function FillView() {
             section.selectedCandidate = candidateKey;
 
             updateManualEntryCandidates(node.endGrid);
-
-            if (section.candidates.get(candidateKey)?.gridString) {
-                adoptGridKeepingFills(node.endGrid);
-                let adopted = getSection();
-                adopted.selectedCandidate = candidateKey;
-                Globals.selectedSectionCandidateKeys!.set(adopted.id, candidateKey);
-            } else {
-                Globals.activeGrid = node.endGrid;
-            }
+            Globals.activeGrid = node.endGrid;
         }
         
         updateSectionFilters();
@@ -361,12 +302,7 @@ function FillView() {
         event.stopPropagation();
         let section = getSection();
         if (!section.selectedCandidate) return;
-        let sc = section.candidates.get(section.selectedCandidate);
-        if (sc?.gridString) {
-            setClassifyFillWords(entriesFromGridString(sc.gridString));
-        } else {
-            setClassifyFillWords(entriesFromSectionString(section, section.selectedCandidate));
-        }
+        setClassifyFillWords(entriesFromSectionString(section, section.selectedCandidate));
     }
 
     function clearSectionCandidates() {
@@ -401,9 +337,8 @@ function FillView() {
     function clearWordLists() {
         if (!window.confirm("Are you sure you want to clear the word lists?")) return;
 
+        cancelGettableFill();
         terminateFillWorkers();
-        cancelMake5x5();
-        setMake5x5(false);
         setIsFillRunning(false);
         Globals.wordList = undefined;
         Globals.wordLists = [];
@@ -494,13 +429,13 @@ function FillView() {
                         checked={isFillRunning} onChange={handleToggleFill} />
                     <label className="form-check-label" htmlFor="fillSwitch">Fill</label>
                 </div>
-                {grid.width === 5 && grid.height === 5 &&
-                <div className="form-check form-switch fill-switch">
-                    <input type="checkbox" className="form-check-input" id="make5x5Switch"
-                        checked={make5x5} onChange={handleMake5x5Toggle} />
-                    <label className="form-check-label" htmlFor="make5x5Switch">Make 5x5</label>
+                <div className="form-check form-switch fill-switch fill-seed-option">
+                    <input type="checkbox" className="form-check-input" id="maybeGettableSeed"
+                        checked={useMaybeGettableSeed}
+                        disabled={isFillRunning}
+                        onChange={() => setUseMaybeGettableSeed(v => !v)} />
+                    <label className="form-check-label" htmlFor="maybeGettableSeed">Maybe Gettable seed</label>
                 </div>
-                }
                 <br />
             </>
             }
@@ -607,10 +542,8 @@ function FillView() {
                             </div>
                         )}
                         {showSectionCandidates && sectionCandidates.map(sc => {
-                            let entry = sc.gridString
-                                ? longestEntryFromGridString(sc.gridString)
-                                : entryFromSectionString(activeSection, sc.sectionString, getLongestStackWord(activeSection));
-                            let candidateKey = sc.gridString || sc.sectionString;
+                            let entry = entryFromSectionString(activeSection, sc.sectionString, getLongestStackWord(activeSection));
+                            let candidateKey = sc.sectionString;
 
                             return (
                             <div className={"fill-list-row-wrapper" + (selectedScKey === candidateKey ? " fill-list-row-selected" : "")}

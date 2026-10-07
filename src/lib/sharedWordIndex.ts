@@ -165,18 +165,150 @@ function compareToString(index: PackedWordIndex, wordId: number, word: string): 
     return 0;
 }
 
-export function hasPackedWord(index: PackedWordIndex, word: string): boolean {
+/** Word id for an A–Z word, or -1 if it isn't in the index. */
+export function findPackedWordId(index: PackedWordIndex, word: string): number {
     const L = word.length;
-    if (L < MIN_LEN || L > MAX_LEN) return false;
+    if (L < MIN_LEN || L > MAX_LEN) return -1;
     const li = L - MIN_LEN;
     let lo = index.byLengthStart[li];
     let hi = lo + index.byLengthCount[li] - 1;
     while (lo <= hi) {
         const mid = (lo + hi) >> 1;
         const cmp = compareToString(index, mid, word);
-        if (cmp === 0) return true;
+        if (cmp === 0) return mid;
         if (cmp < 0) lo = mid + 1;
         else hi = mid - 1;
+    }
+    return -1;
+}
+
+export function hasPackedWord(index: PackedWordIndex, word: string): boolean {
+    return findPackedWordId(index, word) >= 0;
+}
+
+const ALL_MASK = (1 << LETTERS) - 1;
+/** Largest letter-combination count for which per-pair buckets beat a single-position scan. */
+const MAX_PAIR_COMBOS = 64;
+
+function maskPopcount(mask: number): number {
+    let n = 0;
+    while (mask) {
+        mask &= mask - 1;
+        n++;
+    }
+    return n;
+}
+
+/**
+ * Visit ids of words of length masks.length whose letter at every position i is in
+ * masks[i] (bit c = letter c). Buckets are chosen from the most selective positions;
+ * per-letter buckets at a fixed position (or pair) are disjoint, so no id is visited twice.
+ * Stops as soon as visit returns true. Returns whether it stopped early.
+ */
+export function scanPackedSlot(
+    index: PackedWordIndex,
+    masks: ArrayLike<number>,
+    visit: (id: number) => boolean | void,
+): boolean {
+    const L = masks.length;
+    if (L < MIN_LEN || L > MAX_LEN) return false;
+    const li = L - MIN_LEN;
+    const oneBase = oneKeyOffsetByLength[li];
+
+    let bestPos = -1;
+    let bestCost = Infinity;
+    let secondPos = -1;
+    let secondCost = Infinity;
+    for (let p = 0; p < L; p++) {
+        const m = masks[p];
+        if (m === 0) return false;
+        if (m === ALL_MASK) continue;
+        let cost = 0;
+        for (let c = 0; c < LETTERS; c++) {
+            if (m & (1 << c)) cost += index.oneCounts[oneBase + p * LETTERS + c];
+        }
+        if (cost === 0) return false;
+        if (cost < bestCost) {
+            secondPos = bestPos;
+            secondCost = bestCost;
+            bestPos = p;
+            bestCost = cost;
+        } else if (cost < secondCost) {
+            secondPos = p;
+            secondCost = cost;
+        }
+    }
+
+    let pairA = -1;
+    let pairB = -1;
+    let pairCost = Infinity;
+    if (secondPos >= 0
+        && maskPopcount(masks[bestPos]) * maskPopcount(masks[secondPos]) <= MAX_PAIR_COMBOS) {
+        pairA = Math.min(bestPos, secondPos);
+        pairB = Math.max(bestPos, secondPos);
+        pairCost = 0;
+        const mA = masks[pairA];
+        const mB = masks[pairB];
+        for (let c1 = 0; c1 < LETTERS; c1++) {
+            if (!(mA & (1 << c1))) continue;
+            for (let c2 = 0; c2 < LETTERS; c2++) {
+                if (!(mB & (1 << c2))) continue;
+                pairCost += index.twoCounts[twoKeyIndex(L, pairA + 1, pairB + 1, c1, c2)];
+            }
+        }
+        if (pairCost === 0) return false;
+    }
+
+    const chars = index.wordChars;
+    const offsets = index.wordOffsets;
+    const check = (id: number): boolean => {
+        const o = offsets[id];
+        for (let i = 0; i < L; i++) {
+            if (((masks[i] >>> chars[o + i]) & 1) === 0) return false;
+        }
+        return true;
+    };
+
+    if (pairCost <= bestCost && pairCost < index.byLengthCount[li]) {
+        const ids = index.twoWordIds;
+        const mA = masks[pairA];
+        const mB = masks[pairB];
+        for (let c1 = 0; c1 < LETTERS; c1++) {
+            if (!(mA & (1 << c1))) continue;
+            for (let c2 = 0; c2 < LETTERS; c2++) {
+                if (!(mB & (1 << c2))) continue;
+                const key = twoKeyIndex(L, pairA + 1, pairB + 1, c1, c2);
+                const start = index.twoStarts[key];
+                const end = start + index.twoCounts[key];
+                for (let k = start; k < end; k++) {
+                    const id = ids[k];
+                    if (check(id) && visit(id)) return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    if (bestPos >= 0 && bestCost < index.byLengthCount[li]) {
+        const ids = index.oneWordIds;
+        const m = masks[bestPos];
+        for (let c = 0; c < LETTERS; c++) {
+            if (!(m & (1 << c))) continue;
+            const key = oneBase + bestPos * LETTERS + c;
+            const start = index.oneStarts[key];
+            const end = start + index.oneCounts[key];
+            for (let k = start; k < end; k++) {
+                const id = ids[k];
+                if (check(id) && visit(id)) return true;
+            }
+        }
+        return false;
+    }
+
+    const start = index.byLengthStart[li];
+    const end = start + index.byLengthCount[li];
+    for (let id = start; id < end; id++) {
+        if (check(id) && visit(id)) return true;
     }
     return false;
 }

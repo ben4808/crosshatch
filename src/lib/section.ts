@@ -29,36 +29,58 @@ export function updateSectionFilters() {
     });
 }
 
-export function getSectionString(grid: GridState, section: Section): string {
-    let ret = [] as string[];
-    mapKeys(section.squares).sort().forEach(sqKey => {
-        let sq = getSquareAtKey(grid, sqKey);
-        let content = sq.content;
-        ret.push(content ? content! : "-");
+interface SectionLayout {
+    squares: Map<string, boolean>;
+    /** Square coordinates in sectionString order (sorted square keys). */
+    coords: [number, number][];
+    positionByKey: Map<string, number>;
+}
+
+const sectionLayouts = new WeakMap<Section, SectionLayout>();
+
+function getSectionLayout(section: Section): SectionLayout {
+    let layout = sectionLayouts.get(section);
+    if (layout && layout.squares === section.squares) return layout;
+    let keys = mapKeys(section.squares).sort();
+    let coords = keys.map(key => {
+        let tokens = key.substring(1, key.length - 1).split(",");
+        return [+tokens[0], +tokens[1]] as [number, number];
     });
-    return ret.join("");
+    layout = { squares: section.squares, coords, positionByKey: new Map(keys.map((key, i) => [key, i])) };
+    sectionLayouts.set(section, layout);
+    return layout;
+}
+
+/** Section square coordinates in sectionString order. */
+export function getSectionSquareCoords(section: Section): [number, number][] {
+    return getSectionLayout(section).coords;
+}
+
+const sectionWordLists = new WeakMap<Section, { words: Map<string, GridWord>; list: GridWord[] }>();
+
+/** The section's words resolved against grid.words (cached per section and word map). */
+export function getSectionWordList(grid: GridState, section: Section): GridWord[] {
+    let cached = sectionWordLists.get(section);
+    if (cached && cached.words === grid.words) return cached.list;
+    let list = mapKeys(section.words).map(key => grid.words.get(key)!).filter(w => w);
+    sectionWordLists.set(section, { words: grid.words, list });
+    return list;
+}
+
+export function getSectionString(grid: GridState, section: Section): string {
+    let coords = getSectionLayout(section).coords;
+    let ret = "";
+    for (let i = 0; i < coords.length; i++) {
+        let content = grid.squares[coords[i][0]][coords[i][1]].content;
+        ret += content ? content : "-";
+    }
+    return ret;
 }
 
 /** Letter at sqKey within a candidate's sectionString (sorted-key order). */
 export function sectionCandidateLetterAt(section: Section, sectionString: string, sqKey: string): string {
-    let keys = mapKeys(section.squares).sort();
-    let i = keys.indexOf(sqKey);
-    return i >= 0 ? sectionString[i] : "";
-}
-
-/** Apply sectionString letters onto a cloned base grid (for hover/apply UI). */
-export function hydrateSectionCandidate(baseGrid: GridState, section: Section, sectionString: string): GridState {
-    let grid = cloneGridForFill(baseGrid);
-    let keys = mapKeys(section.squares).sort();
-    for (let i = 0; i < keys.length; i++) {
-        let sq = getSquareAtKey(grid, keys[i]);
-        let ch = sectionString[i];
-        if (ch && ch !== "-") {
-            sq.content = ch;
-            sq.viableMask = letterBit(ch);
-        }
-    }
-    return grid;
+    let i = getSectionLayout(section).positionByKey.get(sqKey);
+    return i !== undefined ? sectionString[i] : "";
 }
 
 /** Longest-stack (or longest) word letters from a stored sectionString. */
@@ -308,8 +330,7 @@ export function getPhoneticName(n: number): string {
 }
 
 export function sectionCandidateKey(section: Section, grid: GridState): string {
-    let keys = mapKeys(section.squares).sort();
-    return keys.map(k => getSquareAtKey(grid, k).content!).join("");
+    return getSectionLayout(section).coords.map(([row, col]) => grid.squares[row][col].content!).join("");
 }
 
 export function makeNewSection(id: number): Section {
