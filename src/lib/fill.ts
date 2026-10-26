@@ -14,7 +14,7 @@ import { getSectionSquareCoords, getSectionWordList, newSectionCandidateFromGrid
 import { findPackedWordId } from './sharedWordIndex';
 import { cloneGridForFill, getSquaresForWord, isWordFull,
     getWordAtSquare, otherDir, getSection, getGrid, shuffleArray } from './util';
-import { countLikelyGettableUsed } from './wordList';
+import { countExtraUsed, countLikelyGettableUsed } from './wordList';
 import Globals from './windowService';
 
 /** Run steps for about this long before yielding to the event loop. */
@@ -274,6 +274,7 @@ function initSearchState(baseGrid: GridState, section: Section): FillSearchState
         grid.usedWordIdsIndex = index;
     }
     grid.likelyUsedCount = countLikelyGettableUsed(grid.usedWords);
+    grid.extraUsedCount = countExtraUsed(grid.usedWords);
 
     let openCount = 0;
     for (const [row, col] of getSectionSquareCoords(section)) {

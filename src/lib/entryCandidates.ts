@@ -11,7 +11,7 @@ import {
     constraintLetterCount, getSquaresForWord, isWordFull, letterBit, squareViableMask,
 } from "./util";
 import {
-    countLikelyGettableUsed, fillWordIdFilter, queryIndexedWordList, scanWordIds, wordIdOf, wordOfId,
+    countExtraUsed, countLikelyGettableUsed, fillWordIdFilter, queryIndexedWordList, scanWordIds, wordIdOf, wordOfId,
 } from "./wordList";
 import Globals from "./windowService";
 
@@ -37,6 +37,16 @@ type IdPredicate = (id: number) => boolean;
 export function getLikelyUsedCount(grid: GridState): number {
     if (!Globals.fillFilter) return 0;
     return grid.likelyUsedCount ?? countLikelyGettableUsed(grid.usedWords);
+}
+
+/** Crosswordese / Abbreviation entries the grid already uses toward the fill quota. */
+export function getExtraUsedCount(grid: GridState): number {
+    if (!Globals.fillFilter) return 0;
+    return grid.extraUsedCount ?? countExtraUsed(grid.usedWords);
+}
+
+function gridWordIdFilter(grid: GridState): IdPredicate | undefined {
+    return fillWordIdFilter(getLikelyUsedCount(grid), getExtraUsedCount(grid));
 }
 
 function makeUsedCheck(grid: GridState): IdPredicate {
@@ -73,7 +83,7 @@ export function buildEntryCandidates(
     if (!Globals.wordList) return [];
 
     const isUsed = makeUsedCheck(grid);
-    const allowed = fillWordIdFilter(getLikelyUsedCount(grid));
+    const allowed = gridWordIdFilter(grid);
     const crosses = prepareCrossInfos(grid, word, squares);
     const candidates: EntryCandidate[] = [];
 
@@ -103,7 +113,7 @@ export function buildEntryCandidates(
 /** Unused, filter-allowed dictionary words fitting the squares' letters and masks. */
 function getPatternEntries(grid: GridState, squares: GridSquare[]): string[] {
     const isUsed = makeUsedCheck(grid);
-    const allowed = fillWordIdFilter(getLikelyUsedCount(grid));
+    const allowed = gridWordIdFilter(grid);
     const out: string[] = [];
     scanWordIds(slotMasks(squares), id => {
         if (isUsed(id) || (allowed && !allowed(id))) return false;
@@ -210,7 +220,7 @@ export function forwardCheckSection(
 
 function countPatternEntries(grid: GridState, squares: GridSquare[], cap: number): number {
     const isUsed = makeUsedCheck(grid);
-    const allowed = fillWordIdFilter(getLikelyUsedCount(grid));
+    const allowed = gridWordIdFilter(grid);
     let count = 0;
     scanWordIds(slotMasks(squares), id => {
         if (isUsed(id) || (allowed && !allowed(id))) return false;

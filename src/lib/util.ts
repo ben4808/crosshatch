@@ -259,11 +259,12 @@ export function mapValues<TKey, TVal>(map: Map<TKey, TVal>): TVal[] {
 
 export function isUserFilled(sq: GridSquare): boolean {
     return sq.contentType === ContentType.User || sq.contentType === ContentType.ChosenWord 
-        || sq.contentType === ContentType.ChosenSection;
+        || sq.contentType === ContentType.ChosenSection || sq.contentType === ContentType.Seedword;
 }
 
 export function isUserOrWordFilled(sq: GridSquare): boolean {
-    return sq.contentType === ContentType.User || sq.contentType === ContentType.ChosenWord;
+    return sq.contentType === ContentType.User || sq.contentType === ContentType.ChosenWord
+        || sq.contentType === ContentType.Seedword;
 }
 
 export function isAcross(word: GridWord): boolean {

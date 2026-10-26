@@ -80,9 +80,34 @@
     text-shadow: 1px 1px 0 white, 1px -1px 0 white, -1px 1px 0 white, -1px -1px 0 white;
 }
 
+.grid-dot {
+    position: absolute;
+    top: 2px;
+    left: 50%;
+    width: 5px;
+    height: 5px;
+    margin-left: -1px;
+    border-radius: 50%;
+}
+.grid-dot-red {
+    background-color: #e6b0b0;
+}
+.grid-dot-orange {
+    background-color: #efc6a4;
+}
+.grid-dot-yellow {
+    background-color: #e6dca2;
+}
+.grid-dot-green {
+    background-color: #a9d1af;
+}
+
 .grid-content {
     padding-top: 3px;
     color: black;
+}
+.grid-content-seedword {
+    color: #1a5cff;
 }
 .grid-content-chosen-word {
     color: darken(steelblue, 10%);
@@ -109,7 +134,7 @@
     color: #e00000;
 }
 .grid-content-not-a-thing {
-    color: #8b0000;
+    color: #ff5a5a;
 }
 .grid-content-lively {
     color: seagreen;

@@ -20,6 +20,7 @@ export type FillTrailOp =
         word: string;
         id: number;
         countsTowardQuota: boolean;
+        countsTowardExtra: boolean;
     };
 
 export interface FillFrame {
@@ -44,6 +45,7 @@ export interface FillFrame {
 export interface FillClaim {
     depth: number;
     countsTowardQuota: boolean;
+    countsTowardExtra: boolean;
 }
 
 export interface FillSearchState {

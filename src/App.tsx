@@ -47,6 +47,9 @@ function App(props: AppProps) {
     Globals.selectedWordNode = undefined;
     if (Globals.wordLists === undefined) Globals.wordLists = [];
     Globals.fillStatus = Globals.wordList !== undefined ? FillStatus.Ready : FillStatus.NoWordList;
+    Globals.seedEntry = undefined;
+    Globals.seedWordKey = undefined;
+    Globals.seedDisplayText = undefined;
 
     initializeSessionGlobals();
     clearFill(Globals.activeGrid!);

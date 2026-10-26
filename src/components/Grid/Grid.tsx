@@ -6,10 +6,10 @@ import Square from '../Square/Square';
 import { GridState } from '../../models/GridState';
 import { WordDirection } from '../../models/WordDirection';
 import Globals from '../../lib/windowService';
-import { compareTuples, doesWordContainSquare, getGrid, getSection, getSelectedWord, 
+import { compareTuples, doesWordContainSquare, getGrid, getSection, getSelectedWord, getSquaresForWord, 
     getWordAtSquare, initializeSessionGlobals, otherDir, 
     squareKey, wordKey, constraintLetterCount } from '../../lib/util';
-import { clearFill, eraseGridSquare, getSymmetrySquares, getUncheckedSquareDir, populateWords, 
+import { clearFill, eraseGridSquare, getLettersFromSquares, getSymmetrySquares, getUncheckedSquareDir, populateWords, 
     updateGridConstraintInfo, updateManualEntryCandidates } from '../../lib/grid';
 import { GridWord } from '../../models/GridWord';
 import { AppContext } from '../../AppContext';
@@ -190,6 +190,7 @@ function Grid() {
         selectedSquare: [number, number], selectedWord: GridWord | undefined,
         gettableClasses: SquareGettableClasses): SquareProps {
         let square = grid.squares[row][col];
+        let isSeedSquare = isUnchangedSelectedSeedSquare(grid, row, col);
     
         return {
             key: `${row},${col}`,
@@ -198,7 +199,9 @@ function Grid() {
             number: square.number,
             type: square.type,
             content: square.content,
-            contentType: square.contentType,
+            contentType: isSeedSquare ? ContentType.Seedword
+                : square.contentType === ContentType.Seedword ? ContentType.Autofill
+                : square.contentType,
             isSelected: isSquareSelected() && compareTuples(selectedSquare, [row, col]),
             isInSelectedWord: isWordSelected() && doesWordContainSquare(selectedWord!, row, col),
             isInSelectedSection: (Globals.activeSectionId !== 0 && isSquareInSection(getSection(), square)) ||
@@ -207,6 +210,7 @@ function Grid() {
             isCircled: square.isCircled,
             gettableLetterClass: gettableClasses.letterClass,
             gettableCrossingClass: gettableClasses.crossingClass,
+            dotClass: square.content ? gettableClasses.dotClass : undefined,
         };
     }
 
@@ -253,6 +257,16 @@ function Grid() {
     function setNotes() {
         let newNotes = document.getElementById("puzzleNotes")!.innerText;
         Globals.puzzle!.notes = newNotes === "(notes)" ? "" : newNotes;
+    }
+
+    function isUnchangedSelectedSeedSquare(grid: GridState, row: number, col: number): boolean {
+        const seedEntry = Globals.seedEntry;
+        const seedWordKey = Globals.seedWordKey;
+        if (!seedEntry || !seedWordKey) return false;
+        if (Globals.hoverGrid && grid === Globals.hoverGrid && grid !== Globals.activeGrid) return false;
+        const seedWord = grid.words.get(seedWordKey);
+        if (!seedWord || !doesWordContainSquare(seedWord, row, col)) return false;
+        return getLettersFromSquares(getSquaresForWord(grid, seedWord)) === seedEntry;
     }
 
     let puzzle = Globals.puzzle!;

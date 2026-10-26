@@ -1,0 +1,19 @@
+You are given a list of words and phrases.
+
+1. Pick the one that has the best piece of lore behind item
+ - Don't pick an item that is an abbreviation/acronym, that is obscure, or that isn't presented in its most dominant form.
+ - Prefer lore that is little known, surprising, and/or goes against conventional wisdom.
+ 
+2. Output a crossword clue for that item that tells the lore without giving the answer away.
+ - The goal is not to make it an easy clue but rather an interesting one that sparks the imagination.
+ - Keep the clue as concise as possible, aiming for between 10 an 20 words.
+
+OUTPUT
+Output the result in the following format. Don't output any explanatory or auxiliary text.
+
+<input item> : <clue>
+
+
+WORDS/PHRASES
+
+[[DATA]]

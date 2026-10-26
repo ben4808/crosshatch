@@ -16,4 +16,5 @@ export interface SquareProps {
     isCircled: boolean;
     gettableLetterClass?: string;
     gettableCrossingClass?: string;
+    dotClass?: string;
 }

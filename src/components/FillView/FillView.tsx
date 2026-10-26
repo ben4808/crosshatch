@@ -10,23 +10,40 @@ import { clearFill, eraseSectionCandidateFromGrid, insertEntryIntoGrid, updateGr
 import { fillSectionWord, makeNewNode } from '../../lib/fill';
 import { ensureWordList, terminateFillWorkers } from '../../lib/fillWorkerPool';
 import { cancelGettableFill, startGettableFill } from '../../lib/gettableFill';
+import { cancelMagicPuzzle, runMagicPuzzle } from '../../lib/magicPuzzle';
 import { FillNode } from '../../models/FillNode';
 import { AppContext } from '../../AppContext';
 import { ContentType } from '../../models/ContentType';
+import { GridState } from '../../models/GridState';
 import { Section } from '../../models/Section';
 import { processWordListData } from '../../lib/wordList';
 import { SectionCandidate } from '../../models/SectionCandidate';
 import ClassifyModal from './ClassifyModal';
+import { GETTABLE_VERY } from '../../lib/crosswordListRatings';
 
 /** Refresh fills list promptly while searching; throttle only to avoid per-fill thrash. */
 const FILL_COUNT_UI_INTERVAL_MS = 100;
+
+function countVeryGettableEntries(section: Section, sc: SectionCandidate): number {
+    const grid = getGrid();
+    let count = 0;
+    section.words.forEach((_, key) => {
+        const word = grid.words.get(key);
+        if (!word) return;
+        const entry = entryFromSectionString(section, sc.sectionString, word);
+        if (!entry || /[^A-Z]/.test(entry)) return;
+        if (Globals.wordGettable?.get(entry) === GETTABLE_VERY) count++;
+    });
+    return count;
+}
 
 function FillView() {
     const appContext = useContext(AppContext);
     const [showSectionCandidates, setShowSectionCandidates] = useState(true);
     const [isWordListLoading, setIsWordListLoading] = useState(false);
-    const [isFillRunning, setIsFillRunning] = useState(false);
-    const [useMaybeGettableSeed, setUseMaybeGettableSeed] = useState(false);
+    const [fillMode, setFillMode] = useState<"fill" | "genKnowledge" | "allEntries" | undefined>(undefined);
+    const [isMagicRunning, setIsMagicRunning] = useState(false);
+    const [magicStatus, setMagicStatus] = useState("");
     const [classifyFillWords, setClassifyFillWords] = useState<string[] | undefined>(undefined);
     const fillUiLastUpdateRef = useRef(0);
 
@@ -39,16 +56,15 @@ function FillView() {
         triggerUpdate();
     }
 
-    function handleToggleFill() {
-        if (isFillRunning) {
-            cancelGettableFill();
-            clearFill(getGrid());
-            setFillStatus(FillStatus.Ready);
-            setIsFillRunning(false);
-            triggerUpdate();
-            return;
-        }
+    function stopFillMode() {
+        cancelGettableFill();
+        clearFill(getGrid());
+        setFillStatus(FillStatus.Ready);
+        setFillMode(undefined);
+        triggerUpdate();
+    }
 
+    function startFillSearch(mode: "fill" | "genKnowledge" | "allEntries") {
         // Fresh search each run; leave previously found fills unless user clears them.
         fillUiLastUpdateRef.current = 0;
         const result = startGettableFill({
@@ -56,26 +72,71 @@ function FillView() {
                 const now = performance.now();
                 if (now - fillUiLastUpdateRef.current >= FILL_COUNT_UI_INTERVAL_MS) {
                     fillUiLastUpdateRef.current = now;
-                    // Use context method directly — stable functional setState in App.
                     appContext.triggerUpdate();
                 }
             },
             onComplete: () => {
-                setIsFillRunning(false);
+                setFillMode(undefined);
                 appContext.triggerUpdate();
             },
-        }, { useMaybeGettableSeed });
+        }, { mode });
 
-        if (result === "noSeedWords") {
-            window.alert("No Maybe Gettable / Prefer entries found in the word list.");
-            return;
-        }
         if (result === "nothingToFill") {
             window.alert("There are no open entries to fill.");
             return;
         }
-        setIsFillRunning(true);
+        setFillMode(mode);
         triggerUpdate();
+    }
+
+    function handleToggleFill() {
+        if (fillMode === "fill") {
+            stopFillMode();
+            return;
+        }
+        startFillSearch("fill");
+    }
+
+    function handleToggleGenKnowledge() {
+        if (fillMode === "genKnowledge") {
+            stopFillMode();
+            return;
+        }
+        startFillSearch("genKnowledge");
+    }
+
+    function handleToggleAllEntries() {
+        if (fillMode === "allEntries") {
+            stopFillMode();
+            return;
+        }
+        startFillSearch("allEntries");
+    }
+
+    function handleToggleMagicPuzzle() {
+        if (isMagicRunning) {
+            cancelMagicPuzzle();
+            return;
+        }
+
+        fillUiLastUpdateRef.current = 0;
+        setIsMagicRunning(true);
+        setMagicStatus("Starting…");
+        runMagicPuzzle({
+            onStatus: status => setMagicStatus(status),
+            onProgress: () => {
+                const now = performance.now();
+                if (now - fillUiLastUpdateRef.current >= FILL_COUNT_UI_INTERVAL_MS) {
+                    fillUiLastUpdateRef.current = now;
+                    appContext.triggerUpdate();
+                }
+            },
+            onGridChanged: () => appContext.triggerUpdate(),
+        }).then(result => {
+            setIsMagicRunning(false);
+            if (!result.success && result.cancelled) setMagicStatus("Cancelled.");
+            appContext.triggerUpdate();
+        });
     }
 
     function handleFillWordClick(event: any) {
@@ -242,14 +303,15 @@ function FillView() {
         triggerUpdate();
     }
 
-    function handleSectionCandidateClick(event: any) {
-        function eraseSc() {
-            section.selectedCandidate = undefined;
-            let sc = section.candidates.get(candidateKey)!;
-            eraseSectionCandidateFromGrid(grid, sc);
-            clearFill(grid);
-        }
+    function eraseSelectedFillFromGrid(section: Section, grid: GridState, candidateKey: string) {
+        section.selectedCandidate = undefined;
+        let sc = section.candidates.get(candidateKey);
+        if (!sc) return;
+        eraseSectionCandidateFromGrid(grid, sc);
+        clearFill(grid);
+    }
 
+    function handleSectionCandidateClick(event: any) {
         let target = event.target;
         while (target.classList.length < 1 || target.classList[0] !== "fill-list-row-wrapper") {
             target = target.parentElement;
@@ -261,10 +323,12 @@ function FillView() {
         let candidateKey = target.attributes["data-candidate-key"].value as string;
 
         if (section.selectedCandidate === candidateKey) {
-            eraseSc();
+            eraseSelectedFillFromGrid(section, grid, candidateKey);
         }
         else {
-            if (section.selectedCandidate) eraseSc();
+            if (section.selectedCandidate) {
+                eraseSelectedFillFromGrid(section, grid, section.selectedCandidate);
+            }
 
             let node = getManualSectionNode(candidateKey, false);
             Globals.selectedSectionCandidateKeys!.set(section.id, candidateKey);
@@ -309,8 +373,14 @@ function FillView() {
         if (!window.confirm("Are you sure you want to clear the fills?")) return;
 
         let section = getSection();
+        let grid = getGrid();
+        if (section.selectedCandidate) {
+            eraseSelectedFillFromGrid(section, grid, section.selectedCandidate);
+        }
         section.candidates = new Map<string, SectionCandidate>();
         section.selectedCandidate = undefined;
+        updateSectionFilters();
+        Globals.hoverGrid = undefined;
         triggerUpdate();
     }
 
@@ -338,13 +408,17 @@ function FillView() {
         if (!window.confirm("Are you sure you want to clear the word lists?")) return;
 
         cancelGettableFill();
+        cancelMagicPuzzle();
         terminateFillWorkers();
-        setIsFillRunning(false);
+        setFillMode(undefined);
         Globals.wordList = undefined;
         Globals.wordLists = [];
         Globals.knownWords = new Set<string>();
         Globals.wordGettable = undefined;
         Globals.wordDesirability = undefined;
+        Globals.wordAbbr = undefined;
+        Globals.wordSensitive = undefined;
+        Globals.wordCrosswordese = undefined;
         Globals.likelyGettableSet = undefined;
         ensureWordList(undefined, undefined);
         setFillStatus(FillStatus.NoWordList);
@@ -378,6 +452,10 @@ function FillView() {
         Object.values(SymmetryType).filter(t => isNaN(Number(t))) :
         getSymmetryTypesForRectGrids();
 
+    const isFillRunning = fillMode === "fill";
+    const isGenKnowledgeRunning = fillMode === "genKnowledge";
+    const isAllEntriesRunning = fillMode === "allEntries";
+    const fillQuotaCount = Globals.fillFilter?.maxLikelyGettable ?? 0;
     let fillStatusStr = getFillStatusString(Globals.fillStatus!);
     
     let wordLists = Globals.wordLists || [];
@@ -393,8 +471,12 @@ function FillView() {
     let activeSection = Globals.sections ? Globals.sections!.get(Globals.activeSectionId!)! : makeNewSection(-1);
     let selectedScKey = activeSection.selectedCandidate;
     let selectedSectionIds = mapKeys(Globals.selectedSectionIds!) || [0];
+    const gettableCounts = new Map<string, number>();
     let sectionCandidates = mapValues(activeSection.candidates)
-        .filter(sc => !sc.isFilteredOut).sort((a, b) => b.score - a.score);
+        .filter(sc => !sc.isFilteredOut);
+    sectionCandidates.forEach(sc => gettableCounts.set(sc.sectionString, countVeryGettableEntries(activeSection, sc)));
+    sectionCandidates.sort((a, b) =>
+        (gettableCounts.get(b.sectionString)! - gettableCounts.get(a.sectionString)!) || b.score - a.score);
     let selectedEntry = Globals.selectedWordKey ? getEntryAtWordKey(grid, Globals.selectedWordKey!) : "";
     let useManualHeuristics = Globals.useManualHeuristics !== undefined ? Globals.useManualHeuristics : true;
 
@@ -411,7 +493,7 @@ function FillView() {
     } as React.CSSProperties;
 
     let fillsStyle = {
-        gridTemplateColumns: `4fr 1fr`
+        gridTemplateColumns: `3fr 1fr 1fr`
     } as React.CSSProperties;
 
     return (
@@ -424,18 +506,37 @@ function FillView() {
                 Globals.fillStatus! === FillStatus.Running ? " fill-status-green" : "")}>{fillStatusStr}</div>
             {wordLists.length > 0 &&
             <>
+                <div className="fill-options-heading">Modes</div>
                 <div className="form-check form-switch fill-switch">
                     <input type="checkbox" className="form-check-input" id="fillSwitch" 
-                        checked={isFillRunning} onChange={handleToggleFill} />
+                        checked={isFillRunning} disabled={isMagicRunning || isGenKnowledgeRunning || isAllEntriesRunning} onChange={handleToggleFill} />
                     <label className="form-check-label" htmlFor="fillSwitch">Fill</label>
                 </div>
-                <div className="form-check form-switch fill-switch fill-seed-option">
-                    <input type="checkbox" className="form-check-input" id="maybeGettableSeed"
-                        checked={useMaybeGettableSeed}
-                        disabled={isFillRunning}
-                        onChange={() => setUseMaybeGettableSeed(v => !v)} />
-                    <label className="form-check-label" htmlFor="maybeGettableSeed">Maybe Gettable seed</label>
+                {isFillRunning && (
+                    <div className="fill-mode-status">Considering {fillQuotaCount} Likely Gettable</div>
+                )}
+                <div className="form-check form-switch fill-switch fill-mode-option">
+                    <input type="checkbox" className="form-check-input" id="genKnowledgeSwitch"
+                        checked={isGenKnowledgeRunning} disabled={isMagicRunning || isFillRunning || isAllEntriesRunning} onChange={handleToggleGenKnowledge} />
+                    <label className="form-check-label" htmlFor="genKnowledgeSwitch">Gen. Knowledge</label>
                 </div>
+                {isGenKnowledgeRunning && (
+                    <div className="fill-mode-status">Considering {fillQuotaCount} Maybe Gettable</div>
+                )}
+                <div className="form-check form-switch fill-switch fill-mode-option">
+                    <input type="checkbox" className="form-check-input" id="allEntriesSwitch"
+                        checked={isAllEntriesRunning} disabled={isMagicRunning || isFillRunning || isGenKnowledgeRunning} onChange={handleToggleAllEntries} />
+                    <label className="form-check-label" htmlFor="allEntriesSwitch">All Entries</label>
+                </div>
+                {isAllEntriesRunning && (
+                    <div className="fill-mode-status">Considering all entries</div>
+                )}
+                <div className="form-check form-switch fill-switch fill-mode-option">
+                    <input type="checkbox" className="form-check-input" id="magicPuzzleSwitch"
+                        checked={isMagicRunning} disabled={isFillRunning || isGenKnowledgeRunning || isAllEntriesRunning} onChange={handleToggleMagicPuzzle} />
+                    <label className="form-check-label" htmlFor="magicPuzzleSwitch">Magic Puzzle</label>
+                </div>
+                {magicStatus && <div className="magic-puzzle-status">{magicStatus}</div>}
                 <br />
             </>
             }
@@ -530,15 +631,16 @@ function FillView() {
                     </div>
                     <div className="fill-list" style={fillsStyle}>
                         <div className="fill-list-header">Longest</div>
+                        <div className="fill-list-header">Gettable</div>
                         <div className="fill-list-header">Score</div>
                         {!showSectionCandidates && (
                             <div className="fill-list-row-wrapper">
-                                <div><i>Hidden</i></div><div></div>
+                                <div><i>Hidden</i></div><div></div><div></div>
                             </div>
                         )}
                         {showSectionCandidates && Globals.fillStatus === FillStatus.Complete && sectionCandidates.length === 0 && (
                             <div className="fill-list-row-wrapper">
-                                <div><i>No fills found</i></div><div></div>
+                                <div><i>No fills found</i></div><div></div><div></div>
                             </div>
                         )}
                         {showSectionCandidates && sectionCandidates.map(sc => {
@@ -550,7 +652,8 @@ function FillView() {
                                 key={candidateKey} data-candidate-key={candidateKey}
                                 onClick={handleSectionCandidateClick} onMouseOver={handleSectionCandidateHover}>
                                 <div>{entry}</div>
-                                <div>{sc.score.toFixed(2)}</div>
+                                <div>{gettableCounts.get(candidateKey)}</div>
+                                <div>{sc.score.toFixed(0)}</div>
                             </div>
                         )})}
                     </div>

@@ -9,7 +9,8 @@ import { getUnfilledCrosses } from "./fill";
 import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid";
 import { sectionCandidateKey, sectionCandidateLetterAt } from "./section";
 import { cloneGridForFill, getSectionCandidatesFromKeys, getSquaresForWord, isWordFull, mapKeys, letterBit, squareKey } from "./util";
-import { countLikelyGettableUsed, countsTowardLikelyQuota, isLikelyQuotaFull, wordIdOf } from "./wordList";
+import { countExtraUsed, countLikelyGettableUsed, countsTowardExtraQuota, countsTowardLikelyQuota,
+    isExtraQuotaFull, isLikelyQuotaFull, wordIdOf } from "./wordList";
 import Globals from './windowService';
 
 /**
@@ -74,6 +75,7 @@ export function undoFillTrailTo(state: FillSearchState, mark: number) {
             state.claims.delete(op.word);
             if (op.id >= 0 && grid.usedWordIds) grid.usedWordIds[op.id] = 0;
             if (op.countsTowardQuota) grid.likelyUsedCount!--;
+            if (op.countsTowardExtra) grid.extraUsedCount!--;
         }
     }
 }
@@ -94,12 +96,14 @@ export function addSquareCulprits(state: FillSearchState, set: DepthSet, sq: Gri
 
 /**
  * Add frames whose claimed words could have removed candidates of the given lengths
- * (and, while the Likely quota is full, every frame that claimed a Likely entry).
+ * (and, while a quota is full, every frame that claimed an entry counting toward it).
  */
 export function addClaimCulprits(state: FillSearchState, set: DepthSet, lengths: Set<number>) {
     let quotaFull = isLikelyQuotaFull(state.grid.likelyUsedCount ?? 0);
+    let extraFull = isExtraQuotaFull(state.grid.extraUsedCount ?? 0);
     state.claims.forEach((claim, claimedWord) => {
-        if (lengths.has(claimedWord.length) || (quotaFull && claim.countsTowardQuota)) {
+        if (lengths.has(claimedWord.length) || (quotaFull && claim.countsTowardQuota)
+            || (extraFull && claim.countsTowardExtra)) {
             addDepth(set, claim.depth);
         }
     });
@@ -126,8 +130,10 @@ function claimWord(grid: GridState, word: string, state: FillSearchState | undef
     if (wordId >= 0 && grid.usedWordIds) grid.usedWordIds[wordId] = 1;
     let countsTowardQuota = countsTowardLikelyQuota(word);
     if (countsTowardQuota) grid.likelyUsedCount = (grid.likelyUsedCount ?? 0) + 1;
-    state.claims.set(word, { depth, countsTowardQuota });
-    state.trail.push({ kind: "used", word, id: wordId, countsTowardQuota });
+    let countsTowardExtra = countsTowardExtraQuota(word);
+    if (countsTowardExtra) grid.extraUsedCount = (grid.extraUsedCount ?? 0) + 1;
+    state.claims.set(word, { depth, countsTowardQuota, countsTowardExtra });
+    state.trail.push({ kind: "used", word, id: wordId, countsTowardQuota, countsTowardExtra });
 }
 
 const REPLACEABLE_CONTENT_TYPES = [ContentType.Autofill, ContentType.ChosenSection, ContentType.HoverChosenWord];
@@ -217,6 +223,15 @@ function placeEntryOnGrid(
             if (state) {
                 state.claims.forEach(claim => {
                     if (claim.countsTowardQuota) addDepth(state.failure, claim.depth);
+                });
+            }
+            return undefined;
+        }
+        let extraUsed = grid.extraUsedCount ?? countExtraUsed(grid.usedWords);
+        if (extraUsed > (filter.maxExtra ?? 0)) {
+            if (state) {
+                state.claims.forEach(claim => {
+                    if (claim.countsTowardExtra) addDepth(state.failure, claim.depth);
                 });
             }
             return undefined;

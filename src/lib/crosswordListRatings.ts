@@ -20,29 +20,42 @@ export type Desirability =
   | typeof DESIRABILITY_NORMAL
   | typeof DESIRABILITY_AVOID;
 
-const VERY_GETTABLE_UNITY = new Set(["Concept", "Formula"]);
+// Keep gettability mappings in sync with cruzi-aws crosswordListExtractor.ts.
+const VERY_GETTABLE_UNITY = new Set(["Concept", "Collocation"]);
 const LIKELY_GETTABLE_UNITY = new Set(["Concept", "Collocation", "Formula", "Partial"]);
-const MAYBE_GETTABLE_UNITY = new Set(["Concept", "Collocation", "Formula", "Partial", "Variant"]);
-const NOT_GETTABLE_UNITY = new Set(["Concept", "Collocation", "Formula", "Partial"]);
-const NOT_A_THING_UNITY = new Set(["Non-unit", "Nonsense"]);
 
-const VERY_GETTABLE_FAMILIARITY = new Set(["Beginner Core", "Ubiquitous", "Active", "Colloquial"]);
-const LIKELY_GETTABLE_FAMILIARITY = new Set(["Common Name", "Easy Collocation", "Literal", "Inferred"]);
-const MAYBE_GETTABLE_FAMILIARITY = new Set(["General Knowledge", "Niche", "Variant"]);
+const VERY_GETTABLE_FAMILIARITY = new Set(["Ubiquitous", "Active"]);
+const LIKELY_GETTABLE_FAMILIARITY = new Set([
+  "Ubiquitous",
+  "Active",
+  "Literal",
+  "Common Name",
+  "General Knowledge",
+  "Inferred",
+]);
+const MAYBE_GETTABLE_FAMILIARITY = new Set(["Niche", "Literal", "Non-Unit", "Non-unit"]);
 const NOT_GETTABLE_FAMILIARITY = new Set(["Obscure", "Barely Exists"]);
 
 const PREFER_QUALITY = new Set(["Idiomatic", "Interesting", "Feel-Good", "Trendy"]);
-const NORMAL_QUALITY = new Set(["Normal", "Sensitive"]);
-const AVOID_QUALITY = new Set(["Non-unit", "Uncommon Inflection", "Clunky"]);
+const NORMAL_QUALITY = new Set(["Normal"]);
+const AVOID_QUALITY = new Set(["Non-unit", "Uncommon Derivation", "Clunky"]);
 
 function isUnset(value: string | null | undefined): boolean {
   return value == null || value.trim() === "";
 }
 
+function isNonsense(value: string | null | undefined): boolean {
+  return !isUnset(value) && value === "Nonsense";
+}
+
 export function classifyGettableNess(
+  classification: string | null | undefined,
   unityBucket: string | null | undefined,
   familiarityBucket: string | null | undefined,
 ): GettableNess {
+  if (isNonsense(classification) || isNonsense(unityBucket) || isNonsense(familiarityBucket)) {
+    return GETTABLE_NOT_A_THING;
+  }
   if (isUnset(unityBucket) || isUnset(familiarityBucket)) {
     return GETTABLE_MAYBE;
   }
@@ -50,25 +63,28 @@ export function classifyGettableNess(
   const unity = unityBucket as string;
   const familiarity = familiarityBucket as string;
 
-  if (NOT_A_THING_UNITY.has(unity)) {
-    return GETTABLE_NOT_A_THING;
-  }
   if (VERY_GETTABLE_UNITY.has(unity) && VERY_GETTABLE_FAMILIARITY.has(familiarity)) {
     return GETTABLE_VERY;
   }
   if (LIKELY_GETTABLE_UNITY.has(unity) && LIKELY_GETTABLE_FAMILIARITY.has(familiarity)) {
     return GETTABLE_LIKELY;
   }
-  if (MAYBE_GETTABLE_UNITY.has(unity) && MAYBE_GETTABLE_FAMILIARITY.has(familiarity)) {
+  if (MAYBE_GETTABLE_FAMILIARITY.has(familiarity)) {
     return GETTABLE_MAYBE;
   }
-  if (NOT_GETTABLE_UNITY.has(unity) && NOT_GETTABLE_FAMILIARITY.has(familiarity)) {
+  if (NOT_GETTABLE_FAMILIARITY.has(familiarity)) {
     return GETTABLE_NOT;
   }
   return GETTABLE_MAYBE;
 }
 
-export function classifyDesirability(qualityBucket: string | null | undefined): Desirability {
+export function classifyDesirability(
+  qualityBucket: string | null | undefined,
+  hasAvoidTag = false,
+): Desirability {
+  if (hasAvoidTag || (!isUnset(qualityBucket) && AVOID_QUALITY.has(qualityBucket as string))) {
+    return DESIRABILITY_AVOID;
+  }
   if (isUnset(qualityBucket)) {
     return DESIRABILITY_NORMAL;
   }
@@ -79,9 +95,6 @@ export function classifyDesirability(qualityBucket: string | null | undefined): 
   }
   if (NORMAL_QUALITY.has(quality)) {
     return DESIRABILITY_NORMAL;
-  }
-  if (AVOID_QUALITY.has(quality)) {
-    return DESIRABILITY_AVOID;
   }
   return DESIRABILITY_NORMAL;
 }

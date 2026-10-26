@@ -22,4 +22,6 @@ export interface GridState {
     usedWordIdsIndex?: PackedWordIndex;
     /** Running countLikelyGettableUsed(usedWords). */
     likelyUsedCount?: number;
+    /** Running countExtraUsed(usedWords). */
+    extraUsedCount?: number;
 }

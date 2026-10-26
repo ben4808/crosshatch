@@ -35,7 +35,18 @@ export interface GlobalsObj {
     wordGettable?: Map<string, string>;
     /** Per-entry desirability from the word-list CSV (e.g. "Prefer"). */
     wordDesirability?: Map<string, string>;
+    /** Entries marked abbr=y in the word-list CSV (Acronym/Abbreviation). */
+    wordAbbr?: Set<string>;
+    /** Entries marked sensitive=y in the word-list CSV. */
+    wordSensitive?: Set<string>;
+    /** Entries marked crosswordese=y in the word-list CSV. */
+    wordCrosswordese?: Set<string>;
     /** Active gettability constraint used by the fill (and workers). */
     fillFilter?: FillFilter;
     likelyGettableSet?: Set<string>;
+
+    /** Magic Puzzle seedword currently placed in the grid. */
+    seedEntry?: string;
+    seedWordKey?: string;
+    seedDisplayText?: string;
 }

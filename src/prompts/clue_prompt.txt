@@ -1,0 +1,46 @@
+You are given a list of words and phrases, input one per line.
+
+For each item, write a crossword clue for each of the 4 clue types below where possible.
+
+GUIDELINES
+- Do NOT use any root word in the clue text that appears in the answer.
+- If a clue cannot be generated for the given clue type, drop that line from the results.
+- The tense, inflection, and part of speech of the clue must generally agree with those of the answer.
+- For answers that are acronyms or abbreviations, the clue should also contain an acronym or abbreviation where possible.
+- Answers that are spoken formulas should have clues in quotes. Colloquial answers should have colloquial clues where possible.
+  E.g. "how do you do" -> "Pleased to meet you!".
+- Keep the clue as short as possible, ideally a few words.
+- If the answer is a foreign word or phrase, the clue should either be in that language or include a place tag.
+  E.g. "hola" -> "Buenos días", "avec" -> "With, in Versailles".
+- Clues should have their first word capitalized, unless the clue starts with a blank. They should not have a trailing period.
+
+CLUE TYPES
+- Straight: A straight definition, paraphrasing, or synonym of the item.
+  - The clue should ideally fit this answer more precisely than any likely synonym.
+- Saying: A straight definition/paraphrasing/synonym phrased the way someone would say it aloud, especially an idiomatic or colloquial phrase.
+  - E.g. "wander" -> "Mosey around", "have lunch" -> "Grab a bite"
+- Reference: Names a specific, well-known example or associated thing, that not a synonym.
+  - For nouns, reference something related or give a concrete example. 
+    E.g. "breakfast" -> "Denny's Gram Slam, e.g.", "magic wand" -> "Hogwarts implement".
+  - For verbs, reference a related concept or more specific action.
+    E.g. "binge watch" -> "Do a Friends marathon, say", "flying" -> "Driving alternative".
+  - For adjectives, reference something that it could describe.
+    E.g. "gray" -> "Like a cloudy day", "well-known" -> "Like the Eiffel Tower".
+- Fill in the Blank: Give a fill in the blank where the answer completes a phrase.
+  - The blank replaces the answer and the rest of the clue must not use it.
+  - E.g. "pickup" -> "___ truck", "song" -> "swan ___".
+
+OUTPUT
+Output the results in the following format. Include a blank line between each item's clue group.
+Don't output any explanatory or auxiliary text. No numbering, markdown, or code fences.
+
+<input item exactly as input>
+Straight: <straight clue>
+Saying: <saying clue>
+Reference: <reference clue>
+Fill in the Blank: <fill in the blank clue>
+
+
+WORDS/PHRASES
+
+[[DATA]]

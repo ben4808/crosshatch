@@ -5,4 +5,5 @@ export enum ContentType {
     ChosenSection,
     HoverChosenSection,
     Autofill,
+    Seedword,
 }

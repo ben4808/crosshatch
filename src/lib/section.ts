@@ -11,6 +11,7 @@ import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid"
 import { forAllGridSquares, getGrid, getSquaresForWord, getWordAtSquare, getSquareAtKey, isAcross, 
     isBlackSquare, mapKeys, squareKey, wordKey, wordLength, mapValues, isUserOrWordFilled, cloneGridForFill,
     letterBit } from "./util";
+import { fillScore } from "./wordList";
 import Globals from './windowService';
 
 export function updateSectionFilters() {
@@ -304,12 +305,30 @@ export function newSectionCandidate(node: FillNode, section: Section): SectionCa
 }
 
 export function newSectionCandidateFromGrid(grid: GridState, section: Section): SectionCandidate {
+    let entries: string[] = [];
+    getSectionWordList(grid, section).forEach(word => {
+        let entry = getLettersFromSquares(getSquaresForWord(grid, word));
+        if (/^[A-Z]+$/.test(entry)) entries.push(entry);
+    });
     return {
         sectionId: section.id,
         sectionString: getSectionString(grid, section),
-        score: section.words.size,
+        score: fillScore(entries),
         isFilteredOut: false,
     };
+}
+
+/** Sum of entry scores for a stored sectionString (main thread only). */
+export function sectionCandidateScore(section: Section, sectionString: string): number {
+    let grid = getGrid();
+    let entries: string[] = [];
+    section.words.forEach((_, key) => {
+        let word = grid.words.get(key);
+        if (!word) return;
+        let entry = entryFromSectionString(section, sectionString, word);
+        if (/^[A-Z]+$/.test(entry)) entries.push(entry);
+    });
+    return fillScore(entries);
 }
 
 const natoAlphabet = {

@@ -313,13 +313,13 @@ export function eraseGridSquare(grid: GridState, sq: GridSquare, dir: WordDirect
     if (squares.find(sq => sq.contentType === ContentType.Autofill)) {
         ; // autofill is ephemeral, no need to explicitly delete
     }
-    else if (squares.find(sq => [ContentType.User, ContentType.ChosenWord].includes(sq.contentType))) {
+    else if (squares.find(sq => [ContentType.User, ContentType.ChosenWord, ContentType.Seedword].includes(sq.contentType))) {
         let isInSection = getSectionsWithSelectedCandidate().find(sec => sec.squares.has(squareKey(sq)));
 
         squares.forEach(wsq => {
             if (wsq.contentType === ContentType.User) return;
             let cross = getWordAtSquare(grid, wsq.row, wsq.col, otherDir(dir))!;
-            if (wsq.contentType === ContentType.ChosenWord && !cross) {
+            if ((wsq.contentType === ContentType.ChosenWord || wsq.contentType === ContentType.Seedword) && !cross) {
                 wsq.contentType = ContentType.Autofill;
                 return;
             }

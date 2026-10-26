@@ -1,20 +1,17 @@
-import { EntryCandidate } from "../models/EntryCandidate";
 import { FillFilter } from "../models/FillFilter";
 import { FillStatus } from "../models/FillStatus";
 import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
 import { Section } from "../models/Section";
-import { buildEntryCandidates } from "./entryCandidates";
 import { ensureWordList, MAX_STORED_FILLS, startFill, stopFill } from "./fillWorkerPool";
 import { clearFill, updateGridConstraintInfo } from "./grid";
-import { getSquaresForWord, isWordFull, mapKeys, shuffleArray, wordLength } from "./util";
+import { getSquaresForWord, isWordFull, mapKeys } from "./util";
 import {
     GETTABLE_LIKELY,
+    GETTABLE_MAYBE,
     GETTABLE_VERY,
     buildPackedWordIndex,
     installFillFilter,
-    isFillSeedWord,
-    maybePreferWords,
     rebuildWordIndex,
     wordsWithGettable,
     wordsWithoutAvoid,
@@ -26,12 +23,14 @@ export interface GettableFillCallbacks {
     onComplete: () => void;
 }
 
+export type GettableFillMode = "fill" | "genKnowledge" | "allEntries";
+
 export interface GettableFillOptions {
-    /** Place one Maybe Gettable / Prefer seed in a longest open slot. Default false. */
-    useMaybeGettableSeed?: boolean;
+    /** Fill: Very, then add Likely. Gen. Knowledge: Very+Likely, then add Maybe. All Entries: entire dictionary. */
+    mode?: GettableFillMode;
 }
 
-export type GettableFillStartResult = "started" | "noSeedWords" | "nothingToFill";
+export type GettableFillStartResult = "started" | "nothingToFill";
 
 let fillGeneration = 0;
 
@@ -63,11 +62,14 @@ function getOpenWords(grid: GridState, section: Section): GridWord[] {
 }
 
 /**
- * Fill the active section with Very Gettable entries, then allow one Likely Gettable,
- * then two, and so on, until MAX_STORED_FILLS fills are stored or the Likely cap is
- * reached (fills already found at lower levels are deduplicated). If `useMaybeGettableSeed` is on, also
- * place exactly one Maybe Gettable / Prefer entry in a random longest open slot.
- * Entries already complete when the fill starts don't count toward the Likely quota.
+ * Fill the active section, then raise a gettability quota until MAX_STORED_FILLS fills
+ * are stored or the quota cap is reached (fills already found at lower levels are
+ * deduplicated).
+ *
+ * Fill mode: Very Gettable only, then allow one Likely Gettable, then two, and so on.
+ * Gen. Knowledge: Very + Likely Gettable, then progressively add Maybe Gettable answers.
+ * All Entries: every dictionary word, with no gettability filter.
+ * Entries already complete when the fill starts don't count toward the quota.
  */
 export function startGettableFill(
     callbacks: GettableFillCallbacks,
@@ -76,35 +78,33 @@ export function startGettableFill(
     const gen = ++fillGeneration;
     stopFill();
 
-    const useSeed = !!options?.useMaybeGettableSeed;
+    const mode: GettableFillMode = options?.mode === "genKnowledge" ? "genKnowledge"
+        : options?.mode === "allEntries" ? "allEntries" : "fill";
     const grid = Globals.activeGrid!;
     const section = Globals.sections!.get(Globals.activeSectionId!)!;
     section.fillState = undefined;
 
-    const seedWords = useSeed ? maybePreferWords() : [];
-    if (useSeed && seedWords.length === 0) return "noSeedWords";
-
     const openWords = getOpenWords(grid, section);
     if (openWords.length === 0) return "nothingToFill";
-    const seedLength = useSeed ? Math.max(...openWords.map(wordLength)) : 0;
-    const seedSlots = useSeed ? openWords.filter(word => wordLength(word) === seedLength) : [];
-    if (useSeed) shuffleArray(seedSlots);
 
     updateGridConstraintInfo(grid);
     const exemptWords = mapKeys(grid.usedWords);
     const veryWords = wordsWithoutAvoid(wordsWithGettable(GETTABLE_VERY));
     const likelyWords = wordsWithoutAvoid(wordsWithGettable(GETTABLE_LIKELY));
-    const maxLikelyCap = likelyWords.length === 0 ? 0 : openWords.length - (useSeed ? 1 : 0);
+    const maybeWords = wordsWithoutAvoid(wordsWithGettable(GETTABLE_MAYBE));
+    const isAllEntries = mode === "allEntries";
 
-    let maxLikely = 0;
-    let slotIndex = 0;
-    let startedUnseeded = false;
+    const baseWords = isAllEntries ? Array.from(Globals.knownWords || [])
+        : mode === "genKnowledge" ? veryWords.concat(likelyWords) : veryWords;
+    const quotaWords = isAllEntries ? [] : mode === "genKnowledge" ? maybeWords : likelyWords;
+    const maxQuotaCap = quotaWords.length === 0 ? 0 : openWords.length;
 
-    // Constraint masks come from the whole fill dictionary (seeds included) so the
-    // seed slot isn't pruned to Very Gettable letters before its seed is placed.
-    const switchDictionary = (includeLikely: boolean) => {
+    let maxQuota = 0;
+    let started = false;
+
+    const switchDictionary = (includeQuota: boolean) => {
         installFillFilter(undefined);
-        applyFillDictionary(veryWords.concat(useSeed ? seedWords : [], includeLikely ? likelyWords : []));
+        applyFillDictionary(includeQuota ? baseWords.concat(quotaWords) : baseWords);
         updateGridConstraintInfo(grid);
     };
 
@@ -115,19 +115,22 @@ export function startGettableFill(
         callbacks.onComplete();
     };
 
-    const startJob = (fillFilter: FillFilter, rootWord?: GridWord, rootCandidates?: EntryCandidate[]) => {
+    const startJob = (fillFilter: FillFilter) => {
         installFillFilter(fillFilter);
+        if (gen === fillGeneration) callbacks.onProgress();
         startFill({
             grid,
             section,
             fillFilter,
-            rootWord,
-            rootCandidates,
             onProgress: () => {
                 if (gen === fillGeneration) callbacks.onProgress();
             },
             onComplete: () => {
                 if (gen !== fillGeneration) return;
+                if (isAllEntries) {
+                    finish();
+                    return;
+                }
                 setTimeout(runNext, 0);
             },
         });
@@ -140,37 +143,16 @@ export function startGettableFill(
             return;
         }
 
-        if (useSeed) {
-            if (slotIndex >= seedSlots.length) {
-                if (maxLikely >= maxLikelyCap) {
-                    finish();
-                    return;
-                }
-                maxLikely++;
-                slotIndex = 0;
-                if (maxLikely === 1) switchDictionary(true);
-            }
-
-            const seedSlot = seedSlots[slotIndex++];
-            const fillFilter: FillFilter = { maxLikelyGettable: maxLikely, likelyWords, seedWords, exemptWords };
-            installFillFilter(fillFilter);
-            const rootCandidates = buildEntryCandidates(
-                grid, seedSlot, getSquaresForWord(grid, seedSlot), false, isFillSeedWord);
-            shuffleArray(rootCandidates);
-            startJob(fillFilter, seedSlot, rootCandidates);
-            return;
-        }
-
-        if (startedUnseeded) {
-            if (maxLikely >= maxLikelyCap) {
+        if (started) {
+            if (maxQuota >= maxQuotaCap) {
                 finish();
                 return;
             }
-            maxLikely++;
-            if (maxLikely === 1) switchDictionary(true);
+            maxQuota++;
+            if (maxQuota === 1) switchDictionary(true);
         }
-        startedUnseeded = true;
-        startJob({ maxLikelyGettable: maxLikely, likelyWords, seedWords, exemptWords });
+        started = true;
+        startJob({ maxLikelyGettable: maxQuota, likelyWords: quotaWords, seedWords: [], exemptWords });
     };
 
     switchDictionary(false);

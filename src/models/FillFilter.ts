@@ -6,4 +6,8 @@ export interface FillFilter {
     seedWords: string[];
     /** Entries already complete before the fill started; they don't count toward quotas. */
     exemptWords: string[];
+    /** Max number of Crosswordese / Abbreviation entries the fill may add. Default 0. */
+    maxExtra?: number;
+    /** Crosswordese / Abbreviation entries (disjoint from likelyWords). */
+    extraWords?: string[];
 }

@@ -1,4 +1,5 @@
 import React from 'react';
+import { LETTER_CLASS_NOT_A_THING } from '../../lib/gettableDisplay';
 import { ContentType } from '../../models/ContentType';
 import { SquareType } from '../../models/SquareType';
 import { SquareProps } from './SquareProps';
@@ -29,10 +30,15 @@ function getSquareElement(props: SquareProps) {
                 <div className="grid-square-circled"></div>
             }
             <div className="grid-number">{props.number ?? ""}</div>
+            {props.dotClass &&
+                <div className={"grid-dot " + props.dotClass}></div>
+            }
             <div className={"grid-content" + 
                         (content.length > 1 ? " grid-content-rebus" : "") +
-                        (props.content && props.gettableLetterClass ? " " + props.gettableLetterClass :
+                        (props.content && props.contentType === ContentType.Seedword ? " grid-content-seedword" :
+                         props.content && props.gettableLetterClass === LETTER_CLASS_NOT_A_THING ? " " + LETTER_CLASS_NOT_A_THING :
                          props.content && props.contentType === ContentType.User ? "" :
+                         props.content && props.gettableLetterClass ? " " + props.gettableLetterClass :
                          props.content && props.contentType === ContentType.ChosenWord ? " grid-content-chosen-word" :
                          props.content && props.contentType === ContentType.HoverChosenWord ? " grid-content-chosen-word-hover" :
                          props.content && props.contentType === ContentType.ChosenSection ? " grid-content-chosen-section" :

@@ -15,6 +15,7 @@ export const UNITY_OPTIONS = [
     "Concept",
     "Collocation",
     "Formula",
+    "Formulaic",
     "Partial",
     "Variant",
     "Non-unit",
@@ -35,15 +36,14 @@ export const FAMILIARITY_OPTIONS = [
 ];
 
 export const QUALITY_OPTIONS = [
+    "Normal",
     "Idiomatic",
     "Interesting",
     "Feel-Good",
     "Trendy",
-    "Normal",
-    "Sensitive",
-    "Non-unit",
-    "Uncommon Inflection",
     "Clunky",
+    "Uncommon Derivation",
+    "Non-unit",
 ];
 
 export interface ClassifyRow {
@@ -60,7 +60,7 @@ export interface ClassifyRow {
     isVulgar: boolean;
     isSensitive: boolean;
     isCrosswordese: boolean;
-    isBreakfast: boolean;
+    isReviewed: boolean;
     nytValue: string;
 }
 
@@ -90,12 +90,29 @@ function rowsEqual(a: ClassifyRow, b: ClassifyRow): boolean {
         && a.isVulgar === b.isVulgar
         && a.isSensitive === b.isSensitive
         && a.isCrosswordese === b.isCrosswordese
-        && a.isBreakfast === b.isBreakfast;
+        && a.isReviewed === b.isReviewed;
 }
 
 function nytDisplay(value: string | null | undefined): string {
     if (value == null || value.trim() === "") return "None";
     return value;
+}
+
+function isNonsenseBucket(value: string): boolean {
+    return value === "Nonsense";
+}
+
+function defaultQualityBucket(
+    qualityBucket: string,
+    classification: string,
+    unityBucket: string,
+    familiarityBucket: string,
+): string {
+    if (qualityBucket) return qualityBucket;
+    if (isNonsenseBucket(classification) || isNonsenseBucket(unityBucket) || isNonsenseBucket(familiarityBucket)) {
+        return "";
+    }
+    return "Normal";
 }
 
 function makeBlankRow(): ClassifyRow {
@@ -113,7 +130,7 @@ function makeBlankRow(): ClassifyRow {
         isVulgar: false,
         isSensitive: false,
         isCrosswordese: false,
-        isBreakfast: false,
+        isReviewed: false,
         nytValue: "None",
     };
 }
@@ -153,7 +170,7 @@ function ClassifyModal(props: ClassifyModalProps) {
                     qualityBucket: string | null;
                     isVulgar: boolean | null;
                     isCrosswordese?: boolean;
-                    isBreakfast?: boolean;
+                    isReviewed?: boolean;
                     isSensitive?: boolean;
                     nytValue?: string | null;
                 }[];
@@ -162,20 +179,28 @@ function ClassifyModal(props: ClassifyModalProps) {
                 if (cancelled) return;
                 const mapped: ClassifyRow[] = props.fillWords.map((fillWord) => {
                     const match = entries.find((entry) => entry.fillWord === fillWord);
+                    const classification = asText(match?.classification);
+                    const unityBucket = asText(match?.unityBucket);
+                    const familiarityBucket = asText(match?.familiarityBucket);
                     return {
                         rowId: fillWord,
                         fillWord,
                         entry: match?.entry ?? null,
                         lang: match?.lang ?? null,
                         displayText: asText(match?.displayText),
-                        classification: asText(match?.classification),
-                        unityBucket: asText(match?.unityBucket),
-                        familiarityBucket: asText(match?.familiarityBucket),
-                        qualityBucket: asText(match?.qualityBucket),
+                        classification,
+                        unityBucket,
+                        familiarityBucket,
+                        qualityBucket: defaultQualityBucket(
+                            asText(match?.qualityBucket),
+                            classification,
+                            unityBucket,
+                            familiarityBucket,
+                        ),
                         isVulgar: match?.isVulgar === true,
                         isSensitive: match?.isSensitive === true,
                         isCrosswordese: match?.isCrosswordese === true,
-                        isBreakfast: match?.isBreakfast === true,
+                        isReviewed: match?.isReviewed === true,
                         nytValue: nytDisplay(match?.nytValue),
                     };
                 });
@@ -247,6 +272,7 @@ function ClassifyModal(props: ClassifyModalProps) {
         const changed = rows.filter((row, i) => {
             const entry = (row.entry || row.fillWord || "").trim();
             if (!entry) return false;
+            if (!row.isNew && !row.entry && !row.displayText.trim()) return false;
             return !rowsEqual(row, originals[i]);
         }).map((row) => ({
             ...row,
@@ -280,9 +306,16 @@ function ClassifyModal(props: ClassifyModalProps) {
             changed.forEach((row) => {
                 applyCrosswordListRatings(
                     row.fillWord || row.entry || "",
+                    row.classification || null,
                     row.unityBucket || null,
                     row.familiarityBucket || null,
                     row.qualityBucket || null,
+                    {
+                        isAbbreviation: row.classification === "Acronym/Abbreviation",
+                        isSensitive: row.isSensitive,
+                        isCrosswordese: row.isCrosswordese,
+                        hasAvoidTag: row.isVulgar,
+                    },
                 );
                 const word = (row.entry || row.fillWord || "").toUpperCase();
                 if (Globals.knownWords && /^[A-Z]+$/.test(word)) {
@@ -315,8 +348,8 @@ function ClassifyModal(props: ClassifyModalProps) {
     }
 
     return (
-        <div className="classify-modal-overlay" onClick={props.onClose}>
-            <div className="classify-modal" onClick={(event) => event.stopPropagation()}>
+        <div className="classify-modal-overlay">
+            <div className="classify-modal">
                 <div className="classify-modal-header">
                     <div className="classify-modal-title">Classify Fill Entries</div>
                     <button className="classify-modal-close" onClick={props.onClose}>×</button>
@@ -337,7 +370,23 @@ function ClassifyModal(props: ClassifyModalProps) {
                                     <th>Vulgar</th>
                                     <th>Sensitive</th>
                                     <th>Crosswordese</th>
-                                    <th>Breakfast</th>
+                                    <th className="classify-check-cell">
+                                        <div className="classify-reviewed-header">
+                                            Reviewed
+                                            <input
+                                                type="checkbox"
+                                                title="Check all unchecked"
+                                                checked={rows.length > 0 && rows.every((row) => row.isReviewed)}
+                                                onChange={(event) => {
+                                                    if (!event.target.checked) return;
+                                                    setRows((prev) => prev.map((row) => (
+                                                        row.isReviewed ? row : { ...row, isReviewed: true }
+                                                    )));
+                                                    setStatus(undefined);
+                                                }}
+                                            />
+                                        </div>
+                                    </th>
                                     <th>NYT</th>
                                     <th></th>
                                 </tr>
@@ -438,8 +487,8 @@ function ClassifyModal(props: ClassifyModalProps) {
                                         <td className="classify-check-cell">
                                             <input
                                                 type="checkbox"
-                                                checked={row.isBreakfast}
-                                                onChange={(event) => updateRow(index, { isBreakfast: event.target.checked })}
+                                                checked={row.isReviewed}
+                                                onChange={(event) => updateRow(index, { isReviewed: event.target.checked })}
                                             />
                                         </td>
                                         <td>{row.nytValue || "None"}</td>

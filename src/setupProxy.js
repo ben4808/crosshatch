@@ -16,7 +16,6 @@ const MANUAL_TAGS = {
 };
 
 const CROSSWORDESE_TAG = "crosswordese";
-const BREAKFAST_TAG = "breakfast_test";
 const SENSITIVE_TAG = "sensitive";
 const VULGAR_TAG = "vulgar";
 
@@ -72,6 +71,30 @@ function sendJson(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
+const CHAL_API_URL = (process.env.CHAL_API_URL || "http://localhost:3002").replace(/\/+$/, "");
+
+/** Forward /chal-api/* to chal-api's /api/* (Magic Puzzle DB and AI calls). */
+function handleChalApiRoutes(app) {
+  app.use("/chal-api", async (req, res) => {
+    try {
+      const hasBody = req.method !== "GET" && req.method !== "HEAD";
+      const response = await fetch(`${CHAL_API_URL}/api${req.url}`, {
+        method: req.method,
+        headers: { "Content-Type": "application/json" },
+        body: hasBody ? JSON.stringify(req.body || {}) : undefined,
+      });
+      res.statusCode = response.status;
+      res.setHeader("Content-Type", response.headers.get("content-type") || "application/json");
+      res.end(Buffer.from(await response.arrayBuffer()));
+    } catch (err) {
+      console.error("chal-api proxy error:", err);
+      sendJson(res, 502, {
+        error: `chal-api is unreachable at ${CHAL_API_URL}: ${err && err.message ? err.message : String(err)}`,
+      });
+    }
+  });
+}
+
 function handleClassifyRoutes(app) {
   app.post("/api/classify/entries", async (req, res) => {
     try {
@@ -107,10 +130,10 @@ function handleClassifyRoutes(app) {
           familiarityBucket: row.familiarityBucket || null,
           qualityBucket: row.qualityBucket || null,
           isVulgar: !!row.isVulgar,
+          humanReviewed: !!row.isReviewed,
         });
         tags.push(...collectManualTags(original, row));
         applyFlagTagChange(original, row, "isCrosswordese", CROSSWORDESE_TAG, flagAdds, flagDeletes);
-        applyFlagTagChange(original, row, "isBreakfast", BREAKFAST_TAG, flagAdds, flagDeletes);
         applyFlagTagChange(original, row, "isVulgar", VULGAR_TAG, flagAdds, flagDeletes);
         applyFlagTagChange(original, row, "isSensitive", SENSITIVE_TAG, flagAdds, flagDeletes);
       }
@@ -158,4 +181,5 @@ module.exports = function (app) {
   });
   app.use(express.json({ limit: "2mb" }));
   handleClassifyRoutes(app);
+  handleChalApiRoutes(app);
 };

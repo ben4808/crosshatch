@@ -1,14 +1,19 @@
 import { CluesViewProp } from "./CluesViewProp";
-import React, { createRef, useEffect, useRef, useState } from 'react';
+import React, { createRef, useContext, useEffect, useRef, useState } from 'react';
 import "./CluesView.scss";
 import { wordKey, deepClone, getSquaresForWord, getGrid, mapValues } from "../../lib/util";
 import Globals from '../../lib/windowService';
 import { getLettersFromSquares } from "../../lib/grid";
 import { WordDirection } from "../../models/WordDirection";
+import { generateNormalClues } from "../../lib/magicPuzzle";
+import { AppContext } from "../../AppContext";
 
 function CluesView(props: any) {
+    const appContext = useContext(AppContext);
     const [clueProps, setClueProps] = useState(initClueProps());
     const [selectedKey, setSelectedKey] = useState("");
+    const [normalStatus, setNormalStatus] = useState("");
+    const [isGenerating, setIsGenerating] = useState(false);
     const textareasRef = useRef([] as any[]);
 
     useEffect(() => {
@@ -84,6 +89,19 @@ function CluesView(props: any) {
         setClueProps(newClueProps);
     }
 
+    async function handleGenerateNormalClues() {
+        if (isGenerating) return;
+        setIsGenerating(true);
+        const result = await generateNormalClues(setNormalStatus);
+        if (result.success) {
+            setNormalStatus(result.message || "");
+            appContext.triggerUpdate();
+        } else {
+            setNormalStatus(result.message);
+        }
+        setIsGenerating(false);
+    }
+
     function renderCluesContainer(isAcross: boolean, clueList: CluesViewProp[], refIndex: number) {
         return (
             <div className="clues-container">
@@ -121,6 +139,15 @@ function CluesView(props: any) {
 
     return (
         <div className="clues-view">
+            <div className="clue-gen-buttons">
+                <div className="clue-gen-button-wrap">
+                    <button type="button" className="btn btn-primary clue-gen-button"
+                        disabled={isGenerating} onClick={handleGenerateNormalClues}>
+                        Generate Normal Clues
+                    </button>
+                    <div className="clue-gen-status">{normalStatus}</div>
+                </div>
+            </div>
             {renderCluesContainer(true, acrossClues, 0)}
             {renderCluesContainer(false, downClues, acrossClues.length)}
         </div>

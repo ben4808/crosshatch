@@ -5,6 +5,7 @@ import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
 import { buildEntryCandidates } from "./entryCandidates";
 import { createRootFillSearchState, selectWordToFill } from "./fill";
+import { sectionCandidateScore } from "./section";
 import {
     FillWordFilterPayload,
     MainToWorkerMessage,
@@ -25,7 +26,8 @@ export interface StartFillOptions {
     section: Section;
     /** Called for every reported fill, including ones already stored. */
     onFound?: (sectionString: string) => void;
-    onComplete: () => void;
+    /** exhausted is false when the search ended early (fill cap hit or a chunk failed in a worker). */
+    onComplete: (exhausted: boolean) => void;
     onProgress?: () => void;
     fillFilter?: FillWordFilterPayload;
     /** Fill this word first using rootCandidates instead of picking by MRV. */
@@ -44,6 +46,11 @@ interface ActiveJob {
     queue: EntryCandidate[][];
     /** Workers currently searching a chunk of this job. */
     busy: Set<Worker>;
+    /** The chunk each busy worker is searching, so a failed chunk can be retried. */
+    inFlight: Map<Worker, EntryCandidate[]>;
+    retried: Set<EntryCandidate[]>;
+    /** Set when a chunk failed twice, so part of the search space went unsearched. */
+    incomplete: boolean;
 }
 
 let workers: Worker[] = [];
@@ -76,7 +83,7 @@ function createWorker(): Worker {
 
 function handleWorkerError(worker: Worker, err: ErrorEvent) {
     console.error("Fill worker error", err);
-    if (activeJob) handleWorkerIdle(activeJob, worker, false);
+    if (activeJob) handleChunkFailure(activeJob, worker);
 }
 
 function postInitWordList(worker: Worker) {
@@ -136,14 +143,32 @@ function chunkCandidates<T>(items: T[], workerCount: number): T[][] {
 }
 
 /** Hand the worker its next chunk, or retire it from the job (completing the job when all are idle). */
+function postChunk(job: ActiveJob, worker: Worker, chunk: EntryCandidate[]) {
+    job.inFlight.set(worker, chunk);
+    postToWorker(worker, { type: "chunk", jobId: job.jobId, entryCandidates: chunk });
+}
+
 function handleWorkerIdle(job: ActiveJob, worker: Worker, canTakeMore: boolean) {
+    job.inFlight.delete(worker);
     const next = canTakeMore ? job.queue.shift() : undefined;
     if (next) {
-        postToWorker(worker, { type: "chunk", jobId: job.jobId, entryCandidates: next });
+        postChunk(job, worker, next);
         return;
     }
     job.busy.delete(worker);
     if (job.busy.size === 0) finishJob(job, false);
+}
+
+/** Retry a failed chunk once on the same worker; a second failure retires the worker. */
+function handleChunkFailure(job: ActiveJob, worker: Worker) {
+    const chunk = job.inFlight.get(worker);
+    if (chunk && !job.retried.has(chunk)) {
+        job.retried.add(chunk);
+        postChunk(job, worker, chunk);
+        return;
+    }
+    if (chunk) job.incomplete = true;
+    handleWorkerIdle(job, worker, false);
 }
 
 function finishJob(job: ActiveJob, cancelWorkers: boolean) {
@@ -152,7 +177,7 @@ function finishJob(job: ActiveJob, cancelWorkers: boolean) {
     if (cancelWorkers) {
         for (const worker of workers) postToWorker(worker, { type: "cancel", jobId: job.jobId });
     }
-    job.options.onComplete();
+    job.options.onComplete(!cancelWorkers && !job.incomplete && job.queue.length === 0);
 }
 
 function handleWorkerMessage(worker: Worker, event: MessageEvent<WorkerToMainMessage>) {
@@ -168,7 +193,7 @@ function handleWorkerMessage(worker: Worker, event: MessageEvent<WorkerToMainMes
                 const candidate: SectionCandidate = {
                     sectionId: section.id,
                     sectionString: fill.sectionString,
-                    score: fill.score,
+                    score: sectionCandidateScore(section, fill.sectionString),
                     isFilteredOut: false,
                 };
                 section.candidates.set(fill.sectionString, candidate);
@@ -185,12 +210,13 @@ function handleWorkerMessage(worker: Worker, event: MessageEvent<WorkerToMainMes
 
     if (msg.type === "error") {
         console.error("Fill worker failed:", msg.message);
-        handleWorkerIdle(job, worker, false);
+        handleChunkFailure(job, worker);
         return;
     }
 
     if (msg.type === "chunkDone") {
         handleWorkerIdle(job, worker, true);
+        return;
     }
 }
 
@@ -216,7 +242,7 @@ export function startFill(options: StartFillOptions): boolean {
 
     const { grid, section } = options;
     if (!Globals.wordList) {
-        options.onComplete();
+        options.onComplete(false);
         return false;
     }
 
@@ -224,14 +250,14 @@ export function startFill(options: StartFillOptions): boolean {
 
     const fillWord = options.rootWord ?? selectWordToFill(grid, section);
     if (!fillWord) {
-        options.onComplete();
+        options.onComplete(true);
         return false;
     }
 
     const entryCandidates = options.rootCandidates
         ?? buildEntryCandidates(grid, fillWord, getSquaresForWord(grid, fillWord), false);
     if (entryCandidates.length === 0) {
-        options.onComplete();
+        options.onComplete(true);
         return false;
     }
 
@@ -244,6 +270,9 @@ export function startFill(options: StartFillOptions): boolean {
         options,
         queue: chunkCandidates(entryCandidates, n),
         busy: new Set(),
+        inFlight: new Map(),
+        retried: new Set(),
+        incomplete: false,
     };
     activeJob = job;
 
@@ -263,7 +292,7 @@ export function startFill(options: StartFillOptions): boolean {
             fillWord,
             fillFilter: options.fillFilter,
         });
-        postToWorker(worker, { type: "chunk", jobId: job.jobId, entryCandidates: job.queue.shift()! });
+        postChunk(job, worker, job.queue.shift()!);
     }
 
     return true;
