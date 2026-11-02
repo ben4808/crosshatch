@@ -1,0 +1,66 @@
+GRID STEP
+At this point, if it isn't loaded already, load the word list.
+If the app is running locally, load the word list locally from C:\Users\ben_z\Desktop\crossword_lists\list.enc
+If the app is not running locally, load the word list from https://magic-crossword.s3.us-west-2.amazonaws.com/list.enc
+This list is encrypted and needs to be decrypted using ChaCha20 with the key "LH6dMILZXzc" (zero-padded to 32 bytes).
+Row format: entry,gettableness,desirability,abbr,sensitive,crosswordese,overused
+gettableness codes: vg, lg, mg, ng, nt. desirability codes: p, n, a. flags are y/n.
+
+Perform the same procedure as the Magic Puzzle mode in the normal crosshatch app, with the following modifications:
+1. Don't give any explanations of what is happening, just show the grid with the seed word in the slot where it's currently being considered.
+2. All letters should be shown in white, no colored backgrounds or font colors based on any buckets.
+3. After 10 fills have been found, stop the fill process, choose the one with the highest fill score, and display it in the grid.
+
+Below this show the text "Generating..." while the puzzle is generating.
+When the generation is done, show 2 buttons with the text above them "How does this look?"
+- Looks Good takes the user to the Clue Step
+- Try Again causes the the generation to continue for 10 more fills and them asks again.
+
+On top of the Try Again button is a button "Don't Use" with a down caret beside it to indicate that more info will be shown when clicked.
+When clicked, a modal window will pop up with the instructions "Select item(s) to not use".
+Below this will be an array of all answers in the current fill, minus the seed word. Clicking on an answer crosses it out on the list (i.e. with strikethrough).
+Any items that are crossed out will not be used in any of the fills that are subsequently generated for the current puzzle (doesn't persist to other puzzles).
+Cancel, to the left of Try Again, and an x both close the modal without marking anything Don't Use. Try Again applies the crossed-out answers and generates again.
+
+CLUES PANEL
+The clues panel should generally take after the Clues View in the main app, with some additional requirements.
+
+As soon as the clue panel is opened, query any existing AI generated clues from the generated_clue table that have is_seedword = false. 
+Also query their clue type information. For any entries that have less than 7 existing clues, submit an AI prompt to clue_prompt.txt 
+ to generate more. Submit up to 10 entries per prompt, one prompt at a time, using the same Gemini model selection and fallback as the main app. This will be done in the background, and while 
+ the response is pending, show a spinner icon next to all the entries for which AI results are loading.
+
+As soon as the clue panel is opened, also query any existing community clues from the community_clue table. 
+No prompt needs to be sent if there aren't any.
+
+For entries that have AI generated clues, automatically select a clue to populate for it. 50% of the time, the auto-selected clue should be 
+ the Straight clue type. The other 50% of the time, the selected clue should be a random selection of all other clue types that exist for that entry.
+
+When a clue is clicked, instead of opening an edit textbox directly, open a modal.
+1. The modal will have an edit textbox at the top with an OK button to submit and close the modal. Pressing enter does the same thing as the OK button.
+2. Underneath the modal will be 2 lists of suggested clues. Clicking on any selected clue sets the clue to that clue and also closes the modal.
+3. The first list is a list of AI generated clues for the given entry, those queried earlier. If there is a pending AI prompt, as soon as 
+    the results are returned, update the list with the new clues.
+4. The second list is a list of community clues for the given entry, also queried earlier.
+
+At the bottom of the Clues Panel is a button Finish Puzzle that is enabled as soon as all entries have clues.
+To the left of the Finish Puzzle button should be 2 checkboxes:
+- "Contribute my clues to community clues" (checked by default). If checked, on clicking Finish Puzzle, any clues other than the seed answer 
+    clue that do not exactly match the text of an existing AI generated clue or and existing community clue will be added to the community_clue table.
+- "Including my seed answer clue" (unchecked by default). If checked, the seed answer clue will also be added to the community_clue table if 
+    different from any existing clue.
+
+Finally, on pressing Finish Puzzle, a magic_puzzle record will be created for the puzzle. Additionally, a clue_collection will be created and 
+ clue records will be created and tied to the collection. This is similar to how it's done in the cruzi-scraper project except the 
+ clue_collection will tie to the magic_puzzle instead of the puzzle record.
+
+SHARE STEP
+
+Show a heading "Can your friends solve it?" and under it "Share This Link", then a link with a copy to clipboard icon.
+The puzzle link will be the app URL plus "?puzzle=<id>" where id is the id from the magic_puzzle record.
+
+Under this show a "Download .puz file" button which does just that. Reference the cruzi-scraper project for how to generate this file from the puzzle data.
+
+Underneath this button provide the following instructions:
+"You can publish your .puz file for the community to solve at Crosshare." (Crosshare is a link to crosshare.org)
+"You can also upload your .puz file to solve collaboratively with friends at sqares.io." (also a link)

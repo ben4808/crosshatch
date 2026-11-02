@@ -2,12 +2,16 @@ import { FillFilter } from "../models/FillFilter";
 import { WordList } from "../models/WordList";
 import {
     DESIRABILITY_AVOID,
+    DESIRABILITY_NORMAL,
     DESIRABILITY_PREFER,
     GETTABLE_LIKELY,
+    GETTABLE_MAYBE,
     GETTABLE_NOT_A_THING,
     GETTABLE_VERY,
     classifyDesirability,
     classifyGettableNess,
+    decodeDesirability,
+    decodeGettableNess,
 } from "./crosswordListRatings";
 import {
     attachPackedWordIndex,
@@ -22,6 +26,7 @@ import {
     wordIndexInitPayload,
     WordIndexInitPayload,
 } from "./sharedWordIndex";
+import { decryptCrosswordList, looksLikeCrosswordCsv } from "../magic/chacha20";
 import Globals from './windowService';
 
 export {
@@ -36,8 +41,11 @@ export {
 } from "./crosswordListRatings";
 
 export async function processWordListData(filename: string, data: Blob): Promise<WordList | undefined> {
-    let lines = (await data.text()).split("\n");
-    let words = parseWordList(lines);
+    const bytes = new Uint8Array(await data.arrayBuffer());
+    const text = shouldDecryptWordList(filename, bytes)
+        ? decryptCrosswordList(bytes)
+        : new TextDecoder("utf-8").decode(bytes);
+    let words = parseWordList(text.split("\n"));
     rebuildWordIndex();
 
     return {
@@ -63,6 +71,13 @@ export async function loadWordListFromLocalhost(url: string) {
     console.log("Word List loaded");
 }
 
+function shouldDecryptWordList(filename: string, bytes: Uint8Array): boolean {
+    const lower = filename.toLowerCase();
+    if (lower.endsWith(".enc")) return true;
+    if (lower.endsWith(".csv")) return false;
+    return !looksLikeCrosswordCsv(bytes);
+}
+
 function isYesFlag(value: string | undefined): boolean {
     return (value || "").trim().toLowerCase() === "y";
 }
@@ -78,14 +93,18 @@ function parseWordList(lines: string[]): string[] {
     let abbr = Globals.wordAbbr || new Set<string>();
     let sensitive = Globals.wordSensitive || new Set<string>();
     let crosswordese = Globals.wordCrosswordese || new Set<string>();
+    let overused = Globals.wordOverused || new Set<string>();
+    let regionalism = Globals.wordRegionalism || new Set<string>();
     let words = [] as string[];
-    // entry,gettableness,desirability,abbr,sensitive,crosswordese
+    // entry,gettableness,desirability,abbr,sensitive,crosswordese,overused
     let colEntry = 0;
     let colGettable = 1;
     let colDesirability = 2;
     let colAbbr = 3;
     let colSensitive = 4;
     let colCrosswordese = 5;
+    let colOverused = 6;
+    let colRegionalism = -1;
     let parsedHeader = false;
 
     for (let i = 0; i < lines.length; i++) {
@@ -106,11 +125,15 @@ function parseWordList(lines: string[]): string[] {
             const abbrIdx = headerIndex(headers, "abbr");
             const sensitiveIdx = headerIndex(headers, "sensitive");
             const crosswordeseIdx = headerIndex(headers, "crosswordese");
+            const overusedIdx = headerIndex(headers, "overused");
+            const regionalismIdx = headerIndex(headers, "regionalism");
             colGettable = gettableIdx >= 0 ? gettableIdx : 1;
             colDesirability = desirabilityIdx >= 0 ? desirabilityIdx : 2;
             colAbbr = abbrIdx >= 0 ? abbrIdx : 3;
             colSensitive = sensitiveIdx >= 0 ? sensitiveIdx : 4;
             colCrosswordese = crosswordeseIdx >= 0 ? crosswordeseIdx : 5;
+            colOverused = overusedIdx;
+            colRegionalism = regionalismIdx;
             parsedHeader = true;
             continue;
         }
@@ -119,11 +142,17 @@ function parseWordList(lines: string[]): string[] {
         if (!word.match(/^[A-Z]+$/)) continue;
         if (word.length < 2 || word.length > 15) continue;
 
-        if (colGettable >= 0 && tokens[colGettable]) gettable.set(word, tokens[colGettable].trim());
-        if (colDesirability >= 0 && tokens[colDesirability]) desirability.set(word, tokens[colDesirability].trim());
+        if (colGettable >= 0) {
+            gettable.set(word, decodeGettableNess(tokens[colGettable]) ?? GETTABLE_MAYBE);
+        }
+        if (colDesirability >= 0) {
+            desirability.set(word, decodeDesirability(tokens[colDesirability]) ?? DESIRABILITY_NORMAL);
+        }
         if (colAbbr >= 0 && isYesFlag(tokens[colAbbr])) abbr.add(word);
         if (colSensitive >= 0 && isYesFlag(tokens[colSensitive])) sensitive.add(word);
         if (colCrosswordese >= 0 && isYesFlag(tokens[colCrosswordese])) crosswordese.add(word);
+        if (colOverused >= 0 && isYesFlag(tokens[colOverused])) overused.add(word);
+        if (colRegionalism >= 0 && isYesFlag(tokens[colRegionalism])) regionalism.add(word);
 
         if (!known.has(word)) words.push(word);
         known.add(word);
@@ -135,6 +164,8 @@ function parseWordList(lines: string[]): string[] {
     Globals.wordAbbr = abbr;
     Globals.wordSensitive = sensitive;
     Globals.wordCrosswordese = crosswordese;
+    Globals.wordOverused = overused;
+    Globals.wordRegionalism = regionalism;
     rebuildLikelyGettableSet();
     return words;
 }
@@ -145,7 +176,7 @@ export function applyCrosswordListRatings(
     unityBucket: string | null | undefined,
     familiarityBucket: string | null | undefined,
     qualityBucket: string | null | undefined,
-    flags?: { isAbbreviation?: boolean; isSensitive?: boolean; isCrosswordese?: boolean; hasAvoidTag?: boolean },
+    flags?: { isAbbreviation?: boolean; isSensitive?: boolean; isCrosswordese?: boolean; isOverused?: boolean; hasAvoidTag?: boolean },
 ) {
     const word = fillWord.toUpperCase();
     if (!Globals.wordGettable) Globals.wordGettable = new Map<string, string>();
@@ -153,6 +184,8 @@ export function applyCrosswordListRatings(
     if (!Globals.wordAbbr) Globals.wordAbbr = new Set<string>();
     if (!Globals.wordSensitive) Globals.wordSensitive = new Set<string>();
     if (!Globals.wordCrosswordese) Globals.wordCrosswordese = new Set<string>();
+    if (!Globals.wordOverused) Globals.wordOverused = new Set<string>();
+    if (!Globals.wordRegionalism) Globals.wordRegionalism = new Set<string>();
     Globals.wordGettable.set(word, classifyGettableNess(classification, unityBucket, familiarityBucket));
     Globals.wordDesirability.set(word, classifyDesirability(qualityBucket, flags?.hasAvoidTag === true));
     if (flags) {
@@ -162,7 +195,11 @@ export function applyCrosswordListRatings(
         else Globals.wordSensitive.delete(word);
         if (flags.isCrosswordese) Globals.wordCrosswordese.add(word);
         else Globals.wordCrosswordese.delete(word);
+        if (flags.isOverused) Globals.wordOverused.add(word);
+        else Globals.wordOverused.delete(word);
     }
+    if (familiarityBucket === "Regionalism") Globals.wordRegionalism.add(word);
+    else Globals.wordRegionalism.delete(word);
     rebuildLikelyGettableSet();
 }
 
@@ -181,6 +218,8 @@ export function removeCrosswordListWord(fillWord: string) {
     Globals.wordAbbr?.delete(word);
     Globals.wordSensitive?.delete(word);
     Globals.wordCrosswordese?.delete(word);
+    Globals.wordOverused?.delete(word);
+    Globals.wordRegionalism?.delete(word);
     rebuildLikelyGettableSet();
     rebuildWordIndex();
 }
@@ -326,13 +365,15 @@ export function wordsWithoutAvoid(words: string[]): string[] {
 }
 
 /**
- * Display / scoring category of an entry, highest precedence first.
+ * Display / scoring category of an entry. Penalties are listed most severe first;
+ * an entry gets only the first one that applies. Prefer is not a penalty.
  * Vulgar entries carry Desirability Avoid in the word list.
  */
 export enum EntryQuality {
     Bad = "bad",
     Questionable = "questionable",
     Abbreviation = "abbreviation",
+    Regionalism = "regionalism",
     Preferred = "preferred",
     Normal = "normal",
 }
@@ -341,14 +382,16 @@ const ENTRY_QUALITY_SCORES: Record<EntryQuality, number> = {
     [EntryQuality.Bad]: 0,
     [EntryQuality.Questionable]: 5,
     [EntryQuality.Abbreviation]: 7,
+    [EntryQuality.Regionalism]: 7,
     [EntryQuality.Normal]: 10,
     [EntryQuality.Preferred]: 15,
 };
 
 export function entryQuality(word: string): EntryQuality {
     if (isAvoidDesirability(word) || Globals.wordGettable?.get(word) === GETTABLE_NOT_A_THING) return EntryQuality.Bad;
-    if (Globals.wordSensitive?.has(word) || Globals.wordCrosswordese?.has(word)) return EntryQuality.Questionable;
+    if (Globals.wordSensitive?.has(word) || Globals.wordCrosswordese?.has(word) || Globals.wordOverused?.has(word)) return EntryQuality.Questionable;
     if (Globals.wordAbbr?.has(word)) return EntryQuality.Abbreviation;
+    if (Globals.wordRegionalism?.has(word)) return EntryQuality.Regionalism;
     if (Globals.wordDesirability?.get(word) === DESIRABILITY_PREFER) return EntryQuality.Preferred;
     return EntryQuality.Normal;
 }

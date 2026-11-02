@@ -3,14 +3,14 @@ import { SymmetryType } from '../../models/SymmetryType';
 import "./FillView.scss";
 import Globals from '../../lib/windowService';
 import { FillStatus } from '../../models/FillStatus';
-import { getEntryAtWordKey, getGrid, getSection, mapKeys, mapValues } from '../../lib/util';
-import { calculateSectionOrder, entriesFromSectionString, entryFromSectionString, getLongestStackWord, getPhoneticName, insertSectionCandidateIntoGrid, 
-    makeNewSection, updateSectionFilters } from '../../lib/section';
-import { clearFill, eraseSectionCandidateFromGrid, insertEntryIntoGrid, updateGridConstraintInfo, updateManualEntryCandidates } from '../../lib/grid';
+import { getEntryAtWordKey, getGrid, getSection, initializeSessionGlobals, mapKeys, mapValues } from '../../lib/util';
+import { calculateSectionOrder, candidateLayoutMatches, entriesFromSectionString, entryFromSectionString, getLongestStackWord, getPhoneticName, insertSectionCandidateIntoGrid, 
+    makeNewSection, stampCandidateLayout, updateSectionFilters } from '../../lib/section';
+import { clearFill, eraseSectionCandidateFromGrid, insertEntryIntoGrid, paintSectionCandidate, updateGridConstraintInfo, updateManualEntryCandidates } from '../../lib/grid';
 import { fillSectionWord, makeNewNode } from '../../lib/fill';
 import { ensureWordList, terminateFillWorkers } from '../../lib/fillWorkerPool';
 import { cancelGettableFill, startGettableFill } from '../../lib/gettableFill';
-import { cancelMagicPuzzle, runMagicPuzzle } from '../../lib/magicPuzzle';
+import { cancelMagicPuzzle, moveSeedClue, runMagicPuzzle } from '../../lib/magicPuzzle';
 import { FillNode } from '../../models/FillNode';
 import { AppContext } from '../../AppContext';
 import { ContentType } from '../../models/ContentType';
@@ -23,6 +23,11 @@ import { GETTABLE_VERY } from '../../lib/crosswordListRatings';
 
 /** Refresh fills list promptly while searching; throttle only to avoid per-fill thrash. */
 const FILL_COUNT_UI_INTERVAL_MS = 100;
+
+function blackSquareCount(grid: GridState, section: Section, sc: SectionCandidate): number {
+    const whiteSquares = sc.squareKeys ? sc.squareKeys.length : section.squares.size;
+    return grid.width * grid.height - whiteSquares;
+}
 
 function countVeryGettableEntries(section: Section, sc: SectionCandidate): number {
     const grid = getGrid();
@@ -37,7 +42,7 @@ function countVeryGettableEntries(section: Section, sc: SectionCandidate): numbe
     return count;
 }
 
-function FillView() {
+function FillView({ hidden }: { hidden?: boolean }) {
     const appContext = useContext(AppContext);
     const [showSectionCandidates, setShowSectionCandidates] = useState(true);
     const [isWordListLoading, setIsWordListLoading] = useState(false);
@@ -198,6 +203,11 @@ function FillView() {
         }
 
         let node = makeNewNode(grid, 0);
+        if (!candidateLayoutMatches(section, candidate)) {
+            paintSectionCandidate(node.endGrid, candidate,
+                isHover ? ContentType.HoverChosenSection : ContentType.ChosenSection);
+            return node;
+        }
         insertSectionCandidateIntoGrid(node.endGrid, candidate, 
             isHover ? ContentType.HoverChosenSection : ContentType.ChosenSection);
         return node;
@@ -321,9 +331,33 @@ function FillView() {
         let section = getSection();
         let grid = getGrid();
         let candidateKey = target.attributes["data-candidate-key"].value as string;
+        let candidate = section.candidates.get(candidateKey);
 
         if (section.selectedCandidate === candidateKey) {
             eraseSelectedFillFromGrid(section, grid, candidateKey);
+        }
+        else if (candidate && !candidateLayoutMatches(section, candidate)) {
+            // The fill search reads the live grid. Don't swap patterns out from under it.
+            if (Globals.fillStatus === FillStatus.Running) return;
+            if (section.selectedCandidate) {
+                eraseSelectedFillFromGrid(section, grid, section.selectedCandidate);
+            }
+            stampCandidateLayout(section);
+            const kept = Array.from(section.candidates.values()).map(c => ({
+                ...c,
+                squareKeys: c.squareKeys?.slice(),
+            }));
+            paintSectionCandidate(grid, candidate, ContentType.ChosenSection);
+            initializeSessionGlobals();
+            const next = Globals.sections!.get(0)!;
+            kept.forEach(c => next.candidates.set(c.sectionString, { ...c, sectionId: next.id }));
+            next.selectedCandidate = candidateKey;
+            Globals.selectedSectionCandidateKeys!.set(next.id, candidateKey);
+            grid.userFilledSectionCandidates.clear();
+            grid.userFilledSectionCandidates.set(candidateKey, true);
+            updateGridConstraintInfo(grid);
+            updateManualEntryCandidates(grid);
+            moveSeedClue(grid);
         }
         else {
             if (section.selectedCandidate) {
@@ -336,6 +370,7 @@ function FillView() {
 
             updateManualEntryCandidates(node.endGrid);
             Globals.activeGrid = node.endGrid;
+            if (candidate) moveSeedClue(node.endGrid);
         }
         
         updateSectionFilters();
@@ -419,6 +454,8 @@ function FillView() {
         Globals.wordAbbr = undefined;
         Globals.wordSensitive = undefined;
         Globals.wordCrosswordese = undefined;
+        Globals.wordOverused = undefined;
+        Globals.wordRegionalism = undefined;
         Globals.likelyGettableSet = undefined;
         ensureWordList(undefined, undefined);
         setFillStatus(FillStatus.NoWordList);
@@ -472,11 +509,23 @@ function FillView() {
     let selectedScKey = activeSection.selectedCandidate;
     let selectedSectionIds = mapKeys(Globals.selectedSectionIds!) || [0];
     const gettableCounts = new Map<string, number>();
+    const blackCounts = new Map<string, number>();
+    const longestEntries = new Map<string, string>();
     let sectionCandidates = mapValues(activeSection.candidates)
         .filter(sc => !sc.isFilteredOut);
-    sectionCandidates.forEach(sc => gettableCounts.set(sc.sectionString, countVeryGettableEntries(activeSection, sc)));
+    sectionCandidates.forEach(sc => {
+        blackCounts.set(sc.sectionString, blackSquareCount(grid, activeSection, sc));
+        if (candidateLayoutMatches(activeSection, sc)) {
+            gettableCounts.set(sc.sectionString, countVeryGettableEntries(activeSection, sc));
+        } else {
+            gettableCounts.set(sc.sectionString, sc.gettableCount ?? 0);
+            longestEntries.set(sc.sectionString, sc.longestEntry ?? "");
+        }
+    });
     sectionCandidates.sort((a, b) =>
-        (gettableCounts.get(b.sectionString)! - gettableCounts.get(a.sectionString)!) || b.score - a.score);
+        (blackCounts.get(a.sectionString)! - blackCounts.get(b.sectionString)!)
+        || (gettableCounts.get(b.sectionString)! - gettableCounts.get(a.sectionString)!)
+        || b.score - a.score);
     let selectedEntry = Globals.selectedWordKey ? getEntryAtWordKey(grid, Globals.selectedWordKey!) : "";
     let useManualHeuristics = Globals.useManualHeuristics !== undefined ? Globals.useManualHeuristics : true;
 
@@ -497,8 +546,8 @@ function FillView() {
     } as React.CSSProperties;
 
     return (
-        <div id="FillView" className="fill-container">
-            <input id="open-wordlist-input" className="d-none" type="file" accept=".csv" onChange={onWordListUpload} />
+        <div id="FillView" className="fill-container" style={hidden ? { display: "none" } : undefined}>
+            <input id="open-wordlist-input" className="d-none" type="file" accept=".csv,.enc" onChange={onWordListUpload} />
             <div id="loader" style={{display: isWordListLoading ? "block" : "none"}}></div>
 
             <div className={"fill-status" +
@@ -644,8 +693,10 @@ function FillView() {
                             </div>
                         )}
                         {showSectionCandidates && sectionCandidates.map(sc => {
-                            let entry = entryFromSectionString(activeSection, sc.sectionString, getLongestStackWord(activeSection));
                             let candidateKey = sc.sectionString;
+                            let entry = longestEntries.has(candidateKey)
+                                ? longestEntries.get(candidateKey)!
+                                : entryFromSectionString(activeSection, sc.sectionString, getLongestStackWord(activeSection));
 
                             return (
                             <div className={"fill-list-row-wrapper" + (selectedScKey === candidateKey ? " fill-list-row-selected" : "")}

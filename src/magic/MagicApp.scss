@@ -1,0 +1,1099 @@
+﻿$bg-top: #0a1024;
+$bg-mid: #16244a;
+$bg-bottom: #2b3a5e;
+$surface: rgba(20, 32, 64, 0.72);
+$border: #31446f;
+$text: #e9eefc;
+$muted: #9fb0d6;
+$sea: #7fd6d0;
+$sunset: #ff9f7a;
+$sand: #e8c9a0;
+$ok: #4ade80;
+$bad: #f87171;
+
+body.mc-body {
+  margin: 0;
+  background: $bg-top;
+  color: $text;
+  font-family: "Segoe UI", system-ui, -apple-system, Roboto, sans-serif;
+}
+
+.mc-app {
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  color: $text;
+  background: linear-gradient(180deg, $bg-top 0%, $bg-mid 60%, $bg-bottom 100%);
+  background-attachment: fixed;
+
+  *, *::before, *::after { box-sizing: border-box; }
+  button { font-family: inherit; }
+}
+
+.mc-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 10px 8px;
+  background: rgba(10, 16, 36, 0.85);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid $border;
+}
+
+.mc-progress {
+  max-width: 560px;
+  margin: 0 auto;
+
+  ol {
+    display: flex;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    gap: 4px;
+  }
+
+  li { flex: 1 1 0; min-width: 0; }
+}
+
+.mc-step button {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 2px;
+  background: none;
+  border: 0;
+  border-radius: 8px;
+  color: $muted;
+  font-size: 0.8rem;
+  cursor: pointer;
+
+  &:focus-visible { outline: 2px solid $sea; outline-offset: 1px; }
+  &:disabled { cursor: not-allowed; opacity: 0.45; }
+}
+
+.mc-step-dot {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 2px solid $border;
+  background: rgba(20, 32, 64, 0.9);
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.mc-step-done .mc-step-dot { border-color: $sea; color: $sea; }
+.mc-step-active {
+  button { color: $text; font-weight: 600; }
+  .mc-step-dot { border-color: $sunset; background: $sunset; color: #1a1020; }
+}
+
+.mc-main {
+  flex: 1;
+  width: 100%;
+  max-width: 480px;
+  margin: 0 auto;
+  padding: 20px 16px 32px;
+}
+
+.mc-blank { min-height: 50vh; }
+
+.mc-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
+}
+
+.mc-logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 4px 0 6px;
+}
+
+.mc-logo-word {
+  font-size: clamp(1.25rem, 6.2vw, 1.9rem);
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: $sand;
+}
+
+.mc-logo-art {
+  width: clamp(64px, 20vw, 92px);
+  height: auto;
+  flex: none;
+  // The crossword sits low in the art; shift it up onto the Magic / Crossword baseline.
+  transform: translateY(-12%);
+}
+
+.mc-logo-compact {
+  margin: 0;
+  gap: 4px;
+  justify-content: flex-start;
+  min-width: 0;
+
+  .mc-logo-word {
+    font-size: clamp(0.78rem, 3.2vw, 1rem);
+    white-space: nowrap;
+  }
+
+  .mc-logo-art {
+    width: 34px;
+    transform: translateY(-8%);
+  }
+}
+
+.mc-field {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.mc-label {
+  display: block;
+  padding: 0;
+  margin: 0 0 4px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: $text;
+  float: none;
+  width: 100%;
+  text-align: center;
+}
+
+.mc-hint {
+  margin: 0 0 10px;
+  font-size: 0.9rem;
+  color: $muted;
+  text-align: center;
+}
+
+.mc-input {
+  width: 100%;
+  padding: 12px 14px;
+  font-size: 1.2rem; // >=16px avoids iOS zoom on focus
+  color: $text;
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 10px;
+
+  &:focus {
+    outline: none;
+    border-color: $sea;
+    box-shadow: 0 0 0 3px rgba(127, 214, 208, 0.25);
+  }
+}
+
+.mc-count {
+  margin-top: 8px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
+
+  &.mc-ok { color: $ok; }
+  &.mc-bad { color: $bad; }
+}
+
+.mc-sizes {
+  display: flex;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+.mc-size {
+  flex: 1 1 0;
+  padding: 14px 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: $text;
+  background: $surface;
+  border: 2px solid $border;
+  border-radius: 10px;
+  cursor: pointer;
+
+  &:focus-visible { outline: 2px solid $sea; outline-offset: 2px; }
+  &:disabled { opacity: 0.35; cursor: not-allowed; }
+}
+
+.mc-size-selected {
+  border-color: $sunset;
+  background: rgba(255, 159, 122, 0.18);
+  color: #fff;
+}
+
+.mc-primary {
+  padding: 14px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #1a1020;
+  background: linear-gradient(90deg, $sunset, $sand);
+  border: 0;
+  border-radius: 12px;
+  cursor: pointer;
+
+  &:focus-visible { outline: 2px solid $sea; outline-offset: 2px; }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+}
+
+.mc-secondary {
+  padding: 10px 14px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: $text;
+  background: $surface;
+  border: 2px solid $border;
+  border-radius: 12px;
+  cursor: pointer;
+
+  &:focus-visible { outline: 2px solid $sea; outline-offset: 2px; }
+}
+
+.mc-caret { margin-left: 4px; }
+
+// Grid step
+.mc-gridstep {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 20px;
+
+  &[hidden] { display: none; }
+}
+
+.mc-grid {
+  --mc-size: 5;
+  display: grid;
+  grid-auto-rows: 1fr;
+  gap: 2px;
+  width: min(100%, 360px);
+  aspect-ratio: 1;
+  padding: 2px;
+  background: #05080f;
+  border: 2px solid #05080f;
+  border-radius: 4px;
+}
+
+.mc-cell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  color: #fff;
+  background: $bg-bottom;
+  user-select: none;
+}
+
+.mc-cell-letter {
+  // Roughly 55% of a cell's width, and the grid is at most 360px (less on narrow screens).
+  font-size: calc(min(100vw - 36px, 360px) / var(--mc-size) * 0.55);
+  font-weight: 600;
+  line-height: 1;
+}
+
+.mc-cell-number {
+  position: absolute;
+  top: 1px;
+  left: 2px;
+  font-size: max(8px, calc(min(100vw - 36px, 360px) / var(--mc-size) * 0.22));
+  font-weight: 700;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.mc-cell-black { background: #05080f; }
+
+.mc-generating,
+.mc-ask {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: $text;
+}
+
+.mc-notice {
+  margin: 0;
+  font-size: 0.95rem;
+  color: $muted;
+  text-align: center;
+}
+
+.mc-seed-error { color: $bad; }
+
+.mc-verdict {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.mc-verdict-buttons {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  width: 100%;
+
+  > .mc-primary { flex: 1 1 0; }
+}
+
+.mc-retry {
+  flex: 1 1 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+
+  .mc-primary { width: 100%; }
+}
+
+.mc-modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(5, 8, 15, 0.7);
+}
+
+.mc-modal {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  width: 100%;
+  max-width: 420px;
+  max-height: 85vh;
+  padding: 18px;
+  background: $bg-mid;
+  border: 1px solid $border;
+  border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5);
+}
+
+.mc-modal-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.mc-modal-title {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: $text;
+}
+
+.mc-modal-close {
+  flex: none;
+  width: 32px;
+  height: 32px;
+  margin: -6px -6px 0 0;
+  padding: 0;
+  font-size: 1.15rem;
+  line-height: 1;
+  color: $muted;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:hover, &:focus-visible { color: $text; background: rgba(255, 255, 255, 0.06); }
+  &:focus-visible { outline: 2px solid $sea; outline-offset: 1px; }
+}
+
+.mc-modal-actions {
+  display: flex;
+  gap: 10px;
+
+  > button { flex: 1 1 0; }
+}
+
+.mc-modal-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.mc-modal-item {
+  padding: 8px 12px;
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: $text;
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:focus-visible { outline: 2px solid $sea; outline-offset: 2px; }
+}
+
+.mc-modal-item-excluded {
+  color: $muted;
+  text-decoration: line-through;
+}
+
+
+@media (min-width: 768px) {
+  .mc-main { padding-top: 40px; }
+  .mc-progress ol { gap: 12px; }
+}
+
+.mc-main:has(.mc-cluesstep:not([hidden])) {
+  max-width: 640px;
+}
+
+.mc-cluesstep {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  width: 100%;
+
+  &[hidden] { display: none; }
+}
+
+.mc-clues-instructions {
+  margin: 0;
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-align: center;
+  color: $text;
+}
+
+.mc-clues-columns {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px 24px;
+  width: 100%;
+}
+
+.mc-clues-container {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.mc-clues-header {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-align: center;
+  padding: 4px 0 8px;
+  color: $sand;
+  border-bottom: 1px solid $border;
+  margin-bottom: 6px;
+}
+
+.mc-clues-clues {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.mc-clue {
+  display: block;
+  width: 100%;
+  padding: 6px 4px;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  color: $text;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+
+  &:hover, &:focus-visible {
+    background: rgba(127, 214, 208, 0.12);
+  }
+  &:focus-visible { outline: 2px solid $sea; outline-offset: 1px; }
+}
+
+.mc-clue-number {
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-right: 6px;
+}
+
+.mc-clue-entry {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  margin-right: 6px;
+}
+
+.mc-clue-text {
+  color: $text;
+}
+
+.mc-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  margin: 0 6px -1px 0;
+  border: 2px solid $muted;
+  border-top-color: $sea;
+  border-radius: 50%;
+  animation: mc-spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+@keyframes mc-spin {
+  to { transform: rotate(360deg); }
+}
+
+.mc-clues-footer {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+  flex-wrap: wrap;
+  width: 100%;
+  padding-top: 8px;
+  border-top: 1px solid $border;
+}
+
+.mc-clues-checks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  flex: 1 1 180px;
+  min-width: 0;
+}
+
+.mc-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  font-size: 0.9rem;
+  color: $text;
+  cursor: pointer;
+
+  input {
+    margin-top: 3px;
+    flex: none;
+    accent-color: $sea;
+  }
+}
+
+.mc-check-nested { margin-left: 26px; }
+
+.mc-check-disabled { color: $muted; cursor: not-allowed; }
+
+.mc-finish {
+  flex: 0 0 auto;
+  min-width: 150px;
+  padding: 12px 16px;
+}
+
+.mc-clue-modal {
+  max-width: 720px;
+}
+
+.mc-clue-edit-row {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+}
+
+.mc-clue-ok {
+  flex: none;
+  padding: 10px 16px;
+  font-size: 1rem;
+}
+
+.mc-clue-lists {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-start;
+  gap: 16px;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.mc-clue-list {
+  flex: 1 1 0;
+  min-width: 0;
+
+  h3 { margin: 0 0 8px; }
+
+  ul {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+}
+
+.mc-clue-list-title {
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: $sand;
+}
+
+.mc-clue-suggestion-row {
+  display: flex;
+  align-items: stretch;
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 8px;
+
+  &:hover, &:focus-within { border-color: $sea; }
+
+  .mc-clue-suggestion {
+    flex: 1 1 auto;
+    width: auto;
+    min-width: 0;
+    border: 0;
+    background: transparent;
+    border-radius: 8px 0 0 8px;
+
+    &:only-child { border-radius: 8px; }
+
+    &:hover, &:focus-visible {
+      border-color: transparent;
+      background: rgba(127, 214, 208, 0.12);
+    }
+  }
+}
+
+.mc-clue-suggestion {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 0.95rem;
+  text-align: left;
+  color: $text;
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:hover, &:focus-visible {
+    border-color: $sea;
+    background: rgba(127, 214, 208, 0.12);
+  }
+  &:focus-visible { outline: 2px solid $sea; outline-offset: 1px; }
+}
+
+.mc-clue-delete {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  padding: 0;
+  color: $bad;
+  background: transparent;
+  border: 0;
+  border-left: 1px solid $border;
+  border-radius: 0 8px 8px 0;
+  cursor: pointer;
+
+  &:hover, &:focus-visible {
+    color: #fff;
+    background: rgba(248, 113, 113, 0.28);
+  }
+  &:focus-visible { outline: 2px solid $bad; outline-offset: -2px; }
+  &:disabled { opacity: 0.45; cursor: default; }
+}
+
+.mc-clue-delete-icon {
+  display: block;
+}
+
+.mc-share {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 14px;
+  max-width: 560px;
+  margin: 0 auto;
+}
+
+.mc-share-heading {
+  margin: 8px 0 0;
+  font-size: 1.6rem;
+  font-weight: 700;
+  text-align: center;
+  color: $sand;
+}
+
+.mc-share-subheading {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+  text-align: center;
+  color: $text;
+}
+
+.mc-share-link-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  padding: 8px 8px 8px 14px;
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 10px;
+}
+
+.mc-share-link {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: $sea;
+  font-size: 0.95rem;
+}
+
+.mc-copy {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  color: $text;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:hover, &:focus-visible { color: $sea; background: rgba(127, 214, 208, 0.12); }
+  &:focus-visible { outline: 2px solid $sea; outline-offset: 1px; }
+}
+
+.mc-copy-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.mc-share-actions {
+  display: flex;
+  justify-content: center;
+  align-items: stretch;
+  gap: 12px;
+  margin-top: 10px;
+
+  > button {
+    width: auto;
+    padding: 14px 22px;
+  }
+}
+
+.mc-download {
+  max-width: 100%;
+}
+
+.mc-share-copied {
+  margin: -6px 0 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: $ok;
+  text-align: right;
+}
+
+.mc-share-note {
+  margin: 0;
+  font-size: 0.95rem;
+  line-height: 1.45;
+  color: $muted;
+
+  a {
+    color: $sea;
+    font-weight: 600;
+  }
+}
+
+.mc-header.mc-solver-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 4px 12px;
+}
+
+.mc-solver-tools {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex: none;
+}
+
+.mc-tool {
+  position: relative;
+}
+
+.mc-tool-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  color: $text;
+  background: transparent;
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:hover, &:focus-visible { color: $sea; background: rgba(127, 214, 208, 0.12); }
+  &:focus-visible { outline: 2px solid $sea; outline-offset: 1px; }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+}
+
+.mc-tool-open {
+  color: $sea;
+  background: rgba(127, 214, 208, 0.12);
+}
+
+.mc-tool-icon {
+  width: 22px;
+  height: 22px;
+}
+
+.mc-tool-menu {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  z-index: 15;
+  min-width: 168px;
+  margin-top: 4px;
+  padding: 4px;
+  background: $bg-mid;
+  border: 1px solid $border;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.mc-tool-item {
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: left;
+  color: $text;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+
+  &:hover, &:focus-visible { background: rgba(127, 214, 208, 0.12); }
+  &:focus-visible { outline: 2px solid $sea; outline-offset: -2px; }
+  &:disabled { opacity: 0.4; cursor: not-allowed; }
+}
+
+.mc-solver-timer {
+  min-width: 4.5ch;
+  margin-left: 6px;
+  font-size: 1rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: $sand;
+  text-align: right;
+}
+
+.mc-main.mc-solver-main {
+  max-width: 480px;
+  padding-top: 16px;
+}
+
+.mc-solver {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+}
+
+.mc-solver-board {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 420px;
+  gap: 10px;
+}
+
+.mc-solver-current {
+  order: 2;
+  width: 100%;
+  min-height: 2.6em;
+  margin: 0;
+  font-size: 1.05rem;
+  line-height: 1.35;
+  text-align: center;
+}
+
+.mc-solver-current-label {
+  margin-right: 8px;
+  font-weight: 700;
+  color: $sand;
+}
+
+.mc-solver-current-empty {
+  color: $muted;
+}
+
+.mc-solver .mc-grid { order: 1; }
+
+.mc-cell-open {
+  padding: 0;
+  border: 0;
+  font: inherit;
+  cursor: pointer;
+  touch-action: manipulation;
+
+  &:focus-visible { outline: 2px solid $sea; outline-offset: -2px; }
+}
+
+.mc-cell-slot { background: #3a5278; }
+
+.mc-cell-selected {
+  background: #6d5c72;
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(232, 201, 160, 0.45);
+
+  .mc-cell-number { color: rgba(255, 255, 255, 0.9); }
+  .mc-cell-letter { color: #fff; }
+  .mc-cell-letter-wrong { color: $bad; }
+  .mc-cell-letter-revealed { color: $ok; }
+}
+
+.mc-cell-letter-wrong { color: $bad; }
+.mc-cell-letter-revealed { color: $ok; }
+
+.mc-solver-done {
+  position: relative;
+
+  > .mc-modal-close {
+    position: absolute;
+    top: 8px;
+    right: 8px;
+    margin: 0;
+  }
+}
+
+.mc-solver-done-title {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 36px 0;
+  text-align: center;
+}
+
+.mc-solver-congrats {
+  font-size: 1.7rem;
+  line-height: 1.25;
+}
+
+.mc-solver-done-actions {
+  margin-top: 22px;
+}
+
+.mc-solver-capture {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  overflow: hidden;
+  font-size: 16px;
+}
+
+.mc-solver-lists { display: none; }
+
+.mc-solver-list {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
+.mc-solver-clues {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+}
+
+.mc-solver-clue {
+  display: block;
+  width: 100%;
+  padding: 6px 4px;
+  font-size: 0.92rem;
+  line-height: 1.35;
+  color: $text;
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+
+  &:hover, &:focus-visible { background: rgba(127, 214, 208, 0.12); }
+  &:focus-visible { outline: 2px solid $sea; outline-offset: 1px; }
+}
+
+.mc-solver-clue-active {
+  background: rgba(255, 159, 122, 0.22);
+  font-weight: 600;
+}
+
+.mc-toast {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  z-index: 40;
+  transform: translateX(-50%);
+  padding: 10px 16px;
+  font-weight: 600;
+  color: $ok;
+  background: $bg-mid;
+  border: 1px solid $ok;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+@media (min-width: 768px) {
+  .mc-main.mc-solver-main {
+    max-width: 1040px;
+    padding-top: 24px;
+  }
+
+  .mc-solver {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+    gap: 28px;
+  }
+
+  .mc-solver-current { order: 0; }
+
+  .mc-solver-lists {
+    display: flex;
+    flex: 1 1 440px;
+    gap: 20px;
+    min-width: 0;
+    max-height: calc(100dvh - 88px);
+    overflow: auto;
+    position: sticky;
+    top: 60px;
+  }
+}

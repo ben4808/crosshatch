@@ -102,12 +102,11 @@ function App(props: AppProps) {
       <Menu gridHeight={gridHeight} gridWidth={gridWidth} openView={activeView}></Menu>
 
       <div className="left-panel">
-        {activeView === "Clues" && 
+        {activeView === "Clues" &&
             <CluesView updateSemaphore={updateSemaphore}></CluesView>
         }
-        {activeView === "Fill" && 
-            <FillView></FillView>
-        }
+        {/* Stay mounted while Clues is open so a running fill keeps its switches and status. */}
+        <FillView hidden={activeView !== "Fill"}></FillView>
       </div>
       
       <div className="right-panel">

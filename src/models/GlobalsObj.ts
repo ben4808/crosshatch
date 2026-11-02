@@ -41,6 +41,10 @@ export interface GlobalsObj {
     wordSensitive?: Set<string>;
     /** Entries marked crosswordese=y in the word-list CSV. */
     wordCrosswordese?: Set<string>;
+    /** Entries marked overused=y in the word-list CSV. */
+    wordOverused?: Set<string>;
+    /** Entries whose familiarity bucket is Regionalism (not a CSV column in current lists). */
+    wordRegionalism?: Set<string>;
     /** Active gettability constraint used by the fill (and workers). */
     fillFilter?: FillFilter;
     likelyGettableSet?: Set<string>;

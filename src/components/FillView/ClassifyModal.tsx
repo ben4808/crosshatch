@@ -26,6 +26,7 @@ export const FAMILIARITY_OPTIONS = [
     "Literal",
     "Ubiquitous",
     "Common Name",
+    "Regionalism",
     "Active",
     "General Knowledge",
     "Inferred",
@@ -60,6 +61,7 @@ export interface ClassifyRow {
     isVulgar: boolean;
     isSensitive: boolean;
     isCrosswordese: boolean;
+    isOverused: boolean;
     isReviewed: boolean;
     nytValue: string;
 }
@@ -90,6 +92,7 @@ function rowsEqual(a: ClassifyRow, b: ClassifyRow): boolean {
         && a.isVulgar === b.isVulgar
         && a.isSensitive === b.isSensitive
         && a.isCrosswordese === b.isCrosswordese
+        && a.isOverused === b.isOverused
         && a.isReviewed === b.isReviewed;
 }
 
@@ -130,6 +133,7 @@ function makeBlankRow(): ClassifyRow {
         isVulgar: false,
         isSensitive: false,
         isCrosswordese: false,
+        isOverused: false,
         isReviewed: false,
         nytValue: "None",
     };
@@ -170,6 +174,7 @@ function ClassifyModal(props: ClassifyModalProps) {
                     qualityBucket: string | null;
                     isVulgar: boolean | null;
                     isCrosswordese?: boolean;
+                    isOverused?: boolean;
                     isReviewed?: boolean;
                     isSensitive?: boolean;
                     nytValue?: string | null;
@@ -200,6 +205,7 @@ function ClassifyModal(props: ClassifyModalProps) {
                         isVulgar: match?.isVulgar === true,
                         isSensitive: match?.isSensitive === true,
                         isCrosswordese: match?.isCrosswordese === true,
+                        isOverused: match?.isOverused === true,
                         isReviewed: match?.isReviewed === true,
                         nytValue: nytDisplay(match?.nytValue),
                     };
@@ -314,6 +320,7 @@ function ClassifyModal(props: ClassifyModalProps) {
                         isAbbreviation: row.classification === "Acronym/Abbreviation",
                         isSensitive: row.isSensitive,
                         isCrosswordese: row.isCrosswordese,
+                        isOverused: row.isOverused,
                         hasAvoidTag: row.isVulgar,
                     },
                 );
@@ -370,6 +377,7 @@ function ClassifyModal(props: ClassifyModalProps) {
                                     <th>Vulgar</th>
                                     <th>Sensitive</th>
                                     <th>Crosswordese</th>
+                                    <th>Overused</th>
                                     <th className="classify-check-cell">
                                         <div className="classify-reviewed-header">
                                             Reviewed
@@ -482,6 +490,13 @@ function ClassifyModal(props: ClassifyModalProps) {
                                                 type="checkbox"
                                                 checked={row.isCrosswordese}
                                                 onChange={(event) => updateRow(index, { isCrosswordese: event.target.checked })}
+                                            />
+                                        </td>
+                                        <td className="classify-check-cell">
+                                            <input
+                                                type="checkbox"
+                                                checked={row.isOverused}
+                                                onChange={(event) => updateRow(index, { isOverused: event.target.checked })}
                                             />
                                         </td>
                                         <td className="classify-check-cell">

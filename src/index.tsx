@@ -1,18 +1,27 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import App from './App';
 import 'bootstrap/dist/css/bootstrap.css';
 
-// import { loadWordListFromLocalhost } from './lib/wordList';
-// import Globals from './lib/windowService';
-// import { FillStatus } from './models/FillStatus';
-// loadWordListFromLocalhost("http://localhost/classifier/mainBrodaEntries.txt").then(() => {
-//   Globals.fillStatus = FillStatus.Ready;
-// });
+const isMagicApp = /^\/app(\/|$)/.test(window.location.pathname);
+const root = document.getElementById('root');
 
-ReactDOM.render(
-  <React.StrictMode>
-    <App activeView="Fill" />
-  </React.StrictMode>,
-  document.getElementById('root')
-);
+// Load each app lazily so the crossword editor's styles and globals don't leak into /app.
+if (isMagicApp) {
+  import('./magic/MagicApp').then(({ default: MagicApp }) => {
+    ReactDOM.render(
+      <React.StrictMode>
+        <MagicApp />
+      </React.StrictMode>,
+      root
+    );
+  });
+} else {
+  import('./App').then(({ default: App }) => {
+    ReactDOM.render(
+      <React.StrictMode>
+        <App activeView="Fill" />
+      </React.StrictMode>,
+      root
+    );
+  });
+}

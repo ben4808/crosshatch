@@ -5,7 +5,7 @@ import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
 import { buildEntryCandidates } from "./entryCandidates";
 import { createRootFillSearchState, selectWordToFill } from "./fill";
-import { sectionCandidateScore } from "./section";
+import { countCurrentPatternFills, sectionCandidateScore } from "./section";
 import {
     FillWordFilterPayload,
     MainToWorkerMessage,
@@ -13,7 +13,7 @@ import {
     stripGridLookups,
     WorkerToMainMessage,
 } from "./fillWorkerTypes";
-import { getSquaresForWord } from "./util";
+import { getSquaresForWord, shuffleArray } from "./util";
 import { getWordIndexInitPayload, installFillFilter } from "./wordList";
 import Globals from "./windowService";
 
@@ -188,7 +188,6 @@ function handleWorkerMessage(worker: Worker, event: MessageEvent<WorkerToMainMes
     if (msg.type === "found") {
         const { section, onFound, onProgress } = job.options;
         for (const fill of msg.fills) {
-            onFound?.(fill.sectionString);
             if (!section.candidates.has(fill.sectionString)) {
                 const candidate: SectionCandidate = {
                     sectionId: section.id,
@@ -198,7 +197,8 @@ function handleWorkerMessage(worker: Worker, event: MessageEvent<WorkerToMainMes
                 };
                 section.candidates.set(fill.sectionString, candidate);
             }
-            if (section.candidates.size >= MAX_STORED_FILLS) {
+            onFound?.(fill.sectionString);
+            if (countCurrentPatternFills(section) >= MAX_STORED_FILLS) {
                 onProgress?.();
                 finishJob(job, true);
                 return;
@@ -260,6 +260,8 @@ export function startFill(options: StartFillOptions): boolean {
         options.onComplete(true);
         return false;
     }
+    // Chunks are contiguous slices, so shuffle first or workers always start in dictionary order.
+    shuffleArray(entryCandidates);
 
     const n = Math.min(workerCountCap(), entryCandidates.length);
     ensureWorkers(n);

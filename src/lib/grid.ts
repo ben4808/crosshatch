@@ -350,6 +350,34 @@ export function eraseSectionCandidateFromGrid(grid: GridState, sc: SectionCandid
     });
 }
 
+/**
+ * Draw a fill that belongs to a different black-square pattern: set blacks from its
+ * square keys, then write its letters. Used to preview or select an older Magic Puzzle fill.
+ */
+export function paintSectionCandidate(grid: GridState, candidate: SectionCandidate, contentType?: ContentType) {
+    if (!candidate.squareKeys || candidate.squareKeys.length !== candidate.sectionString.length) return;
+    const chosen = contentType !== ContentType.HoverChosenSection && contentType !== ContentType.Autofill;
+    const white = new Set(candidate.squareKeys);
+    forAllGridSquares(grid, sq => {
+        if (white.has(squareKey(sq))) {
+            if (isBlackSquare(sq)) sq.type = SquareType.White;
+            return;
+        }
+        sq.type = SquareType.Black;
+        sq.content = undefined;
+        sq.contentType = ContentType.Autofill;
+        sq.viableMask = undefined;
+    });
+    for (let i = 0; i < candidate.squareKeys.length; i++) {
+        const sq = getSquareAtKey(grid, candidate.squareKeys[i]);
+        const content = candidate.sectionString[i];
+        sq.content = content && content !== "-" ? content : undefined;
+        sq.viableMask = sq.content ? letterBit(sq.content) : undefined;
+        sq.contentType = chosen ? ContentType.ChosenSection : ContentType.Autofill;
+    }
+    populateWords(grid);
+}
+
 export function clearFill(grid: GridState) {
     Globals.selectedWordNode = undefined;
     let section = getSection();

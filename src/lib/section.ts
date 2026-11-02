@@ -11,8 +11,60 @@ import { generateConstraintInfoForSquares, getLettersFromSquares } from "./grid"
 import { forAllGridSquares, getGrid, getSquaresForWord, getWordAtSquare, getSquareAtKey, isAcross, 
     isBlackSquare, mapKeys, squareKey, wordKey, wordLength, mapValues, isUserOrWordFilled, cloneGridForFill,
     letterBit } from "./util";
-import { fillScore } from "./wordList";
+import { fillScore, GETTABLE_VERY } from "./wordList";
 import Globals from './windowService';
+
+function sameSquareKeys(a: string[], b: string[]): boolean {
+    if (a.length !== b.length) return false;
+    for (let i = 0; i < a.length; i++) {
+        if (a[i] !== b[i]) return false;
+    }
+    return true;
+}
+
+/** True when the candidate was stored for this section's current squares. */
+export function candidateLayoutMatches(section: Section, candidate: SectionCandidate): boolean {
+    if (!candidate.squareKeys) return true;
+    return sameSquareKeys(mapKeys(section.squares).sort(), candidate.squareKeys);
+}
+
+function countVeryGettableEntries(section: Section, candidate: SectionCandidate): number {
+    const grid = getGrid();
+    let count = 0;
+    section.words.forEach((_, key) => {
+        const word = grid.words.get(key);
+        if (!word) return;
+        const entry = entryFromSectionString(section, candidate.sectionString, word);
+        if (!entry || /[^A-Z]/.test(entry)) return;
+        if (Globals.wordGettable?.get(entry) === GETTABLE_VERY) count++;
+    });
+    return count;
+}
+
+/**
+ * Remember how to display fills for the section's current squares.
+ * Later black-square patterns keep these fills in the list instead of dropping them.
+ */
+export function stampCandidateLayout(section: Section) {
+    const keys = mapKeys(section.squares).sort();
+    if (keys.length === 0 || section.words.size === 0) return;
+    const longest = getLongestStackWord(section);
+    section.candidates.forEach(can => {
+        if (can.squareKeys) return;
+        can.squareKeys = keys.slice();
+        can.longestEntry = entryFromSectionString(section, can.sectionString, longest);
+        can.gettableCount = countVeryGettableEntries(section, can);
+    });
+}
+
+/** Fills for the active black-square pattern. Older patterns are already stamped. */
+export function countCurrentPatternFills(section: Section): number {
+    let count = 0;
+    section.candidates.forEach(candidate => {
+        if (!candidate.squareKeys) count++;
+    });
+    return count;
+}
 
 export function updateSectionFilters() {
     let sections = Globals.sections!;
@@ -21,6 +73,8 @@ export function updateSectionFilters() {
         let sqKeys = mapKeys(sec.squares).sort();
         sec.candidates.forEach(can => {
             can.isFilteredOut = false;
+            // A fill from another black-square pattern doesn't line up with these squares.
+            if (can.squareKeys && !sameSquareKeys(sqKeys, can.squareKeys)) return;
             for (let i = 0; i < sqKeys.length; i++) {
                 let gridSq = getSquareAtKey(grid, sqKeys[i]);
                 if (isUserOrWordFilled(gridSq) && can.sectionString[i] !== gridSq.content)

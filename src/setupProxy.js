@@ -18,6 +18,7 @@ const MANUAL_TAGS = {
 const CROSSWORDESE_TAG = "crosswordese";
 const SENSITIVE_TAG = "sensitive";
 const VULGAR_TAG = "vulgar";
+const OVERUSED_TAG = "overused";
 
 function textVal(value) {
   return value == null ? "" : String(value);
@@ -95,6 +96,25 @@ function handleChalApiRoutes(app) {
   });
 }
 
+const MAGIC_LIST_PATH = "C:\\Users\\ben_z\\Desktop\\crossword_lists\\list.enc";
+
+/** Serve the encrypted Magic Crossword word list from disk (browsers can't read C:\ paths). */
+function handleMagicListRoute(app) {
+  app.get("/magic-list/list.enc", (req, res) => {
+    require("fs").readFile(MAGIC_LIST_PATH, (err, data) => {
+      if (err) {
+        console.error("magic list read error:", err);
+        sendJson(res, 404, { error: `Couldn't read ${MAGIC_LIST_PATH}: ${err.message}` });
+        return;
+      }
+      res.statusCode = 200;
+      res.setHeader("Content-Type", "application/octet-stream");
+      res.setHeader("Cache-Control", "no-store");
+      res.end(data);
+    });
+  });
+}
+
 function handleClassifyRoutes(app) {
   app.post("/api/classify/entries", async (req, res) => {
     try {
@@ -136,6 +156,7 @@ function handleClassifyRoutes(app) {
         applyFlagTagChange(original, row, "isCrosswordese", CROSSWORDESE_TAG, flagAdds, flagDeletes);
         applyFlagTagChange(original, row, "isVulgar", VULGAR_TAG, flagAdds, flagDeletes);
         applyFlagTagChange(original, row, "isSensitive", SENSITIVE_TAG, flagAdds, flagDeletes);
+        applyFlagTagChange(original, row, "isOverused", OVERUSED_TAG, flagAdds, flagDeletes);
       }
 
       await updateEntryClassifications(updates);
@@ -180,6 +201,7 @@ module.exports = function (app) {
     next();
   });
   app.use(express.json({ limit: "2mb" }));
+  handleMagicListRoute(app);
   handleClassifyRoutes(app);
   handleChalApiRoutes(app);
 };

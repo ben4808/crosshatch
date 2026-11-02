@@ -8,7 +8,7 @@ import { getUnfilledCrosses } from "./fill";
 import { getLettersFromSquares } from "./grid";
 import { getSectionWordList } from "./section";
 import {
-    constraintLetterCount, getSquaresForWord, isWordFull, letterBit, squareViableMask,
+    constraintLetterCount, getSquaresForWord, isWordFull, letterBit, shuffleArray, squareViableMask,
 } from "./util";
 import {
     countExtraUsed, countLikelyGettableUsed, fillWordIdFilter, queryIndexedWordList, scanWordIds, wordIdOf, wordOfId,
@@ -106,6 +106,9 @@ export function buildEntryCandidates(
 
     if (isForManualFill) {
         candidates.sort((a, b) => b.score - a.score);
+    } else if (candidates.length > 1) {
+        // Dictionary order is alphabetical; shuffle so each run tries a different sequence.
+        shuffleArray(candidates);
     }
     return candidates;
 }

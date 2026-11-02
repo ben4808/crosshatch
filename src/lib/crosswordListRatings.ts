@@ -20,9 +20,50 @@ export type Desirability =
   | typeof DESIRABILITY_NORMAL
   | typeof DESIRABILITY_AVOID;
 
+/** Codes written by cruzi-aws crosswordListExtractor.ts. */
+export const GETTABLE_BY_CODE: Record<string, GettableNess> = {
+  vg: GETTABLE_VERY,
+  lg: GETTABLE_LIKELY,
+  mg: GETTABLE_MAYBE,
+  ng: GETTABLE_NOT,
+  nt: GETTABLE_NOT_A_THING,
+};
+
+export const DESIRABILITY_BY_CODE: Record<string, Desirability> = {
+  p: DESIRABILITY_PREFER,
+  n: DESIRABILITY_NORMAL,
+  a: DESIRABILITY_AVOID,
+};
+
+const GETTABLE_NAMES: GettableNess[] = [
+  GETTABLE_VERY, GETTABLE_LIKELY, GETTABLE_MAYBE, GETTABLE_NOT, GETTABLE_NOT_A_THING,
+];
+const GETTABLE_BY_NAME = new Map(GETTABLE_NAMES.map(value => [value.toLowerCase(), value] as const));
+
+const DESIRABILITY_NAMES: Desirability[] = [
+  DESIRABILITY_PREFER, DESIRABILITY_NORMAL, DESIRABILITY_AVOID,
+];
+const DESIRABILITY_BY_NAME = new Map(DESIRABILITY_NAMES.map(value => [value.toLowerCase(), value] as const));
+
+/** Expand a gettableness token; codes (vg) or full names ("Very Gettable"). */
+export function decodeGettableNess(token: string | undefined): GettableNess | undefined {
+  const trimmed = (token || "").trim();
+  if (!trimmed) return undefined;
+  const lower = trimmed.toLowerCase();
+  return GETTABLE_BY_CODE[lower] ?? GETTABLE_BY_NAME.get(lower);
+}
+
+/** Expand a desirability token; codes (p/n/a) or full names ("Prefer"). */
+export function decodeDesirability(token: string | undefined): Desirability | undefined {
+  const trimmed = (token || "").trim();
+  if (!trimmed) return undefined;
+  const lower = trimmed.toLowerCase();
+  return DESIRABILITY_BY_CODE[lower] ?? DESIRABILITY_BY_NAME.get(lower);
+}
+
 // Keep gettability mappings in sync with cruzi-aws crosswordListExtractor.ts.
-const VERY_GETTABLE_UNITY = new Set(["Concept", "Collocation"]);
-const LIKELY_GETTABLE_UNITY = new Set(["Concept", "Collocation", "Formula", "Partial"]);
+const VERY_GETTABLE_UNITY = new Set(["Concept", "Collocation", "Formula"]);
+const LIKELY_GETTABLE_UNITY = new Set(["Concept", "Collocation", "Formula", "Partial", "Formulaic"]);
 
 const VERY_GETTABLE_FAMILIARITY = new Set(["Ubiquitous", "Active"]);
 const LIKELY_GETTABLE_FAMILIARITY = new Set([
@@ -30,10 +71,10 @@ const LIKELY_GETTABLE_FAMILIARITY = new Set([
   "Active",
   "Literal",
   "Common Name",
+  "Regionalism",
   "General Knowledge",
   "Inferred",
 ]);
-const MAYBE_GETTABLE_FAMILIARITY = new Set(["Niche", "Literal", "Non-Unit", "Non-unit"]);
 const NOT_GETTABLE_FAMILIARITY = new Set(["Obscure", "Barely Exists"]);
 
 const PREFER_QUALITY = new Set(["Idiomatic", "Interesting", "Feel-Good", "Trendy"]);
@@ -69,7 +110,7 @@ export function classifyGettableNess(
   if (LIKELY_GETTABLE_UNITY.has(unity) && LIKELY_GETTABLE_FAMILIARITY.has(familiarity)) {
     return GETTABLE_LIKELY;
   }
-  if (MAYBE_GETTABLE_FAMILIARITY.has(familiarity)) {
+  if (familiarity === "Niche" || (familiarity === "Literal" && !VERY_GETTABLE_UNITY.has(unity))) {
     return GETTABLE_MAYBE;
   }
   if (NOT_GETTABLE_FAMILIARITY.has(familiarity)) {

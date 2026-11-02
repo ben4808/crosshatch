@@ -12,11 +12,11 @@ import { SectionCandidate } from "../models/SectionCandidate";
 import { SquareType } from "../models/SquareType";
 import { WordDirection } from "../models/WordDirection";
 import { forwardCheckSection } from "./entryCandidates";
-import { ensureWordList, startFill, stopFill } from "./fillWorkerPool";
+import { ensureWordList, MAX_STORED_FILLS, startFill, stopFill } from "./fillWorkerPool";
 import { clearFill, getLettersFromSquares, populateWords, updateGridConstraintInfo } from "./grid";
-import { insertSectionCandidateIntoGrid, updateSectionFilters } from "./section";
+import { countCurrentPatternFills, insertSectionCandidateIntoGrid, stampCandidateLayout } from "./section";
 import {
-    forAllGridSquares, getGrid, getSquaresForWord, initializeSessionGlobals, isBlackSquare, isWordFull,
+    cloneGridForFill, forAllGridSquares, getGrid, getSquaresForWord, initializeSessionGlobals, isBlackSquare, isWordFull,
     mapKeys, mapValues, shuffleArray, wordKey, wordLength,
 } from "./util";
 import {
@@ -43,14 +43,14 @@ const OTHER_CLUE_TYPES = ["Saying", "Reference", "Fill in the Blank"];
 
 export const MAGIC_PUZZLE_AUTHOR = "Crosshatch";
 
-interface FillPass {
+export interface FillPass {
     label: string;
     maxLikely: number;
     maxExtra: number;
 }
 
 /** Three fill attempts per seed placement; never includes Maybe Gettable. */
-const FILL_PASSES: FillPass[] = [
+export const FILL_PASSES: FillPass[] = [
     { label: "all Very Gettable", maxLikely: 0, maxExtra: 0 },
     { label: "one Likely Gettable", maxLikely: 1, maxExtra: 0 },
     { label: "one Likely Gettable + one Crosswordese/Abbreviation", maxLikely: 1, maxExtra: 1 },
@@ -78,23 +78,24 @@ interface ParsedClue {
     clue: string;
 }
 
-interface TypedClue {
+export interface TypedClue {
     clue: string;
     clueType: string;
+    timesUsed?: number;
 }
 
 export type ClueGenResult =
     | { success: true; message?: string }
     | { success: false; message: string };
 
-interface EntryClueStatus {
+export interface EntryClueStatus {
     entry: string;
     displayText: string | null;
     cluesGenerated: boolean;
-    clues: { clue: string; clueType: string | null; isSeedword: boolean }[];
+    clues: { clue: string; clueType: string | null; isSeedword: boolean; timesUsed?: number }[];
 }
 
-interface FillDictionaries {
+export interface FillDictionaries {
     very: PackedWordIndex;
     likely: PackedWordIndex;
     all: PackedWordIndex;
@@ -102,7 +103,7 @@ interface FillDictionaries {
     extraWords: string[];
 }
 
-interface SeedPlacement {
+export interface SeedPlacement {
     squares: GridSquare[];
     saved: { content?: string; contentType: ContentType }[];
 }
@@ -130,6 +131,7 @@ export async function runMagicPuzzle(callbacks: MagicPuzzleCallbacks): Promise<M
     const fullIndex = Globals.wordList;
     const knownWords = Globals.knownWords;
     let seedPlacement: SeedPlacement | undefined;
+    let committed = false;
 
     const checkCancelled = () => {
         if (gen !== magicGeneration) throw new MagicPuzzleCancelled();
@@ -181,17 +183,53 @@ export async function runMagicPuzzle(callbacks: MagicPuzzleCallbacks): Promise<M
         let blackPairsAdded = 0;
         let found: string | undefined;
         let foundSlot: GridWord | undefined;
-        while (!found) {
+        let commitPromise: Promise<void> = Promise.resolve();
+        let seedClueError: string | undefined;
+        // Last pattern that actually produced fills. Later patterns replace the grid,
+        // and this is restored if tightening the grid ends with nowhere left to search.
+        let savedPuzzle: PuzzleSnapshot | undefined;
+
+        const commitFirstFill = (sectionString: string, slot: GridWord) => {
+            if (committed) return;
+            const section = Globals.sections!.get(0)!;
+            const candidate = section.candidates.get(sectionString);
+            if (!candidate) return;
+            if (!insertSectionCandidateIntoGrid(getGrid(), candidate, ContentType.ChosenSection)) return;
+            committed = true;
+            // The grid is now the puzzle. Don't let finally restore the pre-seed squares.
+            seedPlacement = undefined;
+            Globals.selectedSectionCandidateKeys!.set(section.id, candidate.sectionString);
+            section.selectedCandidate = candidate.sectionString;
+            rememberSeedword(seed.entry, slot, seedCandidates.find(c => c.entry === seed.entry)?.displayText);
+            Globals.puzzle!.title = `Generated Puzzle ${formatDateMMDDYYYY(new Date())}`;
+            Globals.puzzle!.author = MAGIC_PUZZLE_AUTHOR;
+            callbacks.onGridChanged();
+            callbacks.onStatus(
+                `Step 3/${TOTAL_STEPS}: Selected seed ${seed.entry}; still filling (up to ${MAX_STORED_FILLS})…`);
+            commitPromise = applySeedwordClue(seed.entry, seed.clue).then(() => {
+                callbacks.onGridChanged();
+            }).catch((err: any) => {
+                if (gen !== magicGeneration) return;
+                seedClueError = err?.message ? String(err.message) : String(err);
+            });
+        };
+
+        while (true) {
             if (seedPlacement) {
                 restoreSeed(seedPlacement);
                 seedPlacement = undefined;
                 clearSeedword();
             }
-            // Fresh placement round on the current black-square pattern: every
-            // seed-length slot, and all 3 fill passes in each one, each searched to
-            // exhaustion before the pattern is allowed to change.
+            // Fresh placement round on the current black-square pattern. Fills already
+            // stored for earlier patterns stay in the Fills list. Try every seed-length
+            // slot until one produces a fill, then every remaining fill pass on that
+            // slot. A pass runs until it stores 2000 fills for this pattern or its
+            // search is exhausted. When the pattern is exhausted below 2000, add
+            // another black-square pair and keep going. Stop at 2000 fills for the
+            // current pattern, or when no more pairs can be added.
             const activeGrid = getGrid();
-            resetGridForPlacementRound(activeGrid);
+            // Keep fills from earlier black-square patterns in the Fills list.
+            resetGridForPlacementRound(activeGrid, true);
             Globals.fillStatus = FillStatus.Running;
             callbacks.onGridChanged();
 
@@ -202,7 +240,8 @@ export async function runMagicPuzzle(callbacks: MagicPuzzleCallbacks): Promise<M
                 ? "starting grid"
                 : `${blackPairsAdded} black-square pair${blackPairsAdded === 1 ? "" : "s"} added`;
 
-            for (let i = 0; i < slots.length && !found; i++) {
+            let stopPattern = false;
+            for (let i = 0; i < slots.length && !found && !stopPattern; i++) {
                 const slot = slots[i];
                 const positionLabel = `seed ${seed.entry} in ${slotLabel(slot)} (position ${i + 1} of ${slots.length}, ${attemptLabel})`;
 
@@ -218,19 +257,31 @@ export async function runMagicPuzzle(callbacks: MagicPuzzleCallbacks): Promise<M
                 installFillFilter(makeFillFilter(activeGrid, widest, dictionaries));
                 const fits = !forwardCheckSection(activeGrid, section);
 
-                for (let p = 0; fits && p < FILL_PASSES.length && !found; p++) {
+                for (let p = 0; fits && p < FILL_PASSES.length && !stopPattern; p++) {
                     const pass = FILL_PASSES[p];
                     status(3, `Filling with ${positionLabel} — pass ${p + 1} of ${FILL_PASSES.length}: ${pass.label}…`);
                     switchDictionary(pass.maxExtra > 0 ? dictionaries.all : pass.maxLikely > 0 ? dictionaries.likely : dictionaries.very);
                     installFillFilter(undefined);
-                    updateGridConstraintInfo(activeGrid);
-                    const fillFilter = makeFillFilter(activeGrid, pass, dictionaries);
-                    const attempt = await runFillAttempt(activeGrid, section, fillFilter, callbacks.onProgress);
+                    // Later passes must search the seed placement, not the fill already
+                    // committed on screen. Workers receive a copy, so the grid can keep
+                    // showing the selected fill.
+                    const searchGrid = found ? gridWithSeedOnly(activeGrid) : activeGrid;
+                    updateGridConstraintInfo(searchGrid);
+                    const fillFilter = makeFillFilter(searchGrid, pass, dictionaries);
+                    const attempt = await runFillAttempt(
+                        searchGrid, section, fillFilter, callbacks.onProgress,
+                        sectionString => commitFirstFill(sectionString, slot));
                     checkCancelled();
-                    found = attempt.found;
-                    if (found) foundSlot = slot;
+                    if (attempt.found) {
+                        found = attempt.found;
+                        foundSlot = slot;
+                    }
+                    if (countCurrentPatternFills(section) >= MAX_STORED_FILLS) stopPattern = true;
                     else if (!attempt.exhausted) {
-                        throw new Error(`The fill search for ${positionLabel} stopped before trying every fill (see the console for worker errors).`);
+                        if (!found) {
+                            throw new Error(`The fill search for ${positionLabel} stopped before trying every fill (see the console for worker errors).`);
+                        }
+                        stopPattern = true;
                     }
                 }
 
@@ -242,43 +293,54 @@ export async function runMagicPuzzle(callbacks: MagicPuzzleCallbacks): Promise<M
                 }
             }
 
-            if (found) break;
+            if (stopPattern || countCurrentPatternFills(section) >= MAX_STORED_FILLS) break;
 
-            status(3, slots.length === 0
-                ? `No ${seedLength}-letter slots fit the seed; adding black-square pair #${blackPairsAdded + 1}…`
-                : `No fill found with the seed in any of ${slots.length} positions; adding black-square pair #${blackPairsAdded + 1}…`);
+            const stored = section.candidates.size;
+            // Stamp while this section still matches the grid. The next pattern's
+            // word list is built as soon as the black squares are added.
+            stampCandidateLayout(section);
+            status(3, found
+                ? `Stored ${stored} fill${stored === 1 ? "" : "s"}; adding black-square pair #${blackPairsAdded + 1}…`
+                : slots.length === 0
+                    ? `No ${seedLength}-letter slots fit the seed; adding black-square pair #${blackPairsAdded + 1}…`
+                    : `No fill found with the seed in any of ${slots.length} positions; adding black-square pair #${blackPairsAdded + 1}…`);
             installFillFilter(undefined);
             switchDictionary(fullIndex);
+            if (found) savedPuzzle = capturePuzzle();
+            // Filled letters block new black squares. The snapshot above still has them.
+            clearPlacedLetters(getGrid());
             if (!addRandomBlackSquarePair(getGrid(), seedLength)) {
-                throw new Error("No viable grid found: there's nowhere left to add black squares.");
+                if (savedPuzzle) {
+                    restorePuzzle(savedPuzzle);
+                    committed = true;
+                    callbacks.onGridChanged();
+                } else {
+                    throw new Error("No viable grid found: there's nowhere left to add black squares.");
+                }
+                break;
             }
             blackPairsAdded++;
+            found = undefined;
+            foundSlot = undefined;
+            committed = false;
+            clearSeedword();
             callbacks.onGridChanged();
         }
 
         installFillFilter(undefined);
         switchDictionary(fullIndex);
-        const grid = getGrid();
-        const section = Globals.sections!.get(0)!;
-        const candidate = section.candidates.get(found);
-        if (!candidate) throw new Error("The found fill went missing from the Fills list.");
-        insertSectionCandidateIntoGrid(grid, candidate, ContentType.ChosenSection);
-        Globals.selectedSectionCandidateKeys!.set(section.id, candidate.sectionString);
-        section.selectedCandidate = candidate.sectionString;
-        seedPlacement = undefined;
-        rememberSeedword(seed.entry, foundSlot, seedCandidates.find(c => c.entry === seed.entry)?.displayText);
-        await applySeedwordClue(seed.entry, seed.clue);
-        updateSectionFilters();
+        if (found && foundSlot && !committed) commitFirstFill(found, foundSlot);
+        if (!committed) throw new Error("The found fill went missing from the Fills list.");
+        await commitPromise;
         Globals.fillStatus = FillStatus.Complete;
         callbacks.onGridChanged();
 
-        // Step 4: title and author. Remaining clues are generated later from the Clue View.
-        status(4, "Naming the puzzle…");
-        const title = `Generated Puzzle ${formatDateMMDDYYYY(new Date())}`;
-        Globals.puzzle!.title = title;
-        Globals.puzzle!.author = MAGIC_PUZZLE_AUTHOR;
-
-        callbacks.onStatus(`Done: "${title}" with seed ${seed.entry}.`);
+        // Title and author were set when the first fill was selected. Remaining clues
+        // are generated later from the Clue View.
+        const title = Globals.puzzle!.title!;
+        callbacks.onStatus(seedClueError
+            ? `Done, but the seed clue failed: ${seedClueError}`
+            : `Done: "${title}" with seed ${seed.entry}.`);
         return { success: true, title };
     } catch (err: any) {
         if (err instanceof MagicPuzzleCancelled || gen !== magicGeneration) {
@@ -296,7 +358,11 @@ export async function runMagicPuzzle(callbacks: MagicPuzzleCallbacks): Promise<M
             restoreSeed(seedPlacement);
             clearSeedword();
         }
-        if (Globals.fillStatus === FillStatus.Running) clearFill(getGrid());
+        if (committed) {
+            if (Globals.fillStatus === FillStatus.Running) Globals.fillStatus = FillStatus.Complete;
+        } else if (Globals.fillStatus === FillStatus.Running) {
+            clearFill(getGrid());
+        }
     }
 }
 
@@ -387,7 +453,7 @@ export async function generateNormalClues(onStatus: (status: string) => void): P
     }
 }
 
-function makeFillFilter(grid: GridState, pass: FillPass, dictionaries: FillDictionaries): FillFilter {
+export function makeFillFilter(grid: GridState, pass: FillPass, dictionaries: FillDictionaries): FillFilter {
     return {
         maxLikelyGettable: pass.maxLikely,
         likelyWords: dictionaries.likelyWords,
@@ -398,18 +464,26 @@ function makeFillFilter(grid: GridState, pass: FillPass, dictionaries: FillDicti
     };
 }
 
-function buildFillDictionaries(knownWords: Set<string>): FillDictionaries {
-    const isPlain = (word: string) => !isMagicPuzzleBlocked(word) && !isCrosswordeseOrAbbreviation(word);
+export function buildFillDictionaries(knownWords: Set<string>, excluded?: Set<string>): FillDictionaries {
+    const isRegionalism = (word: string) => !!Globals.wordRegionalism?.has(word);
+    const isExcluded = (word: string) => !!excluded?.has(word);
+    const isPlain = (word: string) =>
+        !isMagicPuzzleBlocked(word) && !isCrosswordeseOrAbbreviation(word) && !isExcluded(word);
     const veryWords = wordsWithGettable(GETTABLE_VERY).filter(isPlain);
-    const likelyWords = wordsWithGettable(GETTABLE_LIKELY).filter(isPlain);
+    // Regionalism stays Likely Gettable for display, but it is not quota-limited.
+    const regionalismWords = wordsWithGettable(GETTABLE_LIKELY).filter(word =>
+        isRegionalism(word) && !isMagicPuzzleBlocked(word) && !isCrosswordeseOrAbbreviation(word)
+        && !isExcluded(word));
+    const likelyWords = wordsWithGettable(GETTABLE_LIKELY).filter(word => isPlain(word) && !isRegionalism(word));
     const extraWords = crosswordeseAndAbbreviationWords()
-        .filter(word => knownWords.has(word) && !isMagicPuzzleBlocked(word)
+        .filter(word => knownWords.has(word) && !isMagicPuzzleBlocked(word) && !isExcluded(word)
             && Globals.wordGettable?.get(word) === GETTABLE_VERY);
 
+    const baseWords = veryWords.concat(regionalismWords);
     return {
-        very: buildPackedWordIndex(veryWords),
-        likely: buildPackedWordIndex(veryWords.concat(likelyWords)),
-        all: buildPackedWordIndex(veryWords.concat(likelyWords, extraWords)),
+        very: buildPackedWordIndex(baseWords),
+        likely: buildPackedWordIndex(baseWords.concat(likelyWords)),
+        all: buildPackedWordIndex(baseWords.concat(likelyWords, extraWords)),
         likelyWords,
         extraWords,
     };
@@ -421,27 +495,48 @@ interface FillAttemptResult {
     exhausted: boolean;
 }
 
-/** Resolves with the first fill found, or with no fill once the search is exhausted, cut short, or cancelled. */
-function runFillAttempt(grid: GridState, section: Section, fillFilter: FillFilter, onProgress: () => void): Promise<FillAttemptResult> {
+/**
+ * Runs until MAX_STORED_FILLS fills are stored or the search space is exhausted.
+ * onFirstFill runs when the first fill is stored; the search keeps going after that.
+ * Resolves with no fill when the search is exhausted, cut short, or cancelled.
+ */
+function runFillAttempt(
+    grid: GridState,
+    section: Section,
+    fillFilter: FillFilter,
+    onProgress: () => void,
+    onFirstFill: (sectionString: string) => void,
+): Promise<FillAttemptResult> {
     return new Promise(resolve => {
         let settled = false;
-        const settle = (result: FillAttemptResult) => {
+        let first: string | undefined;
+        const settle = (exhausted: boolean) => {
             if (settled) return;
             settled = true;
             if (cancelActiveAttempt === cancel) cancelActiveAttempt = undefined;
-            stopFill();
-            resolve(result);
+            resolve({ found: first, exhausted });
         };
-        const cancel = () => settle({ exhausted: false });
+        const cancel = () => {
+            stopFill();
+            settle(false);
+        };
         cancelActiveAttempt = cancel;
 
         startFill({
             grid,
             section,
             fillFilter,
-            onFound: sectionString => settle({ found: sectionString, exhausted: false }),
+            onFound: sectionString => {
+                if (first) return;
+                first = sectionString;
+                try {
+                    onFirstFill(sectionString);
+                } catch (err) {
+                    console.error("Failed to select the first fill", err);
+                }
+            },
             onProgress,
-            onComplete: exhausted => settle({ exhausted }),
+            onComplete: exhausted => settle(exhausted),
         });
     });
 }
@@ -454,12 +549,114 @@ function longestOpenSlotLength(grid: GridState): number {
     return longest;
 }
 
-function seedSlots(grid: GridState, length: number, seed: string): GridWord[] {
+export function seedSlots(grid: GridState, length: number, seed: string): GridWord[] {
     return mapValues(grid.words).filter(word => wordLength(word) === length && seedMatchesSlot(grid, word, seed));
 }
 
-/** Clear leftover fill/seed letters and rebuild sections for a new placement round. */
-function resetGridForPlacementRound(grid: GridState) {
+interface SquareSnap {
+    type: SquareType;
+    content?: string;
+    contentType: ContentType;
+}
+
+interface PuzzleSnapshot {
+    squares: SquareSnap[][];
+    candidates: SectionCandidate[];
+    selectedCandidate?: string;
+    seedEntry?: string;
+    seedWordKey?: string;
+    seedDisplayText?: string;
+    title?: string;
+    author?: string;
+}
+
+function capturePuzzle(): PuzzleSnapshot {
+    const grid = getGrid();
+    const section = Globals.sections!.get(0)!;
+    return {
+        squares: grid.squares.map(row => row.map(sq => ({
+            type: sq.type,
+            content: sq.content,
+            contentType: sq.contentType,
+        }))),
+        candidates: Array.from(section.candidates.values()).map(candidate => ({ ...candidate })),
+        selectedCandidate: section.selectedCandidate,
+        seedEntry: Globals.seedEntry,
+        seedWordKey: Globals.seedWordKey,
+        seedDisplayText: Globals.seedDisplayText,
+        title: Globals.puzzle?.title,
+        author: Globals.puzzle?.author,
+    };
+}
+
+function restorePuzzle(snap: PuzzleSnapshot) {
+    const grid = getGrid();
+    for (let r = 0; r < grid.height; r++) {
+        for (let c = 0; c < grid.width; c++) {
+            const sq = grid.squares[r][c];
+            const saved = snap.squares[r][c];
+            sq.type = saved.type;
+            sq.content = saved.content;
+            sq.contentType = saved.contentType;
+        }
+    }
+    grid.userFilledSectionCandidates.clear();
+    populateWords(grid);
+    initializeSessionGlobals();
+    const section = Globals.sections!.get(0)!;
+    snap.candidates.forEach(candidate => {
+        section.candidates.set(candidate.sectionString, { ...candidate, sectionId: section.id });
+    });
+    section.selectedCandidate = snap.selectedCandidate;
+    if (snap.selectedCandidate) {
+        Globals.selectedSectionCandidateKeys!.set(section.id, snap.selectedCandidate);
+        grid.userFilledSectionCandidates.set(snap.selectedCandidate, true);
+    }
+    Globals.seedEntry = snap.seedEntry;
+    Globals.seedWordKey = snap.seedWordKey;
+    Globals.seedDisplayText = snap.seedDisplayText;
+    if (Globals.puzzle) {
+        if (snap.title !== undefined) Globals.puzzle.title = snap.title;
+        if (snap.author !== undefined) Globals.puzzle.author = snap.author;
+    }
+    updateGridConstraintInfo(grid);
+}
+
+/** Copy of the grid with only the seed (and typed letters) still filled. */
+export function gridWithSeedOnly(grid: GridState): GridState {
+    const copy = cloneGridForFill(grid);
+    forAllGridSquares(copy, sq => {
+        if (isBlackSquare(sq) || sq.contentType === ContentType.User || sq.contentType === ContentType.Seedword) return;
+        sq.content = undefined;
+        sq.contentType = ContentType.Autofill;
+    });
+    return copy;
+}
+
+export function clearPlacedLetters(grid: GridState) {
+    forAllGridSquares(grid, sq => {
+        if (isBlackSquare(sq) || sq.contentType === ContentType.User) return;
+        sq.content = undefined;
+        sq.contentType = ContentType.Autofill;
+    });
+    updateGridConstraintInfo(grid);
+}
+
+/**
+ * Clear leftover fill/seed letters and rebuild sections for a new placement round.
+ * When preserveFills is set, fills already stored (including other black-square
+ * patterns) stay in the new section's candidate list.
+ */
+export function resetGridForPlacementRound(grid: GridState, preserveFills = false) {
+    const previousSection = Globals.sections?.get(0);
+    const preserved = preserveFills && previousSection
+        ? Array.from(previousSection.candidates.values()).map(candidate => ({
+            ...candidate,
+            squareKeys: candidate.squareKeys?.slice(),
+        }))
+        : undefined;
+
+    grid.userFilledSectionCandidates.clear();
     forAllGridSquares(grid, sq => {
         if (isBlackSquare(sq) || sq.contentType === ContentType.User) return;
         sq.content = undefined;
@@ -469,6 +666,13 @@ function resetGridForPlacementRound(grid: GridState) {
     initializeSessionGlobals();
     const section = Globals.sections!.get(0)!;
     section.candidates = new Map<string, SectionCandidate>();
+    preserved?.forEach(candidate => {
+        section.candidates.set(candidate.sectionString, {
+            ...candidate,
+            sectionId: section.id,
+            isFilteredOut: false,
+        });
+    });
     section.selectedCandidate = undefined;
     section.fillState = undefined;
     updateGridConstraintInfo(grid);
@@ -483,7 +687,7 @@ function seedMatchesSlot(grid: GridState, slot: GridWord, seed: string): boolean
     return squares.length === seed.length && squares.every((sq, i) => !sq.content || sq.content === seed[i]);
 }
 
-function placeSeed(grid: GridState, slot: GridWord, seed: string): SeedPlacement {
+export function placeSeed(grid: GridState, slot: GridWord, seed: string): SeedPlacement {
     const squares = getSquaresForWord(grid, slot);
     const saved = squares.map(sq => ({ content: sq.content, contentType: sq.contentType }));
     squares.forEach((sq, i) => {
@@ -507,12 +711,46 @@ function clearSeedword() {
 }
 
 function rememberSeedword(entry: string, slot: GridWord | undefined, displayText?: string) {
+    const oldKey = Globals.seedWordKey;
+    const newKey = slot ? wordKey(slot) : undefined;
+    // Drop the clue on the previous slot before the new slot receives it.
+    if (oldKey && newKey && oldKey !== newKey) Globals.puzzle?.clues.delete(oldKey);
     Globals.seedEntry = entry;
-    Globals.seedWordKey = slot ? wordKey(slot) : undefined;
+    Globals.seedWordKey = newKey;
     Globals.seedDisplayText = displayText || entry;
     if (slot) {
         getSquaresForWord(getGrid(), slot).forEach(sq => { sq.contentType = ContentType.Seedword; });
     }
+}
+
+/** Move the seed clue onto the slot that now contains the seed entry. */
+export function moveSeedClue(grid: GridState) {
+    const entry = Globals.seedEntry;
+    const clues = Globals.puzzle?.clues;
+    if (!entry || !clues) return;
+
+    const oldKey = Globals.seedWordKey;
+    let slot: GridWord | undefined;
+    if (oldKey) {
+        const current = grid.words.get(oldKey);
+        if (current && getLettersFromSquares(getSquaresForWord(grid, current)) === entry) slot = current;
+    }
+    if (!slot) {
+        for (const word of grid.words.values()) {
+            if (getLettersFromSquares(getSquaresForWord(grid, word)) === entry) {
+                slot = word;
+                break;
+            }
+        }
+    }
+    if (!slot) return;
+
+    const newKey = wordKey(slot);
+    const clue = oldKey ? clues.get(oldKey) : undefined;
+    if (oldKey && oldKey !== newKey) clues.delete(oldKey);
+    if (clue !== undefined) clues.set(newKey, clue);
+    Globals.seedWordKey = newKey;
+    getSquaresForWord(grid, slot).forEach(sq => { sq.contentType = ContentType.Seedword; });
 }
 
 async function applySeedwordClue(entry: string, clue: string) {
@@ -536,7 +774,7 @@ function seedWordKeys(): string[] {
     return keys;
 }
 
-function restoreSeed(placement: SeedPlacement) {
+export function restoreSeed(placement: SeedPlacement) {
     placement.squares.forEach((sq, i) => {
         sq.content = placement.saved[i].content;
         sq.contentType = placement.saved[i].contentType;
@@ -553,18 +791,33 @@ function gridAnswers(grid: GridState): string[] {
     return Array.from(answers);
 }
 
-/** Starting black squares for each supported Magic Puzzle grid size. */
-function startingBlackSquares(size: number): [number, number][] | undefined {
+/**
+ * Starting black squares for a Magic Puzzle grid.
+ * A 3- or 4-letter seed changes the otherwise empty 5×5 start. Other sizes ignore seed length.
+ */
+export function startingBlackSquares(size: number, seedLength?: number): [number, number][] | undefined {
     const last = size - 1;
+    if (size === 5 && seedLength === 3) {
+        // (0,0), (0,1), (1,0) and their 180° reflections.
+        return [
+            [0, 0], [0, 1], [1, 0],
+            [last, last], [last, last - 1], [last - 1, last],
+        ];
+    }
+    if (size === 5 && seedLength === 4) {
+        return [[0, 0], [last, last]];
+    }
     switch (size) {
         case 5:
             return [];
         case 6:
             return [[0, 0], [last, last]];
         case 7:
+            // Northwest block and its 180° reflection. Three across answers
+            // (rows 2–4) and one down answer (column 3) stay seven letters long.
             return [
-                [0, 0], [0, 1], [1, 0],
-                [last - 1, last], [last, last - 1], [last, last],
+                [0, 0], [0, 1], [0, 2], [1, 0], [1, 1],
+                [last, last], [last, last - 1], [last, last - 2], [last - 1, last], [last - 1, last - 1],
             ];
         default:
             return undefined;
@@ -575,8 +828,8 @@ function startingBlackSquares(size: number): [number, number][] | undefined {
  * Reset the grid's black squares to the Magic Puzzle starting pattern for its size.
  * Returns true when the grid changed.
  */
-function applyStartingBlackSquares(grid: GridState): boolean {
-    const blacks = grid.width === grid.height ? startingBlackSquares(grid.width) : undefined;
+export function applyStartingBlackSquares(grid: GridState, seedLength?: number): boolean {
+    const blacks = grid.width === grid.height ? startingBlackSquares(grid.width, seedLength) : undefined;
     if (!blacks) throw new Error("Magic Puzzle supports 5x5, 6x6, and 7x7 grids only.");
 
     const blackKeys = new Set(blacks.map(([r, c]) => r * grid.width + c));
@@ -623,9 +876,10 @@ function isAdjacentToBlack(grid: GridState, row: number, col: number): boolean {
  * MIN_SLOT_LENGTH next to them, keeps the white squares connected, and keeps at least one
  * slot of seedLength. Prefers squares adjacent to existing blacks (growing from the corners).
  * Never blackens the center square of an odd-sized grid (it is its own partner, so it's skipped).
+ * Never blackens the northeast or southwest corner squares.
  * Returns false if no such pair exists.
  */
-function addRandomBlackSquarePair(grid: GridState, seedLength: number): boolean {
+export function addRandomBlackSquarePair(grid: GridState, seedLength: number): boolean {
     const h = grid.height;
     const w = grid.width;
     const adjacent: [number, number][] = [];
@@ -635,6 +889,7 @@ function addRandomBlackSquarePair(grid: GridState, seedLength: number): boolean 
             const pr = h - 1 - r;
             const pc = w - 1 - c;
             if (r * w + c >= pr * w + pc) continue;
+            if (isNortheastOrSouthwestCorner(r, c, h, w) || isNortheastOrSouthwestCorner(pr, pc, h, w)) continue;
             const sq = grid.squares[r][c];
             const partner = grid.squares[pr][pc];
             if (isBlackSquare(sq) || isBlackSquare(partner) || sq.content || partner.content) continue;
@@ -655,6 +910,10 @@ function addRandomBlackSquarePair(grid: GridState, seedLength: number): boolean 
         pair.forEach(([row, col]) => { grid.squares[row][col].type = SquareType.White; });
     }
     return false;
+}
+
+function isNortheastOrSouthwestCorner(row: number, col: number, height: number, width: number): boolean {
+    return (row === 0 && col === width - 1) || (row === height - 1 && col === 0);
 }
 
 function isWhite(grid: GridState, row: number, col: number): boolean {
@@ -778,7 +1037,7 @@ function canonicalClueType(raw: string): string | undefined {
     return undefined;
 }
 
-function parseTypedClueResponse(
+export function parseTypedClueResponse(
     response: string,
     answers: string[],
     displayByAnswer: Map<string, string>,
@@ -820,7 +1079,7 @@ function parseTypedClueResponse(
     return clues;
 }
 
-function pickGeneratedClue(clues: TypedClue[]): string | undefined {
+export function pickGeneratedClue(clues: TypedClue[]): string | undefined {
     if (clues.length === 0) return undefined;
     const straight = clues.filter(clue => clue.clueType === STRAIGHT_CLUE_TYPE);
     const others = clues.filter(clue => clue.clueType && clue.clueType !== STRAIGHT_CLUE_TYPE);
@@ -832,7 +1091,7 @@ function pickGeneratedClue(clues: TypedClue[]): string | undefined {
     return chosen[Math.floor(Math.random() * chosen.length)].clue;
 }
 
-function displayTextsFromStatuses(
+export function displayTextsFromStatuses(
     answers: string[],
     statusByAnswer: Map<string, EntryClueStatus>,
 ): Map<string, string> {
@@ -852,7 +1111,7 @@ function chunk<T>(items: T[], size: number): T[][] {
 
 const promptCache = new Map<string, string>();
 
-async function loadPrompt(url: string, signal?: AbortSignal): Promise<string> {
+export async function loadPrompt(url: string, signal?: AbortSignal): Promise<string> {
     const cached = promptCache.get(url);
     if (cached !== undefined) return cached;
     const res = await fetch(url, { signal });
@@ -862,13 +1121,13 @@ async function loadPrompt(url: string, signal?: AbortSignal): Promise<string> {
     return text;
 }
 
-async function makeAICall(prompt: string, signal?: AbortSignal): Promise<string> {
+export async function makeAICall(prompt: string, signal?: AbortSignal): Promise<string> {
     const body = await postJson<{ response?: string }>("/makeAICall", { prompt }, signal);
     if (!body.response) throw new Error("The AI returned an empty response.");
     return body.response;
 }
 
-async function postJson<T = unknown>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
+export async function postJson<T = unknown>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
     const res = await fetch(`${CHAL_API}${path}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
