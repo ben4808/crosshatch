@@ -7,6 +7,7 @@ import Solver from './Solver';
 import { fillKey, MagicFill, normalizeSeed } from './magicFill';
 import SetupStep, { countLetters, defaultGridSize, resolveGridSize } from './SetupStep';
 import { ensureSeedEntry } from './seedEntry';
+import { chooseSeedword, fetchSeedCandidates, GROK_MODEL, postJson } from '../lib/magicPuzzle';
 import './MagicApp.scss';
 
 interface PuzzleSetup {
@@ -14,7 +15,12 @@ interface PuzzleSetup {
   id: number;
   seed: string;
   size: number;
+  /** AI-written clue for the seed, when the seed came from Choose For Me. */
+  seedClue?: string;
 }
+
+/** Seed lengths Choose For Me picks from, one per grid size. */
+const CHOOSE_SEED_LENGTHS = [5, 6, 7];
 
 export default function MagicApp() {
   const [solvingId, setSolvingId] = useState(() => puzzleIdFromLocation());
@@ -27,6 +33,9 @@ export default function MagicApp() {
   const [shared, setShared] = useState<SharedPuzzle | undefined>(undefined);
   const [starting, setStarting] = useState(false);
   const [seedError, setSeedError] = useState('');
+  const [choosing, setChoosing] = useState(false);
+  // The clue the AI wrote for the seed picked by Choose For Me, kept until the Clues step.
+  const [chosenSeed, setChosenSeed] = useState<{ entry: string; clue: string } | undefined>(undefined);
 
   useEffect(() => {
     document.title = 'Magic Crossword';
@@ -44,8 +53,28 @@ export default function MagicApp() {
     const nextLength = countLetters(next);
     setSeed(next);
     setSeedError('');
+    // The held clue only belongs to the seed the AI picked.
+    if (chosenSeed && normalizeSeed(next) !== chosenSeed.entry) setChosenSeed(undefined);
     // A new letter count picks the size for that length, replacing a manual choice.
     if (prevLength !== nextLength) setPickedSize(defaultGridSize(nextLength));
+  }
+
+  async function chooseSeed() {
+    if (choosing || starting) return;
+    setChoosing(true);
+    setSeedError('');
+    try {
+      const length = CHOOSE_SEED_LENGTHS[Math.floor(Math.random() * CHOOSE_SEED_LENGTHS.length)];
+      const candidates = await fetchSeedCandidates(length, undefined, { excludeSeedwordClues: true });
+      const chosen = await chooseSeedword(candidates, undefined, GROK_MODEL);
+      changeSeed(chosen.displayText);
+      // changeSeed clears a clue held for a different seed; hold this one after it.
+      setChosenSeed({ entry: normalizeSeed(chosen.displayText), clue: chosen.clue });
+    } catch (err) {
+      setSeedError(err instanceof Error && err.message ? err.message : String(err));
+    } finally {
+      setChoosing(false);
+    }
   }
 
   async function generateGrid() {
@@ -63,7 +92,15 @@ export default function MagicApp() {
     }
     setPickedSize(size);
     // A new puzzle starts from scratch, including the Grid step's "Don't Use" choices.
-    setPuzzle(prev => ({ id: (prev?.id ?? 0) + 1, seed: normalizeSeed(submitted), size }));
+    const submittedSeed = normalizeSeed(submitted);
+    const seedClue = chosenSeed && chosenSeed.entry === submittedSeed ? chosenSeed.clue : undefined;
+    if (seedClue) {
+      // Same as the main app: keep the seed's AI clue in generated_clue (is_seedword = true).
+      postJson('/magicPuzzle/generatedClues', {
+        clues: [{ entry: submittedSeed, clue: seedClue, isSeedword: true }],
+      }).catch(err => console.error('Failed to save the seed clue', err));
+    }
+    setPuzzle(prev => ({ id: (prev?.id ?? 0) + 1, seed: submittedSeed, size, seedClue }));
     setFill(undefined);
     setShared(undefined);
     // Setup changed, so any later progress is no longer valid.
@@ -96,6 +133,7 @@ export default function MagicApp() {
     setFill(undefined);
     setShared(undefined);
     setSeedError('');
+    setChosenSeed(undefined);
   }
 
   function finishPuzzle(saved: SharedPuzzle) {
@@ -125,7 +163,9 @@ export default function MagicApp() {
             onSeedChange={changeSeed}
             onSizeChange={setPickedSize}
             onGenerate={() => { void generateGrid(); }}
+            onChoose={() => { void chooseSeed(); }}
             busy={starting}
+            choosing={choosing}
             error={seedError}
           />
         )}
@@ -144,6 +184,7 @@ export default function MagicApp() {
             key={`${puzzle.id}-${fillKey(fill)}`}
             fill={fill}
             seed={puzzle.seed}
+            seedClue={puzzle.seedClue}
             hidden={step !== 2}
             onFinished={finishPuzzle}
           />

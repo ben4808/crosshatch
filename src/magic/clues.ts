@@ -2,11 +2,12 @@ import cluePromptUrl from "../prompts/clue_prompt.txt";
 import {
     displayTextsFromStatuses,
     EntryClueStatus,
+    GROK_MODEL,
     loadPrompt,
-    makeAICall,
-    parseTypedClueResponse,
+    MAX_CLUE_RETRIES,
     pickGeneratedClue,
     postJson,
+    requestTypedClues,
     TypedClue,
 } from "../lib/magicPuzzle";
 import { fillKey, MagicFill, MagicSlot } from "./magicFill";
@@ -108,25 +109,35 @@ export async function generateMissingAiClues(
     options: {
         lang?: string;
         signal?: AbortSignal;
+        /** Progress text for the Clues step, e.g. "Generating clues (prompt 1 of 2)...". */
+        onStatus?: (status: string) => void;
+        /** Runs as soon as each batch returns (or fails after its retries), before the next prompt is sent. */
         onBatchComplete: (answers: string[], clues: AiCluesByEntry) => void;
     },
-): Promise<void> {
-    if (answers.length === 0) return;
+): Promise<{ failedBatches: number; totalBatches: number }> {
+    if (answers.length === 0) return { failedBatches: 0, totalBatches: 0 };
 
     const batches = chunk(answers, CLUE_BATCH_SIZE);
     const cluePrompt = await loadPrompt(cluePromptUrl, options.signal);
     const lang = options.lang || "en";
+    let failedBatches = 0;
 
-    for (const batch of batches) {
-        if (options.signal?.aborted) return;
+    for (let i = 0; i < batches.length; i++) {
+        const batch = batches[i];
+        if (options.signal?.aborted) return { failedBatches, totalBatches: batches.length };
+        const promptLabel = `prompt ${i + 1} of ${batches.length}`;
+        options.onStatus?.(`Generating clues (${promptLabel})...`);
         try {
             const displayByAnswer = displayTextsFromStatuses(batch, statuses);
             const prompt = cluePrompt.replace("[[DATA]]",
                 batch.map(answer => displayByAnswer.get(answer) || answer).join("\n"));
-            const response = await makeAICall(prompt, options.signal);
-            if (options.signal?.aborted) return;
-
-            const parsed = parseTypedClueResponse(response, batch, displayByAnswer);
+            const parsed = await requestTypedClues(prompt, batch, displayByAnswer, {
+                signal: options.signal,
+                model: GROK_MODEL,
+                onRetry: retry => options.onStatus?.(
+                    `Generating clues (${promptLabel}, retry ${retry} of ${MAX_CLUE_RETRIES})...`),
+            });
+            if (options.signal?.aborted) return { failedBatches, totalBatches: batches.length };
             const merged: AiCluesByEntry = {};
             const newClues: { entry: string; clue: string; isSeedword: boolean; clueType: string }[] = [];
             batch.forEach(answer => {
@@ -144,18 +155,25 @@ export async function generateMissingAiClues(
                 });
                 merged[answer] = already.concat(added.map(typed => ({ ...typed, timesUsed: typed.timesUsed ?? 0 })));
             });
-            if (newClues.length > 0) {
-                await postJson("/magicPuzzle/generatedClues", { clues: newClues, lang }, options.signal);
-            }
-            if (options.signal?.aborted) return;
+            // Apply this batch right away; saving to the database comes after.
             Object.assign(existing, merged);
             options.onBatchComplete(batch, merged);
+            if (newClues.length > 0) {
+                try {
+                    await postJson("/magicPuzzle/generatedClues", { clues: newClues, lang }, options.signal);
+                } catch (err) {
+                    if (options.signal?.aborted) return { failedBatches, totalBatches: batches.length };
+                    console.error("Failed to save generated clues", err);
+                }
+            }
         } catch (err) {
-            if (options.signal?.aborted) return;
+            if (options.signal?.aborted) return { failedBatches, totalBatches: batches.length };
             console.error("Failed to generate AI clues", err);
+            failedBatches++;
             options.onBatchComplete(batch, {});
         }
     }
+    return { failedBatches, totalBatches: batches.length };
 }
 
 export function communityCluesToSubmit(

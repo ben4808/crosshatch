@@ -92,7 +92,7 @@ function CluesView(props: any) {
     async function handleGenerateNormalClues() {
         if (isGenerating) return;
         setIsGenerating(true);
-        const result = await generateNormalClues(setNormalStatus);
+        const result = await generateNormalClues(setNormalStatus, () => appContext.triggerUpdate());
         if (result.success) {
             setNormalStatus(result.message || "");
             appContext.triggerUpdate();

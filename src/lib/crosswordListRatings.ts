@@ -6,6 +6,8 @@ export const GETTABLE_NOT_A_THING = "Not a Thing";
 
 export const DESIRABILITY_PREFER = "Prefer";
 export const DESIRABILITY_NORMAL = "Normal";
+export const DESIRABILITY_SLIGHT_PENALTY = "Slight Penalty";
+export const DESIRABILITY_PENALTY = "Penalty";
 export const DESIRABILITY_AVOID = "Avoid";
 
 export type GettableNess =
@@ -18,6 +20,8 @@ export type GettableNess =
 export type Desirability =
   | typeof DESIRABILITY_PREFER
   | typeof DESIRABILITY_NORMAL
+  | typeof DESIRABILITY_SLIGHT_PENALTY
+  | typeof DESIRABILITY_PENALTY
   | typeof DESIRABILITY_AVOID;
 
 /** Codes written by cruzi-aws crosswordListExtractor.ts. */
@@ -32,6 +36,8 @@ export const GETTABLE_BY_CODE: Record<string, GettableNess> = {
 export const DESIRABILITY_BY_CODE: Record<string, Desirability> = {
   p: DESIRABILITY_PREFER,
   n: DESIRABILITY_NORMAL,
+  sp: DESIRABILITY_SLIGHT_PENALTY,
+  pn: DESIRABILITY_PENALTY,
   a: DESIRABILITY_AVOID,
 };
 
@@ -41,7 +47,7 @@ const GETTABLE_NAMES: GettableNess[] = [
 const GETTABLE_BY_NAME = new Map(GETTABLE_NAMES.map(value => [value.toLowerCase(), value] as const));
 
 const DESIRABILITY_NAMES: Desirability[] = [
-  DESIRABILITY_PREFER, DESIRABILITY_NORMAL, DESIRABILITY_AVOID,
+  DESIRABILITY_PREFER, DESIRABILITY_NORMAL, DESIRABILITY_SLIGHT_PENALTY, DESIRABILITY_PENALTY, DESIRABILITY_AVOID,
 ];
 const DESIRABILITY_BY_NAME = new Map(DESIRABILITY_NAMES.map(value => [value.toLowerCase(), value] as const));
 
@@ -53,7 +59,7 @@ export function decodeGettableNess(token: string | undefined): GettableNess | un
   return GETTABLE_BY_CODE[lower] ?? GETTABLE_BY_NAME.get(lower);
 }
 
-/** Expand a desirability token; codes (p/n/a) or full names ("Prefer"). */
+/** Expand a desirability token; codes (p/n/sp/pn/a) or full names ("Prefer"). */
 export function decodeDesirability(token: string | undefined): Desirability | undefined {
   const trimmed = (token || "").trim();
   if (!trimmed) return undefined;
@@ -61,9 +67,17 @@ export function decodeDesirability(token: string | undefined): Desirability | un
   return DESIRABILITY_BY_CODE[lower] ?? DESIRABILITY_BY_NAME.get(lower);
 }
 
-// Keep gettability mappings in sync with cruzi-aws crosswordListExtractor.ts.
-const VERY_GETTABLE_UNITY = new Set(["Concept", "Collocation", "Formula"]);
-const LIKELY_GETTABLE_UNITY = new Set(["Concept", "Collocation", "Formula", "Partial", "Formulaic"]);
+// Keep gettability/desirability mappings in sync with cruzi-aws crosswordListExtractor.ts.
+const VERY_GETTABLE_UNITY = new Set(["Concept", "Collocation", "Formula", "Variant"]);
+const LIKELY_GETTABLE_UNITY = new Set([
+  "Concept",
+  "Collocation",
+  "Formula",
+  "Variant",
+  "Partial",
+  "Formulaic",
+]);
+const CORE_UNITY = new Set(["Concept", "Collocation", "Formula"]);
 
 const VERY_GETTABLE_FAMILIARITY = new Set(["Ubiquitous", "Active"]);
 const LIKELY_GETTABLE_FAMILIARITY = new Set([
@@ -75,11 +89,8 @@ const LIKELY_GETTABLE_FAMILIARITY = new Set([
   "General Knowledge",
   "Inferred",
 ]);
-const NOT_GETTABLE_FAMILIARITY = new Set(["Obscure", "Barely Exists"]);
 
 const PREFER_QUALITY = new Set(["Idiomatic", "Interesting", "Feel-Good", "Trendy"]);
-const NORMAL_QUALITY = new Set(["Normal"]);
-const AVOID_QUALITY = new Set(["Non-unit", "Uncommon Derivation", "Clunky"]);
 
 function isUnset(value: string | null | undefined): boolean {
   return value == null || value.trim() === "";
@@ -93,6 +104,7 @@ export function classifyGettableNess(
   classification: string | null | undefined,
   unityBucket: string | null | undefined,
   familiarityBucket: string | null | undefined,
+  crosswordBucket: string | null | undefined = null,
 ): GettableNess {
   if (isNonsense(classification) || isNonsense(unityBucket) || isNonsense(familiarityBucket)) {
     return GETTABLE_NOT_A_THING;
@@ -104,38 +116,60 @@ export function classifyGettableNess(
   const unity = unityBucket as string;
   const familiarity = familiarityBucket as string;
 
-  if (VERY_GETTABLE_UNITY.has(unity) && VERY_GETTABLE_FAMILIARITY.has(familiarity)) {
+  if (
+    VERY_GETTABLE_UNITY.has(unity)
+    && VERY_GETTABLE_FAMILIARITY.has(familiarity)
+    && crosswordBucket !== "Unexpected Form"
+    && classification !== "Contraction"
+  ) {
     return GETTABLE_VERY;
   }
   if (LIKELY_GETTABLE_UNITY.has(unity) && LIKELY_GETTABLE_FAMILIARITY.has(familiarity)) {
     return GETTABLE_LIKELY;
   }
-  if (familiarity === "Niche" || (familiarity === "Literal" && !VERY_GETTABLE_UNITY.has(unity))) {
+  if (
+    familiarity === "Niche"
+    || (familiarity === "Literal" && !CORE_UNITY.has(unity))
+  ) {
     return GETTABLE_MAYBE;
   }
-  if (NOT_GETTABLE_FAMILIARITY.has(familiarity)) {
+  if (familiarity === "Obscure") {
     return GETTABLE_NOT;
   }
   return GETTABLE_MAYBE;
 }
 
+export interface ClassifyDesirabilityInput {
+  qualityBucket?: string | null;
+  unityBucket?: string | null;
+  baseForm?: string | null;
+  classification?: string | null;
+  crosswordBucket?: string | null;
+  hasAvoidTag?: boolean;
+  hasSensitiveTag?: boolean;
+}
+
 export function classifyDesirability(
   qualityBucket: string | null | undefined,
   hasAvoidTag = false,
+  extras: Omit<ClassifyDesirabilityInput, "qualityBucket" | "hasAvoidTag"> = {},
 ): Desirability {
-  if (hasAvoidTag || (!isUnset(qualityBucket) && AVOID_QUALITY.has(qualityBucket as string))) {
+  const crosswordBucket = extras.crosswordBucket;
+  if (crosswordBucket === "Contrived" || hasAvoidTag) {
     return DESIRABILITY_AVOID;
   }
-  if (isUnset(qualityBucket)) {
-    return DESIRABILITY_NORMAL;
+  if (crosswordBucket === "Convenient" || crosswordBucket === "Uncommon Derivation" || extras.hasSensitiveTag) {
+    return DESIRABILITY_PENALTY;
   }
-
-  const quality = qualityBucket as string;
-  if (PREFER_QUALITY.has(quality)) {
+  if (!isUnset(extras.baseForm) || extras.classification === "Acronym/Abbreviation") {
+    return DESIRABILITY_SLIGHT_PENALTY;
+  }
+  if (
+    (!isUnset(qualityBucket) && PREFER_QUALITY.has(qualityBucket as string))
+    || crosswordBucket === "High-Scrabble"
+    || crosswordBucket === "Unexpected Form"
+  ) {
     return DESIRABILITY_PREFER;
-  }
-  if (NORMAL_QUALITY.has(quality)) {
-    return DESIRABILITY_NORMAL;
   }
   return DESIRABILITY_NORMAL;
 }

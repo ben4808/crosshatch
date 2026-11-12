@@ -38,9 +38,9 @@ const LETTER_CLASSES = [
 
 /** Dot classes in precedence order (first wins). */
 const DOT_CLASSES: [EntryQuality, string][] = [
-    [EntryQuality.Bad, "grid-dot-red"],
-    [EntryQuality.Questionable, "grid-dot-orange"],
-    [EntryQuality.Abbreviation, "grid-dot-yellow"],
+    [EntryQuality.Avoid, "grid-dot-red"],
+    [EntryQuality.Penalty, "grid-dot-orange"],
+    [EntryQuality.SlightPenalty, "grid-dot-yellow"],
     [EntryQuality.Preferred, "grid-dot-green"],
 ];
 
@@ -61,7 +61,7 @@ export function getGridGettableClasses(grid: GridState): SquareGettableClasses[]
         if (qualityCache.has(key)) return qualityCache.get(key);
         const letters = getLettersFromSquares(getSquaresForWord(grid, word));
         const quality = !/^[A-Z]+$/.test(letters) ? undefined
-            : rankOf(word) === RANK_NOT_A_THING ? EntryQuality.Bad
+            : rankOf(word) === RANK_NOT_A_THING ? EntryQuality.Avoid
             : entryQuality(letters);
         qualityCache.set(key, quality);
         return quality;

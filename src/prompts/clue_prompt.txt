@@ -1,44 +1,49 @@
-You are given a list of words and phrases, input one per line.
+You are given a list of words and phrases, one per line.
 
-For each item, write a crossword clue for each of the 4 clue types below where possible.
+For each item, write a crossword clue for 3-5 clue types described below. 
+One of these will always be the Straight clue type, but for the rest, pick the clue types that fit the answer most naturally.
 
 GUIDELINES
-- Do NOT use any root word in the clue text that appears in the answer.
-- If a clue cannot be generated for the given clue type, drop that line from the results.
-- The tense, inflection, and part of speech of the clue must generally agree with those of the answer.
-- For answers that are acronyms or abbreviations, the clue should also contain an acronym or abbreviation where possible.
-- Answers that are spoken formulas should have clues in quotes. Colloquial answers should have colloquial clues where possible.
-  E.g. "how do you do" -> "Pleased to meet you!".
-- Keep the clue as short as possible, ideally a few words.
-- If the answer is a foreign word or phrase, the clue should either be in that language or include a place tag.
-  E.g. "hola" -> "Buenos días", "avec" -> "With, in Versailles".
-- Clues should have their first word capitalized, unless the clue starts with a blank. They should not have a trailing period.
+- Do NOT use any words that appear in the answer or any root words of the words that appear in the answer.
+- Shorter is generally better, aggresively cut fluff words that don't add spice.
+- For answers that are acronyms or abbreviations, the clue should either also contain an acronym or abbreviation or include a qualifier like "in brief" or "(abbr.)".
+- Answers that are spoken formulas should have clues in quotes. (e.g. '"how do you do"' -> '"Pleased to meet you!"'.)
+- If a clue is vague and has many different interpretations, prefer adding a qualifier to add context (e.g. "Operate, as a car" for DRIVE).
+- If the answer is niche or obscure, prefer very straightforward clues with extra hints that give the solver the best chance possible.
+- If the answer is a foreign word or phrase, the clue should either be in that language or include a place qualifier.
+  E.g. "hola" -> "Saludo desde México", "avec" -> "With, in Versailles".
+- Archaic answers should include at the end with a qualifier something like "in olden days", "once", "to Shakespeare", etc.
+- Clues should have their first word capitalized, unless the clue starts with a blank. 
+- Clues should not have a trailing period unless they are complete sentences. Exclamation marks and question marks are OK.
+- For all clue types, if the answer is common, prefer to use colloquial or idiomatic phrases where possible, as they add spice to an otherwise boring clue.
 
 CLUE TYPES
-- Straight: A straight definition, paraphrasing, or synonym of the item.
-  - The clue should ideally fit this answer more precisely than any likely synonym.
-- Saying: A straight definition/paraphrasing/synonym phrased the way someone would say it aloud, especially an idiomatic or colloquial phrase.
-  - E.g. "wander" -> "Mosey around", "have lunch" -> "Grab a bite"
-- Reference: Names a specific, well-known example or associated thing, that not a synonym.
-  - For nouns, reference something related or give a concrete example. 
-    E.g. "breakfast" -> "Denny's Gram Slam, e.g.", "magic wand" -> "Hogwarts implement".
-  - For verbs, reference a related concept or more specific action.
-    E.g. "binge watch" -> "Do a Friends marathon, say", "flying" -> "Driving alternative".
-  - For adjectives, reference something that it could describe.
-    E.g. "gray" -> "Like a cloudy day", "well-known" -> "Like the Eiffel Tower".
-- Fill in the Blank: Give a fill in the blank where the answer completes a phrase.
-  - The blank replaces the answer and the rest of the clue must not use it.
-  - E.g. "pickup" -> "___ truck", "song" -> "swan ___".
+Straight: A straight definition, or a synonym/paraphrase of the dominant sense of the answer.
+  - The clue should fit this answer more precisely than any synonym of the answer.
+  - The tense, inflection, and part of speech of the clue should generally agree with those of the answer.
+Alternate Sense: Like Straight but describes an alternate sense of the answer.
+Association: Make free association(s) of the answer to other concrete, well-known concepts
+  - Noun examples: "breakfast" -> "Denny's Gram Slam, e.g.", "magic wand" -> "Hogwarts implement".
+  - Verb examples: "binge watch" -> "Do a Friends marathon, say", "swimming" -> "Ironman discipline"
+  - Adjective examples: "gray" -> "Like a cloudy day", "well-known" -> "Like the Eiffel Tower".
+Antonym: Antonym of the answer (e.g. "concentrated" -> "Opposite of far-flung", "sickly" -> "Not healthy").
+Categorize: (e.g. "innie -> "Type of navel", "Mexican" -> "Common food cart cuisine")
+Example: (e.g. "fish" -> "Grouper, for one", "exiled" -> "Napoleon or Trotsky")
+Context: Find a well-known phrase, quotation, or saying that contains the answer
+ - Either give it as a fill in the blank clue ("truck" -> "fire ___", "power" -> "Knowledge is ___", "a lark" -> "Happy as ___")
+ - Or give it in words ("fire" -> "start to 'truck' or 'man'"). 
+   This also works well for answers that are prefixes, or suffixes. ("pseudo-" -> "Prefix for intellectual or science")
+Fun Fact: Give a piece of lore about the answer that is surprising, interesting, or is strange but true.
 
 OUTPUT
 Output the results in the following format. Include a blank line between each item's clue group.
 Don't output any explanatory or auxiliary text. No numbering, markdown, or code fences.
+Copy the clue type names exactly.
 
 <input item exactly as input>
-Straight: <straight clue>
-Saying: <saying clue>
-Reference: <reference clue>
-Fill in the Blank: <fill in the blank clue>
+<clue type 1> : <clue 1>
+<clue type 2> : <clue 2>
+...
 
 
 WORDS/PHRASES

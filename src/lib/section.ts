@@ -372,6 +372,18 @@ export function newSectionCandidateFromGrid(grid: GridState, section: Section): 
     };
 }
 
+/** Recompute fill scores and gettability counts from the current word-list ratings. */
+export function rescoreAllSectionCandidates() {
+    const sections = Globals.sections;
+    if (!sections) return;
+    sections.forEach(section => {
+        section.candidates.forEach(candidate => {
+            candidate.score = sectionCandidateScore(section, candidate.sectionString);
+            candidate.gettableCount = countVeryGettableEntries(section, candidate);
+        });
+    });
+}
+
 /** Sum of entry scores for a stored sectionString (main thread only). */
 export function sectionCandidateScore(section: Section, sectionString: string): number {
     let grid = getGrid();

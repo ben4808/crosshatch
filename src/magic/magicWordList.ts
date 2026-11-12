@@ -57,19 +57,11 @@ async function loadWordList() {
     parseList(decryptCrosswordList(encrypted));
 }
 
-function isYes(token: string | undefined): boolean {
-    return (token || "").trim().toLowerCase() === "y";
-}
-
-/** Row format: entry,gettableness,desirability,abbr,sensitive,crosswordese,overused */
+/** Row format: entry,gettableness,desirability */
 function parseList(text: string) {
     const known = new Set<string>();
     const gettable = new Map<string, string>();
     const desirability = new Map<string, string>();
-    const abbr = new Set<string>();
-    const sensitive = new Set<string>();
-    const crosswordese = new Set<string>();
-    const overused = new Set<string>();
 
     const lines = text.split("\n");
     for (const rawLine of lines) {
@@ -85,10 +77,6 @@ function parseList(text: string) {
         // Unset gettableness defaults to Maybe Gettable, matching the extractor.
         gettable.set(entry, decodeGettableNess(tokens[1]) ?? GETTABLE_MAYBE);
         desirability.set(entry, decodeDesirability(tokens[2]) ?? DESIRABILITY_NORMAL);
-        if (isYes(tokens[3])) abbr.add(entry);
-        if (isYes(tokens[4])) sensitive.add(entry);
-        if (isYes(tokens[5])) crosswordese.add(entry);
-        if (isYes(tokens[6])) overused.add(entry);
     }
 
     if (known.size === 0) throw new Error("The word list was empty or couldn't be decrypted.");
@@ -96,10 +84,10 @@ function parseList(text: string) {
     Globals.knownWords = known;
     Globals.wordGettable = gettable;
     Globals.wordDesirability = desirability;
-    Globals.wordAbbr = abbr;
-    Globals.wordSensitive = sensitive;
-    Globals.wordCrosswordese = crosswordese;
-    Globals.wordOverused = overused;
+    Globals.wordAbbr = new Set<string>();
+    Globals.wordSensitive = new Set<string>();
+    Globals.wordCrosswordese = new Set<string>();
+    Globals.wordOverused = new Set<string>();
     Globals.wordRegionalism = new Set<string>();
     // Rebuilds the Likely Gettable set from the new ratings.
     installFillFilter(undefined);

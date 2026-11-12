@@ -327,6 +327,31 @@ body.mc-body {
 
 .mc-seed-error { color: $bad; }
 
+.mc-choose {
+  display: block;
+  margin: 10px auto 0;
+  padding: 8px 18px;
+  font-size: 1rem;
+  font-weight: 600;
+  color: $text;
+  background: $surface;
+  border: 2px solid $border;
+  border-radius: 10px;
+  cursor: pointer;
+
+  &:hover:not(:disabled) { border-color: $sea; }
+  &:focus-visible { outline: 2px solid $sea; outline-offset: 2px; }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+.mc-clues-status {
+  margin: 0 0 -10px;
+  min-height: 1.4em;
+  font-size: 0.95rem;
+  text-align: center;
+  color: $muted;
+}
+
 .mc-verdict {
   display: flex;
   flex-direction: column;

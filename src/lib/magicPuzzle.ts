@@ -34,12 +34,22 @@ import Globals from "./windowService";
 /** Dev-server path forwarded to chal-api's /api routes (see setupProxy.js). */
 const CHAL_API = "/chal-api";
 const SEED_CANDIDATE_COUNT = 10;
-const SEED_FAMILIARITY_BUCKET = "General Knowledge";
+/** Seed candidates are drawn from all of these buckets, mixed with no fixed proportion. */
+const SEED_FAMILIARITY_BUCKETS = ["General Knowledge", "Inferred"];
 const MIN_SLOT_LENGTH = 3;
 const TOTAL_STEPS = 4;
 const NORMAL_CLUE_BATCH_SIZE = 10;
 const STRAIGHT_CLUE_TYPE = "Straight";
-const OTHER_CLUE_TYPES = ["Saying", "Reference", "Fill in the Blank"];
+const ASSOCIATION_CLUE_TYPE = "Association";
+/** Clue type names exactly as clue_prompt.txt asks the AI to write them. */
+const OTHER_CLUE_TYPES = [
+    "Alternate Sense", ASSOCIATION_CLUE_TYPE, "Antonym", "Categorize", "Example", "Context", "Fun Fact",
+];
+/** A failed clue prompt is retried this many times (so up to 1 + MAX_CLUE_RETRIES attempts). */
+export const MAX_CLUE_RETRIES = 2;
+const CLUE_RETRY_DELAY_MS = 1500;
+/** Model id chal-api routes to the Cursor SDK instead of Gemini. */
+export const GROK_MODEL = "grok-4.6";
 
 export const MAGIC_PUZZLE_AUTHOR = "Crosshatch";
 
@@ -68,7 +78,7 @@ export type MagicPuzzleResult =
     | { success: true; title: string }
     | { success: false; cancelled: boolean; message: string };
 
-interface SeedEntry {
+export interface SeedEntry {
     entry: string;
     displayText: string;
 }
@@ -153,28 +163,17 @@ export async function runMagicPuzzle(callbacks: MagicPuzzleCallbacks): Promise<M
         resetGridForPlacementRound(getGrid());
         callbacks.onGridChanged();
 
-        // Step 1: random General Knowledge seed candidates for the longest open slot.
+        // Step 1: random General Knowledge / Inferred seed candidates for the longest open slot.
         const seedLength = longestOpenSlotLength(getGrid());
         if (seedLength < MIN_SLOT_LENGTH) throw new Error(`The grid has no open slots of ${MIN_SLOT_LENGTH}+ letters.`);
-        status(1, `Selecting ${SEED_CANDIDATE_COUNT} random ${SEED_FAMILIARITY_BUCKET} entries of length ${seedLength}…`);
-        const { entries: seedCandidates } = await postJson<{ entries: SeedEntry[] }>("/magicPuzzle/seedEntries", {
-            length: seedLength,
-            count: SEED_CANDIDATE_COUNT,
-            familiarityBucket: SEED_FAMILIARITY_BUCKET,
-        }, signal);
+        status(1, `Selecting ${SEED_CANDIDATE_COUNT} random ${SEED_FAMILIARITY_BUCKETS.join(" / ")} entries of length ${seedLength}…`);
+        const seedCandidates = await fetchSeedCandidates(seedLength, signal);
         checkCancelled();
-        if (!seedCandidates || seedCandidates.length === 0) {
-            throw new Error(`No ${SEED_FAMILIARITY_BUCKET} entries of length ${seedLength} found in the database.`);
-        }
 
         // Step 2: AI picks the seed entry.
         status(2, `Waiting on AI to choose the seed entry from ${seedCandidates.length} candidates…`);
-        const seedPrompt = await loadPrompt(seedwordCluePromptUrl, signal);
-        const seedResponse = await makeAICall(
-            seedPrompt.replace("[[DATA]]", seedCandidates.map(c => c.displayText || c.entry).join("\n")), signal);
+        const seed = await chooseSeedword(seedCandidates, signal);
         checkCancelled();
-        const seed = matchSeedResponse(seedResponse, seedCandidates);
-        if (!seed) throw new Error("Couldn't match the AI's seed response to any candidate entry.");
 
         // Step 3: find a grid the seed fits in with a gettable fill.
         status(3, "Building fill dictionaries…");
@@ -366,7 +365,11 @@ export async function runMagicPuzzle(callbacks: MagicPuzzleCallbacks): Promise<M
     }
 }
 
-export async function generateNormalClues(onStatus: (status: string) => void): Promise<ClueGenResult> {
+/** onClues runs each time clues are applied to the puzzle (once per returned batch). */
+export async function generateNormalClues(
+    onStatus: (status: string) => void,
+    onClues?: () => void,
+): Promise<ClueGenResult> {
     try {
         const grid = getGrid();
         const answers = gridAnswers(grid).filter(answer => answer !== Globals.seedEntry);
@@ -393,17 +396,52 @@ export async function generateNormalClues(onStatus: (status: string) => void): P
             }
         });
 
+        const puzzleClues = Globals.puzzle!.clues;
+        const skipKeys = new Set(seedWordKeys());
+        let assigned = 0;
+        // Puts a clue on every grid word whose answer is in `forAnswers`.
+        const assignClues = (forAnswers: Iterable<string>) => {
+            const targets = new Set(forAnswers);
+            grid.words.forEach(word => {
+                const key = wordKey(word);
+                if (skipKeys.has(key)) return;
+                const answer = getLettersFromSquares(getSquaresForWord(grid, word));
+                if (answer === Globals.seedEntry || !targets.has(answer)) return;
+                const chosen = pickGeneratedClue(cluesByAnswer.get(answer) || []);
+                if (!chosen) return;
+                puzzleClues.set(key, chosen);
+                assigned++;
+            });
+        };
+
+        // Entries that already have clues are filled in before any prompt is sent.
+        assignClues(cluesByAnswer.keys());
+        if (assigned > 0) onClues?.();
+
         const batches = chunk(toGenerate, NORMAL_CLUE_BATCH_SIZE);
+        let failedBatches = 0;
+        let lastError = "";
         if (batches.length > 0) {
             const cluePrompt = await loadPrompt(cluePromptUrl);
             for (let i = 0; i < batches.length; i++) {
-                onStatus(`Generating (prompt ${i + 1} of ${batches.length})...`);
                 const batch = batches[i];
+                const promptLabel = `prompt ${i + 1} of ${batches.length}`;
+                onStatus(`Generating (${promptLabel})...`);
                 const displayByAnswer = displayTextsFromStatuses(batch, statusByAnswer);
                 const prompt = cluePrompt.replace("[[DATA]]",
                     batch.map(answer => displayByAnswer.get(answer) || answer).join("\n"));
-                const response = await makeAICall(prompt);
-                const parsed = parseTypedClueResponse(response, batch, displayByAnswer);
+                let parsed: Map<string, TypedClue[]>;
+                try {
+                    parsed = await requestTypedClues(prompt, batch, displayByAnswer, {
+                        onRetry: retry => onStatus(
+                            `Generating (${promptLabel}, retry ${retry} of ${MAX_CLUE_RETRIES})...`),
+                    });
+                } catch (err: any) {
+                    failedBatches++;
+                    lastError = err?.message ? String(err.message) : String(err);
+                    continue;
+                }
+
                 const newClues: { entry: string; clue: string; isSeedword: boolean; clueType: string }[] = [];
                 parsed.forEach((typedClues, answer) => {
                     const existing = cluesByAnswer.get(answer) || [];
@@ -417,35 +455,38 @@ export async function generateNormalClues(onStatus: (status: string) => void): P
                         });
                     });
                 });
+                // Apply this batch right away; later batches (and the save) don't hold it up.
+                assignClues(parsed.keys());
+                onClues?.();
                 if (newClues.length > 0) {
-                    await postJson("/magicPuzzle/generatedClues", { clues: newClues });
+                    try {
+                        await postJson("/magicPuzzle/generatedClues", { clues: newClues });
+                    } catch (err) {
+                        console.error("Failed to save generated clues", err);
+                    }
                 }
             }
         }
 
-        const puzzleClues = Globals.puzzle!.clues;
-        const skipKeys = new Set(seedWordKeys());
-        let assigned = 0;
         let missing = 0;
         grid.words.forEach(word => {
-            const key = wordKey(word);
-            if (skipKeys.has(key)) return;
+            if (skipKeys.has(wordKey(word))) return;
             const answer = getLettersFromSquares(getSquaresForWord(grid, word));
             if (answer === Globals.seedEntry) return;
-            const chosen = pickGeneratedClue(cluesByAnswer.get(answer) || []);
-            if (!chosen) {
-                missing++;
-                return;
-            }
-            puzzleClues.set(key, chosen);
-            assigned++;
+            if (!puzzleClues.get(wordKey(word))) missing++;
         });
 
+        if (failedBatches > 0 && failedBatches === batches.length && assigned === 0) {
+            return { success: false, message: `Clue generation failed: ${lastError}` };
+        }
+        const notes: string[] = [];
+        if (failedBatches > 0) {
+            notes.push(`${failedBatches} of ${batches.length} prompts failed after ${MAX_CLUE_RETRIES} retries (${lastError})`);
+        }
+        if (missing > 0) notes.push(`${missing} still need clues`);
         return {
             success: true,
-            message: missing > 0
-                ? `Assigned ${assigned} clues (${missing} still need clues).`
-                : undefined,
+            message: notes.length > 0 ? `Assigned ${assigned} clues (${notes.join("; ")}).` : undefined,
         };
     } catch (err: any) {
         const message = err?.message ? String(err.message) : String(err);
@@ -1014,6 +1055,39 @@ function parseClueLines(response: string): ParsedClue[] {
     return parsed;
 }
 
+/** Random seed candidates of the given length from the General Knowledge and Inferred buckets. */
+export async function fetchSeedCandidates(
+    length: number,
+    signal?: AbortSignal,
+    options?: { excludeSeedwordClues?: boolean },
+): Promise<SeedEntry[]> {
+    const { entries } = await postJson<{ entries: SeedEntry[] }>("/magicPuzzle/seedEntries", {
+        length,
+        count: SEED_CANDIDATE_COUNT,
+        familiarityBuckets: SEED_FAMILIARITY_BUCKETS,
+        excludeSeedwordClues: options?.excludeSeedwordClues === true,
+    }, signal);
+    if (!entries || entries.length === 0) {
+        throw new Error(`No ${SEED_FAMILIARITY_BUCKETS.join(" or ")} entries of length ${length} found in the database.`);
+    }
+    return entries;
+}
+
+/** Asks the AI (seedword_clue_prompt.txt) to pick the best seed from the candidates and clue it. */
+export async function chooseSeedword(
+    candidates: SeedEntry[],
+    signal?: AbortSignal,
+    model?: string,
+): Promise<{ entry: string; clue: string; displayText: string }> {
+    const seedPrompt = await loadPrompt(seedwordCluePromptUrl, signal);
+    const response = await makeAICall(
+        seedPrompt.replace("[[DATA]]", candidates.map(c => c.displayText || c.entry).join("\n")), signal, model);
+    const seed = matchSeedResponse(response, candidates);
+    if (!seed) throw new Error("Couldn't match the AI's seed response to any candidate entry.");
+    const displayText = candidates.find(c => c.entry === seed.entry)?.displayText || seed.entry;
+    return { ...seed, displayText };
+}
+
 function matchSeedResponse(response: string, candidates: SeedEntry[]): { entry: string; clue: string } | undefined {
     const byKey = new Map<string, string>();
     candidates.forEach(candidate => {
@@ -1029,12 +1103,7 @@ function matchSeedResponse(response: string, candidates: SeedEntry[]): { entry: 
 
 function canonicalClueType(raw: string): string | undefined {
     const normalized = raw.trim().toLowerCase().replace(/[-_]+/g, " ").replace(/\s+/g, " ");
-    if (normalized === "straight") return STRAIGHT_CLUE_TYPE;
-    if (OTHER_CLUE_TYPES.map(type => type.toLowerCase()).includes(normalized)) {
-        return OTHER_CLUE_TYPES.find(type => type.toLowerCase() === normalized);
-    }
-    if (normalized === "fill in the blanks" || normalized === "fitb") return "Fill in the Blank";
-    return undefined;
+    return [STRAIGHT_CLUE_TYPE, ...OTHER_CLUE_TYPES].find(type => type.toLowerCase() === normalized);
 }
 
 export function parseTypedClueResponse(
@@ -1082,13 +1151,33 @@ export function parseTypedClueResponse(
 export function pickGeneratedClue(clues: TypedClue[]): string | undefined {
     if (clues.length === 0) return undefined;
     const straight = clues.filter(clue => clue.clueType === STRAIGHT_CLUE_TYPE);
-    const others = clues.filter(clue => clue.clueType && clue.clueType !== STRAIGHT_CLUE_TYPE);
-    const preferStraight = Math.random() < 0.5;
-    const pool = preferStraight
-        ? (straight.length > 0 ? straight : others)
-        : (others.length > 0 ? others : straight);
-    const chosen = pool.length > 0 ? pool : clues;
-    return chosen[Math.floor(Math.random() * chosen.length)].clue;
+    const association = clues.filter(clue => clue.clueType === ASSOCIATION_CLUE_TYPE);
+    const others = clues.filter(clue =>
+        clue.clueType
+        && clue.clueType !== STRAIGHT_CLUE_TYPE
+        && clue.clueType !== ASSOCIATION_CLUE_TYPE
+    );
+    const roll = Math.random();
+    const picked = roll < 1 / 3
+        ? pickFromClues(straight) ?? pickRandomOtherType(others) ?? pickFromClues(association)
+        : roll < 2 / 3
+            ? pickFromClues(association) ?? pickRandomOtherType(others) ?? pickFromClues(straight)
+            : pickRandomOtherType(others) ?? pickFromClues(association) ?? pickFromClues(straight);
+    if (picked) return picked;
+    return clues[Math.floor(Math.random() * clues.length)].clue;
+}
+
+function pickFromClues(pool: TypedClue[]): string | undefined {
+    if (pool.length === 0) return undefined;
+    return pool[Math.floor(Math.random() * pool.length)].clue;
+}
+
+/** One clue from a type chosen uniformly among the types present. */
+function pickRandomOtherType(others: TypedClue[]): string | undefined {
+    if (others.length === 0) return undefined;
+    const types = Array.from(new Set(others.map(clue => clue.clueType)));
+    const type = types[Math.floor(Math.random() * types.length)];
+    return pickFromClues(others.filter(clue => clue.clueType === type));
 }
 
 export function displayTextsFromStatuses(
@@ -1121,10 +1210,56 @@ export async function loadPrompt(url: string, signal?: AbortSignal): Promise<str
     return text;
 }
 
-export async function makeAICall(prompt: string, signal?: AbortSignal): Promise<string> {
-    const body = await postJson<{ response?: string }>("/makeAICall", { prompt }, signal);
+/** Calls chal-api's /makeAICall. Gemini by default; pass a model such as GROK_MODEL to use it instead. */
+export async function makeAICall(prompt: string, signal?: AbortSignal, model?: string): Promise<string> {
+    const body = await postJson<{ response?: string }>("/makeAICall", model ? { prompt, model } : { prompt }, signal);
     if (!body.response) throw new Error("The AI returned an empty response.");
     return body.response;
+}
+
+function sleep(ms: number, signal?: AbortSignal): Promise<void> {
+    return new Promise(resolve => {
+        const timer = setTimeout(resolve, ms);
+        signal?.addEventListener("abort", () => {
+            clearTimeout(timer);
+            resolve();
+        }, { once: true });
+    });
+}
+
+/**
+ * Sends one clue prompt and parses the typed clues. A failed call, or a response that
+ * contains no usable clues, is retried up to MAX_CLUE_RETRIES times before giving up.
+ * onRetry runs before each retry with the retry number (1-based).
+ */
+export async function requestTypedClues(
+    prompt: string,
+    answers: string[],
+    displayByAnswer: Map<string, string>,
+    options: { signal?: AbortSignal; model?: string; onRetry?: (retry: number) => void } = {},
+): Promise<Map<string, TypedClue[]>> {
+    const { signal, model, onRetry } = options;
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= MAX_CLUE_RETRIES; attempt++) {
+        if (attempt > 0) {
+            onRetry?.(attempt);
+            await sleep(CLUE_RETRY_DELAY_MS, signal);
+        }
+        if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+        try {
+            const response = await makeAICall(prompt, signal, model);
+            const parsed = parseTypedClueResponse(response, answers, displayByAnswer);
+            if (!Array.from(parsed.values()).some(clues => clues.length > 0)) {
+                throw new Error("The AI response didn't contain any clues.");
+            }
+            return parsed;
+        } catch (err) {
+            if (signal?.aborted) throw err;
+            lastError = err;
+            console.warn(`Clue prompt failed (attempt ${attempt + 1} of ${MAX_CLUE_RETRIES + 1})`, err);
+        }
+    }
+    throw lastError;
 }
 
 export async function postJson<T = unknown>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {

@@ -1,10 +1,13 @@
 import React, { useEffect, useState } from "react";
+import { rescoreAllSectionCandidates } from "../../lib/section";
 import { applyCrosswordListRatings, rebuildWordIndex, removeCrosswordListWord } from "../../lib/wordList";
 import Globals from "../../lib/windowService";
+import "./FillView.scss";
 
 export const ENTRY_TYPE_OPTIONS = [
     "Word",
     "Phrase",
+    "Contraction",
     "Proper Name",
     "Acronym/Abbreviation",
     "Prefix/Suffix",
@@ -32,7 +35,6 @@ export const FAMILIARITY_OPTIONS = [
     "Inferred",
     "Niche",
     "Obscure",
-    "Barely Exists",
     "Nonsense",
 ];
 
@@ -42,10 +44,31 @@ export const QUALITY_OPTIONS = [
     "Interesting",
     "Feel-Good",
     "Trendy",
-    "Clunky",
-    "Uncommon Derivation",
-    "Non-unit",
 ];
+
+export const CROSSWORD_OPTIONS = [
+    "Contrived",
+    "Convenient",
+    "Uncommon Derivation",
+    "High-Scrabble",
+    "Unexpected Form",
+];
+
+const CROSSWORD_OPTION_LABELS: Record<string, string> = {
+    "Uncommon Derivation": "Unc. Derivation",
+};
+
+function crosswordOptionLabel(option: string): string {
+    return CROSSWORD_OPTION_LABELS[option] ?? option;
+}
+
+export const UNPLEASANT_OPTIONS = [
+    "Vulgar",
+    "Sensitive",
+    "Gross",
+];
+
+export type UnpleasantValue = "" | "Vulgar" | "Sensitive" | "Gross";
 
 export interface ClassifyRow {
     rowId: string;
@@ -58,10 +81,9 @@ export interface ClassifyRow {
     unityBucket: string;
     familiarityBucket: string;
     qualityBucket: string;
-    isVulgar: boolean;
-    isSensitive: boolean;
-    isCrosswordese: boolean;
-    isOverused: boolean;
+    crosswordBucket: string;
+    baseForm: string;
+    unpleasant: UnpleasantValue;
     isReviewed: boolean;
     nytValue: string;
 }
@@ -81,18 +103,24 @@ function asText(value: string | null | undefined): string {
     return value == null ? "" : value;
 }
 
+function unpleasantFromFlags(isVulgar?: boolean | null, isSensitive?: boolean, isGross?: boolean): UnpleasantValue {
+    if (isVulgar === true) return "Vulgar";
+    if (isSensitive === true) return "Sensitive";
+    if (isGross === true) return "Gross";
+    return "";
+}
+
 function rowsEqual(a: ClassifyRow, b: ClassifyRow): boolean {
     return a.fillWord === b.fillWord
         && a.entry === b.entry
         && a.displayText === b.displayText
+        && a.baseForm === b.baseForm
         && a.classification === b.classification
         && a.unityBucket === b.unityBucket
         && a.familiarityBucket === b.familiarityBucket
         && a.qualityBucket === b.qualityBucket
-        && a.isVulgar === b.isVulgar
-        && a.isSensitive === b.isSensitive
-        && a.isCrosswordese === b.isCrosswordese
-        && a.isOverused === b.isOverused
+        && a.crosswordBucket === b.crosswordBucket
+        && a.unpleasant === b.unpleasant
         && a.isReviewed === b.isReviewed;
 }
 
@@ -130,10 +158,9 @@ function makeBlankRow(): ClassifyRow {
         unityBucket: "Concept",
         familiarityBucket: "General Knowledge",
         qualityBucket: "Normal",
-        isVulgar: false,
-        isSensitive: false,
-        isCrosswordese: false,
-        isOverused: false,
+        crosswordBucket: "",
+        baseForm: "",
+        unpleasant: "",
         isReviewed: false,
         nytValue: "None",
     };
@@ -172,11 +199,13 @@ function ClassifyModal(props: ClassifyModalProps) {
                     unityBucket: string | null;
                     familiarityBucket: string | null;
                     qualityBucket: string | null;
+                    crosswordBucket: string | null;
+                    baseForm?: string | null;
+                    base_form?: string | null;
                     isVulgar: boolean | null;
-                    isCrosswordese?: boolean;
-                    isOverused?: boolean;
-                    isReviewed?: boolean;
                     isSensitive?: boolean;
+                    isGross?: boolean;
+                    isReviewed?: boolean;
                     nytValue?: string | null;
                 }[];
             })
@@ -202,10 +231,9 @@ function ClassifyModal(props: ClassifyModalProps) {
                             unityBucket,
                             familiarityBucket,
                         ),
-                        isVulgar: match?.isVulgar === true,
-                        isSensitive: match?.isSensitive === true,
-                        isCrosswordese: match?.isCrosswordese === true,
-                        isOverused: match?.isOverused === true,
+                        crosswordBucket: asText(match?.crosswordBucket),
+                        baseForm: asText(match?.baseForm ?? match?.base_form),
+                        unpleasant: unpleasantFromFlags(match?.isVulgar, match?.isSensitive, match?.isGross),
                         isReviewed: match?.isReviewed === true,
                         nytValue: nytDisplay(match?.nytValue),
                     };
@@ -317,11 +345,11 @@ function ClassifyModal(props: ClassifyModalProps) {
                     row.familiarityBucket || null,
                     row.qualityBucket || null,
                     {
+                        crosswordBucket: row.crosswordBucket || null,
                         isAbbreviation: row.classification === "Acronym/Abbreviation",
-                        isSensitive: row.isSensitive,
-                        isCrosswordese: row.isCrosswordese,
-                        isOverused: row.isOverused,
-                        hasAvoidTag: row.isVulgar,
+                        hasAvoidTag: row.unpleasant === "Vulgar" || row.unpleasant === "Gross",
+                        hasSensitiveTag: row.unpleasant === "Sensitive",
+                        baseForm: row.baseForm || null,
                     },
                 );
                 const word = (row.entry || row.fillWord || "").toUpperCase();
@@ -329,11 +357,12 @@ function ClassifyModal(props: ClassifyModalProps) {
                     Globals.knownWords.add(word);
                 }
             });
-            const savedIds = new Set(changed.map((row) => row.rowId));
             if (changed.some((row) => row.isNew || !originals.find((original) => original.rowId === row.rowId)?.entry)) {
                 rebuildWordIndex();
             }
+            rescoreAllSectionCandidates();
 
+            const savedIds = new Set(changed.map((row) => row.rowId));
             const nextRows = rows.map((row) => {
                 if (!savedIds.has(row.rowId)) return { ...row };
                 const entry = (row.entry || row.fillWord || "").trim();
@@ -369,15 +398,14 @@ function ClassifyModal(props: ClassifyModalProps) {
                             <thead>
                                 <tr>
                                     <th>Entry</th>
+                                    <th>Base Form</th>
                                     <th>Display</th>
                                     <th>Classification</th>
                                     <th>Unity</th>
                                     <th>Familiarity</th>
                                     <th>Quality</th>
-                                    <th>Vulgar</th>
-                                    <th>Sensitive</th>
-                                    <th>Crosswordese</th>
-                                    <th>Overused</th>
+                                    <th>Crossword</th>
+                                    <th>Unpleasant</th>
                                     <th className="classify-check-cell">
                                         <div className="classify-reviewed-header">
                                             Reviewed
@@ -419,6 +447,13 @@ function ClassifyModal(props: ClassifyModalProps) {
                                                     {!row.entry && <div className="classify-missing">Not in database</div>}
                                                 </>
                                             )}
+                                        </td>
+                                        <td>
+                                            <input
+                                                type="text"
+                                                value={row.baseForm}
+                                                onChange={(event) => updateRow(index, { baseForm: event.target.value })}
+                                            />
                                         </td>
                                         <td>
                                             <input
@@ -471,33 +506,29 @@ function ClassifyModal(props: ClassifyModalProps) {
                                                 ))}
                                             </select>
                                         </td>
-                                        <td className="classify-check-cell">
-                                            <input
-                                                type="checkbox"
-                                                checked={row.isVulgar}
-                                                onChange={(event) => updateRow(index, { isVulgar: event.target.checked })}
-                                            />
+                                        <td>
+                                            <select
+                                                value={row.crosswordBucket}
+                                                onChange={(event) => updateRow(index, { crosswordBucket: event.target.value })}
+                                            >
+                                                <option value=""></option>
+                                                {optionsWithCurrent(CROSSWORD_OPTIONS, row.crosswordBucket).map((option) => (
+                                                    <option key={option} value={option}>{crosswordOptionLabel(option)}</option>
+                                                ))}
+                                            </select>
                                         </td>
-                                        <td className="classify-check-cell">
-                                            <input
-                                                type="checkbox"
-                                                checked={row.isSensitive}
-                                                onChange={(event) => updateRow(index, { isSensitive: event.target.checked })}
-                                            />
-                                        </td>
-                                        <td className="classify-check-cell">
-                                            <input
-                                                type="checkbox"
-                                                checked={row.isCrosswordese}
-                                                onChange={(event) => updateRow(index, { isCrosswordese: event.target.checked })}
-                                            />
-                                        </td>
-                                        <td className="classify-check-cell">
-                                            <input
-                                                type="checkbox"
-                                                checked={row.isOverused}
-                                                onChange={(event) => updateRow(index, { isOverused: event.target.checked })}
-                                            />
+                                        <td>
+                                            <select
+                                                value={row.unpleasant}
+                                                onChange={(event) => updateRow(index, {
+                                                    unpleasant: event.target.value as UnpleasantValue,
+                                                })}
+                                            >
+                                                <option value=""></option>
+                                                {optionsWithCurrent(UNPLEASANT_OPTIONS, row.unpleasant).map((option) => (
+                                                    <option key={option} value={option}>{option}</option>
+                                                ))}
+                                            </select>
                                         </td>
                                         <td className="classify-check-cell">
                                             <input

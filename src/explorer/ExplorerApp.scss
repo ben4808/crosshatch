@@ -1,0 +1,187 @@
+@import "../magic/MagicApp.scss";
+
+.ex-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  padding: 10px 16px;
+  background: rgba(10, 16, 36, 0.92);
+  backdrop-filter: blur(6px);
+  border-bottom: 1px solid $border;
+}
+
+.ex-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 10px 12px;
+}
+
+.ex-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.ex-label {
+  margin: 0;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: $muted;
+}
+
+.ex-input {
+  height: 38px;
+  padding: 6px 10px;
+  font-size: 1rem;
+  color: $text;
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 8px;
+
+  &:focus {
+    outline: none;
+    border-color: $sea;
+    box-shadow: 0 0 0 3px rgba(127, 214, 208, 0.25);
+  }
+}
+
+.ex-length { width: 5.5rem; }
+.ex-pattern { width: 11rem; }
+.ex-page-size { width: 5.5rem; }
+.ex-reviewed { width: 6.5rem; }
+
+select.ex-input {
+  cursor: pointer;
+
+  option {
+    background: $bg-mid;
+    color: $text;
+  }
+}
+
+.ex-menu { position: relative; }
+
+.ex-menu-button {
+  min-width: 11rem;
+  max-width: 16rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ex-menu-panel {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 100%;
+  max-height: min(320px, 60vh);
+  overflow: auto;
+  margin: 0;
+  padding: 6px;
+  list-style: none;
+  background: $bg-mid;
+  border: 1px solid $border;
+  border-radius: 10px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+}
+
+.ex-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 8px;
+  font-size: 0.9rem;
+  color: $text;
+  border-radius: 6px;
+  cursor: pointer;
+
+  &:hover { background: rgba(127, 214, 208, 0.12); }
+
+  input {
+    margin: 0;
+    accent-color: $sea;
+  }
+}
+
+.ex-actions,
+.ex-pager {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ex-actions .mc-primary,
+.ex-actions .mc-secondary,
+.ex-pager .mc-secondary {
+  padding: 8px 14px;
+  font-size: 0.95rem;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.ex-page-label {
+  min-width: 7.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: $text;
+  text-align: center;
+}
+
+.ex-main {
+  flex: 1;
+  padding: 16px 16px 32px;
+}
+
+.ex-status {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  color: $muted;
+}
+
+.ex-error { color: $bad; }
+
+.ex-columns {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 18px;
+}
+
+.ex-column {
+  flex: 0 0 200px;
+  width: 200px;
+  min-width: 160px;
+  display: flex;
+  flex-direction: column;
+}
+
+.ex-item {
+  display: block;
+  width: 100%;
+  padding: 4px 8px;
+  font-size: 0.95rem;
+  line-height: 1.35;
+  text-align: left;
+  color: $text;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+
+  &:hover, &:focus-visible { background: rgba(127, 214, 208, 0.12); }
+  &:focus-visible { outline: 2px solid $sea; outline-offset: 1px; }
+}
+
+.ex-item-selected {
+  background: rgba(255, 159, 122, 0.28);
+  font-weight: 700;
+
+  &:hover, &:focus-visible { background: rgba(255, 159, 122, 0.42); }
+}

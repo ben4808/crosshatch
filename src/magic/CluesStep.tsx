@@ -12,12 +12,15 @@ import {
     loadExistingClues,
     TypedClue,
 } from './clues';
+import { MAX_CLUE_RETRIES } from '../lib/magicPuzzle';
 import { MagicFill, MagicSlot, slotsFromCells } from './magicFill';
 import { SharedPuzzle } from './ShareStep';
 
 interface CluesStepProps {
   fill: MagicFill;
   seed: string;
+  /** Clue the AI wrote for the seed in the Setup step; pre-fills the seed's entry. */
+  seedClue?: string;
   hidden: boolean;
   onFinished: (puzzle: SharedPuzzle) => void;
 }
@@ -207,9 +210,18 @@ function ClueRow({
   );
 }
 
-export default function CluesStep({ fill, seed, hidden, onFinished }: CluesStepProps) {
+export default function CluesStep({ fill, seed, seedClue, hidden, onFinished }: CluesStepProps) {
   const slots = useMemo(() => slotsFromCells(fill.cells), [fill]);
-  const [selected, setSelected] = useState<Record<string, string>>({});
+  const [selected, setSelected] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    if (seedClue) {
+      slotsFromCells(fill.cells).forEach(slot => {
+        if (slot.entry === seed) initial[slot.key] = seedClue;
+      });
+    }
+    return initial;
+  });
+  const [genStatus, setGenStatus] = useState('');
   const [aiClues, setAiClues] = useState<AiCluesByEntry>({});
   const [communityClues, setCommunityClues] = useState<CommunityCluesByEntry>({});
   const [loadingEntries, setLoadingEntries] = useState<Record<string, boolean>>({});
@@ -252,8 +264,9 @@ export default function CluesStep({ fill, seed, hidden, onFinished }: CluesStepP
         setLoadingEntries(loading);
 
         const existing = { ...loaded.ai };
-        await generateMissingAiClues(toGenerate, loaded.statuses, existing, {
+        const outcome = await generateMissingAiClues(toGenerate, loaded.statuses, existing, {
           signal,
+          onStatus: setGenStatus,
           onBatchComplete: (answers, clues) => {
             if (signal.aborted) return;
             const withoutDeleted: AiCluesByEntry = {};
@@ -279,10 +292,15 @@ export default function CluesStep({ fill, seed, hidden, onFinished }: CluesStepP
             });
           },
         });
+        if (signal.aborted) return;
+        setGenStatus(outcome.failedBatches > 0
+          ? `${outcome.failedBatches} of ${outcome.totalBatches} clue prompts failed after ${MAX_CLUE_RETRIES} retries. Some entries have no AI clues.`
+          : '');
       } catch (err) {
         if (signal.aborted) return;
         console.error('Failed to load clues', err);
         setNotice(err instanceof Error && err.message ? err.message : String(err));
+        setGenStatus('');
         setLoadingEntries({});
       }
     })();
@@ -356,6 +374,7 @@ export default function CluesStep({ fill, seed, hidden, onFinished }: CluesStepP
 
   return (
     <div className="mc-cluesstep" hidden={hidden}>
+      <p className="mc-clues-status" role="status" aria-live="polite">{genStatus}</p>
       <p className="mc-clues-instructions">Write or select clues</p>
       <div className="mc-clues-columns">
         <div className="mc-clues-container">

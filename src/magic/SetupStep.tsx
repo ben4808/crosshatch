@@ -44,11 +44,16 @@ interface SetupStepProps {
   onSeedChange: (seed: string) => void;
   onSizeChange: (size: number) => void;
   onGenerate: () => void;
+  /** Asks the AI to pick a seed answer and fills the Seed Answer box with it. */
+  onChoose: () => void;
   busy?: boolean;
+  choosing?: boolean;
   error?: string;
 }
 
-export default function SetupStep({ seed, pickedSize, onSeedChange, onSizeChange, onGenerate, busy = false, error = '' }: SetupStepProps) {
+export default function SetupStep({
+  seed, pickedSize, onSeedChange, onSizeChange, onGenerate, onChoose, busy = false, choosing = false, error = '',
+}: SetupStepProps) {
   const count = countLetters(seed);
   const countValid = isSeedLengthValid(count);
   const size = resolveGridSize(pickedSize, count);
@@ -78,12 +83,16 @@ export default function SetupStep({ seed, pickedSize, onSeedChange, onSizeChange
           autoCapitalize="characters"
           spellCheck={false}
           aria-describedby="mc-seed-hint mc-seed-count"
-          disabled={busy}
+          disabled={busy || choosing}
           onChange={e => onSeedChange(e.target.value)}
         />
         <div id="mc-seed-count" className={`mc-count ${countValid ? 'mc-ok' : 'mc-bad'}`}>
           Letters: {count}
         </div>
+        <button type="button" className="mc-choose" disabled={busy || choosing} onClick={onChoose}>
+          {choosing && <span className="mc-spinner" role="status" aria-label="Choosing a seed answer" />}
+          {choosing ? 'Choosing...' : 'Choose For Me'}
+        </button>
       </div>
 
       <fieldset className="mc-field">
@@ -109,7 +118,7 @@ export default function SetupStep({ seed, pickedSize, onSeedChange, onSizeChange
         </div>
       </fieldset>
 
-      <button type="submit" className="mc-primary" disabled={!canGenerate || busy}>
+      <button type="submit" className="mc-primary" disabled={!canGenerate || busy || choosing}>
         Generate Grid
       </button>
       {error && <p className="mc-notice mc-seed-error" role="alert">{error}</p>}

@@ -27,14 +27,15 @@ The clues panel should generally take after the Clues View in the main app, with
 
 As soon as the clue panel is opened, query any existing AI generated clues from the generated_clue table that have is_seedword = false. 
 Also query their clue type information. For any entries that have less than 7 existing clues, submit an AI prompt to clue_prompt.txt 
- to generate more. Submit up to 10 entries per prompt, one prompt at a time, using the same Gemini model selection and fallback as the main app. This will be done in the background, and while 
+ to generate more. Submit up to 10 entries per prompt, one prompt at a time, using grok-4.6 (via chal-api's makeAICall). Retry each prompt up to 2 times; apply each batch's clues as soon as it returns. This will be done in the background, and while 
  the response is pending, show a spinner icon next to all the entries for which AI results are loading.
 
 As soon as the clue panel is opened, also query any existing community clues from the community_clue table. 
 No prompt needs to be sent if there aren't any.
 
-For entries that have AI generated clues, automatically select a clue to populate for it. 50% of the time, the auto-selected clue should be 
- the Straight clue type. The other 50% of the time, the selected clue should be a random selection of all other clue types that exist for that entry.
+For entries that have AI generated clues, automatically select a clue to populate for it. 1/3 of the time, the auto-selected clue should be
+ the Straight clue type. 1/3 of the time it should be Association (if that type exists for the entry). The rest of the time, pick a random
+ other clue type that exists for that entry.
 
 When a clue is clicked, instead of opening an edit textbox directly, open a modal.
 1. The modal will have an edit textbox at the top with an OK button to submit and close the modal. Pressing enter does the same thing as the OK button.
