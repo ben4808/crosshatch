@@ -87,7 +87,7 @@ export default function ExplorerApp() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch("/api/explorer/entries", {
+      const res = await fetch("/chal-api/explorer/entries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

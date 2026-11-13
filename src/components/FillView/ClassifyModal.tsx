@@ -180,7 +180,7 @@ function ClassifyModal(props: ClassifyModalProps) {
         setError(undefined);
         setStatus(undefined);
 
-        fetch("/api/classify/entries", {
+        fetch("/chal-api/classify/entries", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ fillWords: props.fillWords }),
@@ -277,7 +277,7 @@ function ClassifyModal(props: ClassifyModalProps) {
             try {
                 setSaving(true);
                 setError(undefined);
-                const res = await fetch("/api/classify/delete", {
+                const res = await fetch("/chal-api/classify/delete", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ entry, lang: row.lang || "en" }),
@@ -324,7 +324,7 @@ function ClassifyModal(props: ClassifyModalProps) {
         setStatus(undefined);
 
         try {
-            const res = await fetch("/api/classify/save", {
+            const res = await fetch("/chal-api/classify/save", {
                 method: "POST",
                 headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({
