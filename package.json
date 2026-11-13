@@ -16,7 +16,7 @@
   "scripts": {
     "postinstall": "patch-package",
     "start": "react-scripts start --no-cache",
-    "build": "react-scripts build",
+    "build": "react-scripts build && node scripts/copyGithubPagesRoutes.js",
     "test": "react-scripts test --no-cache",
     "eject": "react-scripts eject"
   },

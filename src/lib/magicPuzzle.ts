@@ -6,6 +6,7 @@ import { FillStatus } from "../models/FillStatus";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
+import { CHAL_API } from "./chalApi";
 import { PackedWordIndex } from "./sharedWordIndex";
 import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
@@ -31,8 +32,6 @@ import {
 } from "./wordList";
 import Globals from "./windowService";
 
-/** Dev-server path forwarded to chal-api's /api routes (see setupProxy.js). */
-const CHAL_API = "/chal-api";
 const SEED_CANDIDATE_COUNT = 10;
 /** Seed candidates are drawn from all of these buckets, mixed with no fixed proportion. */
 const SEED_FAMILIARITY_BUCKETS = ["General Knowledge", "Inferred"];

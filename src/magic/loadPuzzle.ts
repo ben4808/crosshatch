@@ -1,7 +1,5 @@
 import { cellsFromFillKey, Cells, MagicSlot, slotsFromCells } from './magicFill';
-
-/** Dev-server path forwarded to chal-api's /api routes (see setupProxy.js). */
-const CHAL_API = '/chal-api';
+import { CHAL_API } from '../lib/chalApi';
 
 export interface LoadedPuzzle {
   id: string;

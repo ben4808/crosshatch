@@ -1,5 +1,4 @@
-/** Dev-server path forwarded to chal-api's /api routes (see setupProxy.js). */
-const CHAL_API = "/chal-api";
+import { CHAL_API } from "../lib/chalApi";
 
 /** Record each crossed-out answer as a dont_use tag, inserting 1 or incrementing it. */
 export async function saveDontUseEntries(entries: string[], lang = "en"): Promise<void> {
