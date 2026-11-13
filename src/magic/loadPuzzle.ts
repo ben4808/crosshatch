@@ -1,5 +1,5 @@
 import { cellsFromFillKey, Cells, MagicSlot, slotsFromCells } from './magicFill';
-import { CHAL_API } from '../lib/chalApi';
+import { chalFetch } from '../lib/chalApi';
 
 export interface LoadedPuzzle {
   id: string;
@@ -17,7 +17,7 @@ interface PuzzleResponse {
 }
 
 export async function loadMagicPuzzle(id: string): Promise<LoadedPuzzle> {
-  const res = await fetch(`${CHAL_API}/magicPuzzle/${encodeURIComponent(id)}`);
+  const res = await chalFetch(`/magicPuzzle/${encodeURIComponent(id)}`);
   const data = await res.json().catch(() => ({})) as PuzzleResponse;
   if (!res.ok) {
     throw new Error(data.error || data.message || `Couldn't load puzzle (${res.status})`);

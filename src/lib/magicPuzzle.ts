@@ -6,7 +6,7 @@ import { FillStatus } from "../models/FillStatus";
 import { GridSquare } from "../models/GridSquare";
 import { GridState } from "../models/GridState";
 import { GridWord } from "../models/GridWord";
-import { CHAL_API } from "./chalApi";
+import { chalFetch } from "./chalApi";
 import { PackedWordIndex } from "./sharedWordIndex";
 import { Section } from "../models/Section";
 import { SectionCandidate } from "../models/SectionCandidate";
@@ -1262,7 +1262,7 @@ export async function requestTypedClues(
 }
 
 export async function postJson<T = unknown>(path: string, body: unknown, signal?: AbortSignal): Promise<T> {
-    const res = await fetch(`${CHAL_API}${path}`, {
+    const res = await chalFetch(path, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

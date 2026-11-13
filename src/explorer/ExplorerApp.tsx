@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import ClassifyModal, { FAMILIARITY_OPTIONS } from "../components/FillView/ClassifyModal";
-import { CHAL_API } from "../lib/chalApi";
+import { chalFetch } from "../lib/chalApi";
 import "./ExplorerApp.scss";
 
 const COLUMN_SIZE = 20;
@@ -88,7 +88,7 @@ export default function ExplorerApp() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetch(`${CHAL_API}/explorer/entries`, {
+      const res = await chalFetch("/explorer/entries", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
