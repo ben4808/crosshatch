@@ -472,6 +472,37 @@ body.mc-body {
   text-decoration: line-through;
 }
 
+.mc-suggest-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+}
+
+.mc-suggest-option {
+  width: 100%;
+  padding: 10px 12px;
+  text-align: left;
+  font-size: 1rem;
+  font-weight: 600;
+  color: $text;
+  background: $surface;
+  border: 1px solid $border;
+  border-radius: 8px;
+  cursor: pointer;
+
+  &:hover:not(:disabled), &:focus-visible { border-color: $sea; }
+  &:focus-visible { outline: 2px solid $sea; outline-offset: 2px; }
+  &:disabled { opacity: 0.6; cursor: default; }
+}
+
+.mc-suggest-more {
+  width: 100%;
+}
+
 
 @media (min-width: 768px) {
   .mc-main { padding-top: 40px; }

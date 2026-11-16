@@ -2,9 +2,11 @@ import cluePromptUrl from "../prompts/clue_prompt.txt";
 import {
     displayTextsFromStatuses,
     EntryClueStatus,
-    GROK_MODEL,
+    existingClueTextsByAnswer,
+    formatCluePromptData,
     loadPrompt,
     MAX_CLUE_RETRIES,
+    MUSE_MODEL,
     pickGeneratedClue,
     postJson,
     requestTypedClues,
@@ -88,16 +90,107 @@ export function entriesNeedingAiClues(ai: AiCluesByEntry, entries: string[]): st
     return entries.filter(entry => (ai[entry] || []).length < MIN_AI_CLUES);
 }
 
+const CONTEXT_CLUE_TYPE = "Context";
+
+export interface AutoSelectOptions {
+    /** User-edited clues. Left unchanged, and a Context clue here uses the one Context slot. */
+    lockedKeys?: ReadonlySet<string>;
+    /** Slots whose clue the caller sets (the seed while its lore clue is pending or already chosen). */
+    ignoredKeys?: ReadonlySet<string>;
+}
+
+function usableClues(clues: TypedClue[]): TypedClue[] {
+    return clues.filter(clue => clue.clue.trim());
+}
+
+/** True when every available clue is Context, so auto-select has no other choice. */
+function isContextOnly(clues: TypedClue[]): boolean {
+    const usable = usableClues(clues);
+    return usable.length > 0 && usable.every(clue => clue.clueType === CONTEXT_CLUE_TYPE);
+}
+
+function clueTypeOf(clues: TypedClue[], text: string): string | undefined {
+    const trimmed = text.trim();
+    if (!trimmed) return undefined;
+    return clues.find(clue => clue.clue === trimmed)?.clueType;
+}
+
+/**
+ * Auto-select one clue per empty slot.
+ * At most one selected clue may be Context, unless more than one entry has only Context clues —
+ * those entries each get a Context clue, and no other entry does.
+ */
 export function autoSelectedClues(
     slots: MagicSlot[],
     ai: AiCluesByEntry,
     existing: Record<string, string> = {},
+    options?: AutoSelectOptions,
 ): Record<string, string> {
+    const locked = options?.lockedKeys;
+    const ignored = options?.ignoredKeys;
     const next = { ...existing };
+    const excludeContext = new Set([CONTEXT_CLUE_TYPE]);
+
+    const cluesFor = (slot: MagicSlot) => ai[slot.entry] || [];
+    const textFor = (slot: MagicSlot) => (next[slot.key] || "").trim();
+    const isIgnored = (slot: MagicSlot) => !!ignored?.has(slot.key);
+    const isLocked = (slot: MagicSlot) => !!locked?.has(slot.key);
+    const isContextOnlySlot = (slot: MagicSlot) => !isIgnored(slot) && isContextOnly(cluesFor(slot));
+
+    // A non-forced entry may receive Context only when no entry is required to use it.
+    const contextOnlyTakesSlot = slots.some(slot => {
+        if (!isContextOnlySlot(slot)) return false;
+        const text = textFor(slot);
+        if (isLocked(slot) && text && clueTypeOf(cluesFor(slot), text) !== CONTEXT_CLUE_TYPE) return false;
+        return true;
+    });
+    const allowVoluntary = !contextOnlyTakesSlot;
+
+    let voluntaryUsed = false;
+    let keeperKey: string | undefined;
+    if (allowVoluntary) {
+        const lockedHasContext = slots.some(slot =>
+            !isIgnored(slot)
+            && !isContextOnlySlot(slot)
+            && isLocked(slot)
+            && clueTypeOf(cluesFor(slot), textFor(slot)) === CONTEXT_CLUE_TYPE);
+        if (lockedHasContext) {
+            voluntaryUsed = true;
+        } else {
+            const keeper = slots.find(slot =>
+                !isIgnored(slot)
+                && !isContextOnlySlot(slot)
+                && !isLocked(slot)
+                && clueTypeOf(cluesFor(slot), textFor(slot)) === CONTEXT_CLUE_TYPE);
+            if (keeper) {
+                keeperKey = keeper.key;
+                voluntaryUsed = true;
+            }
+        }
+    }
+
     slots.forEach(slot => {
-        if ((next[slot.key] || "").trim()) return;
-        const chosen = pickGeneratedClue(ai[slot.entry] || []);
-        if (chosen) next[slot.key] = chosen;
+        if (isIgnored(slot)) return;
+        const clues = cluesFor(slot);
+        const text = textFor(slot);
+        const type = clueTypeOf(clues, text);
+
+        if (isContextOnlySlot(slot)) {
+            if (isLocked(slot) && text) return;
+            if (text && type === CONTEXT_CLUE_TYPE) return;
+            const chosen = pickGeneratedClue(clues.filter(clue => clue.clueType === CONTEXT_CLUE_TYPE));
+            if (chosen) next[slot.key] = chosen;
+            return;
+        }
+
+        if (isLocked(slot) && text) return;
+        if (slot.key === keeperKey) return;
+        if (text && type !== CONTEXT_CLUE_TYPE) return;
+
+        const chosen = pickGeneratedClue(clues, !allowVoluntary || voluntaryUsed ? excludeContext : undefined);
+        if (!chosen) return;
+        next[slot.key] = chosen;
+        if (clueTypeOf(clues, chosen) === CONTEXT_CLUE_TYPE) voluntaryUsed = true;
     });
     return next;
 }
@@ -109,6 +202,8 @@ export async function generateMissingAiClues(
     options: {
         lang?: string;
         signal?: AbortSignal;
+        /** Community clues already stored for these entries, sent into the prompt so the AI doesn't repeat them. */
+        community?: CommunityCluesByEntry;
         /** Progress text for the Clues step, e.g. "Generating clues (prompt 1 of 2)...". */
         onStatus?: (status: string) => void;
         /** Runs as soon as each batch returns (or fails after its retries), before the next prompt is sent. */
@@ -129,11 +224,14 @@ export async function generateMissingAiClues(
         options.onStatus?.(`Generating clues (${promptLabel})...`);
         try {
             const displayByAnswer = displayTextsFromStatuses(batch, statuses);
-            const prompt = cluePrompt.replace("[[DATA]]",
-                batch.map(answer => displayByAnswer.get(answer) || answer).join("\n"));
+            const prompt = cluePrompt.replace("[[DATA]]", formatCluePromptData(
+                batch,
+                displayByAnswer,
+                existingClueTextsByAnswer(batch, statuses, options.community),
+            ));
             const parsed = await requestTypedClues(prompt, batch, displayByAnswer, {
                 signal: options.signal,
-                model: GROK_MODEL,
+                model: MUSE_MODEL,
                 onRetry: retry => options.onStatus?.(
                     `Generating clues (${promptLabel}, retry ${retry} of ${MAX_CLUE_RETRIES})...`),
             });

@@ -9,7 +9,7 @@ import { calculateSectionOrder, candidateLayoutMatches, entriesFromSectionString
 import { clearFill, eraseSectionCandidateFromGrid, insertEntryIntoGrid, paintSectionCandidate, updateGridConstraintInfo, updateManualEntryCandidates } from '../../lib/grid';
 import { fillSectionWord, makeNewNode } from '../../lib/fill';
 import { ensureWordList, terminateFillWorkers } from '../../lib/fillWorkerPool';
-import { cancelGettableFill, startGettableFill } from '../../lib/gettableFill';
+import { cancelGettableFill, GettableFillMode, startGettableFill } from '../../lib/gettableFill';
 import { cancelMagicPuzzle, moveSeedClue, runMagicPuzzle } from '../../lib/magicPuzzle';
 import { FillNode } from '../../models/FillNode';
 import { AppContext } from '../../AppContext';
@@ -46,7 +46,7 @@ function FillView({ hidden }: { hidden?: boolean }) {
     const appContext = useContext(AppContext);
     const [showSectionCandidates, setShowSectionCandidates] = useState(true);
     const [isWordListLoading, setIsWordListLoading] = useState(false);
-    const [fillMode, setFillMode] = useState<"fill" | "genKnowledge" | "allEntries" | undefined>(undefined);
+    const [fillMode, setFillMode] = useState<GettableFillMode | undefined>(undefined);
     const [isMagicRunning, setIsMagicRunning] = useState(false);
     const [magicStatus, setMagicStatus] = useState("");
     const [classifyFillWords, setClassifyFillWords] = useState<string[] | undefined>(undefined);
@@ -69,7 +69,7 @@ function FillView({ hidden }: { hidden?: boolean }) {
         triggerUpdate();
     }
 
-    function startFillSearch(mode: "fill" | "genKnowledge" | "allEntries") {
+    function startFillSearch(mode: GettableFillMode) {
         // Fresh search each run; leave previously found fills unless user clears them.
         fillUiLastUpdateRef.current = 0;
         const result = startGettableFill({
@@ -108,6 +108,14 @@ function FillView({ hidden }: { hidden?: boolean }) {
             return;
         }
         startFillSearch("genKnowledge");
+    }
+
+    function handleToggleNoGimmes() {
+        if (fillMode === "noGimmes") {
+            stopFillMode();
+            return;
+        }
+        startFillSearch("noGimmes");
     }
 
     function handleToggleAllEntries() {
@@ -491,7 +499,9 @@ function FillView({ hidden }: { hidden?: boolean }) {
 
     const isFillRunning = fillMode === "fill";
     const isGenKnowledgeRunning = fillMode === "genKnowledge";
+    const isNoGimmesRunning = fillMode === "noGimmes";
     const isAllEntriesRunning = fillMode === "allEntries";
+    const isGettableRunning = isFillRunning || isGenKnowledgeRunning || isNoGimmesRunning || isAllEntriesRunning;
     const fillQuotaCount = Globals.fillFilter?.maxLikelyGettable ?? 0;
     let fillStatusStr = getFillStatusString(Globals.fillStatus!);
     
@@ -558,7 +568,7 @@ function FillView({ hidden }: { hidden?: boolean }) {
                 <div className="fill-options-heading">Modes</div>
                 <div className="form-check form-switch fill-switch">
                     <input type="checkbox" className="form-check-input" id="fillSwitch" 
-                        checked={isFillRunning} disabled={isMagicRunning || isGenKnowledgeRunning || isAllEntriesRunning} onChange={handleToggleFill} />
+                        checked={isFillRunning} disabled={isMagicRunning || (isGettableRunning && !isFillRunning)} onChange={handleToggleFill} />
                     <label className="form-check-label" htmlFor="fillSwitch">Fill</label>
                 </div>
                 {isFillRunning && (
@@ -566,15 +576,23 @@ function FillView({ hidden }: { hidden?: boolean }) {
                 )}
                 <div className="form-check form-switch fill-switch fill-mode-option">
                     <input type="checkbox" className="form-check-input" id="genKnowledgeSwitch"
-                        checked={isGenKnowledgeRunning} disabled={isMagicRunning || isFillRunning || isAllEntriesRunning} onChange={handleToggleGenKnowledge} />
+                        checked={isGenKnowledgeRunning} disabled={isMagicRunning || (isGettableRunning && !isGenKnowledgeRunning)} onChange={handleToggleGenKnowledge} />
                     <label className="form-check-label" htmlFor="genKnowledgeSwitch">Gen. Knowledge</label>
                 </div>
                 {isGenKnowledgeRunning && (
                     <div className="fill-mode-status">Considering {fillQuotaCount} Maybe Gettable</div>
                 )}
                 <div className="form-check form-switch fill-switch fill-mode-option">
+                    <input type="checkbox" className="form-check-input" id="noGimmesSwitch"
+                        checked={isNoGimmesRunning} disabled={isMagicRunning || (isGettableRunning && !isNoGimmesRunning)} onChange={handleToggleNoGimmes} />
+                    <label className="form-check-label" htmlFor="noGimmesSwitch">No Gimmes</label>
+                </div>
+                {isNoGimmesRunning && (
+                    <div className="fill-mode-status">Considering {fillQuotaCount} Maybe Gettable</div>
+                )}
+                <div className="form-check form-switch fill-switch fill-mode-option">
                     <input type="checkbox" className="form-check-input" id="allEntriesSwitch"
-                        checked={isAllEntriesRunning} disabled={isMagicRunning || isFillRunning || isGenKnowledgeRunning} onChange={handleToggleAllEntries} />
+                        checked={isAllEntriesRunning} disabled={isMagicRunning || (isGettableRunning && !isAllEntriesRunning)} onChange={handleToggleAllEntries} />
                     <label className="form-check-label" htmlFor="allEntriesSwitch">All Entries</label>
                 </div>
                 {isAllEntriesRunning && (
@@ -582,7 +600,7 @@ function FillView({ hidden }: { hidden?: boolean }) {
                 )}
                 <div className="form-check form-switch fill-switch fill-mode-option">
                     <input type="checkbox" className="form-check-input" id="magicPuzzleSwitch"
-                        checked={isMagicRunning} disabled={isFillRunning || isGenKnowledgeRunning || isAllEntriesRunning} onChange={handleToggleMagicPuzzle} />
+                        checked={isMagicRunning} disabled={isGettableRunning} onChange={handleToggleMagicPuzzle} />
                     <label className="form-check-label" htmlFor="magicPuzzleSwitch">Magic Puzzle</label>
                 </div>
                 {magicStatus && <div className="magic-puzzle-status">{magicStatus}</div>}

@@ -1,0 +1,14 @@
+You are given a word or phrase.
+
+ Output a crossword clue for that item that tells a piece of its lore without giving the answer away. Think about a piece of lore that
+  is surprising, interesting, or unexpected.
+ The goal is not to make it an easy clue but rather one that sparks the imagination and inspires the solver to look up more details.
+ Keep the clue concise, but don't leave out the pertinent details. Considering formulating it in Jeopardy clue style.
+
+OUTPUT
+Output only the resulting clue. Don't output any explanatory or auxiliary text.
+
+
+ITEM
+
+[[DATA]]

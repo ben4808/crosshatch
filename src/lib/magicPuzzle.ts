@@ -1,4 +1,5 @@
 import seedwordCluePromptUrl from "../prompts/seedword_clue_prompt.txt";
+import seedCluePromptUrl from "../prompts/seed_clue_prompt.txt";
 import cluePromptUrl from "../prompts/clue_prompt.txt";
 import { ContentType } from "../models/ContentType";
 import { FillFilter } from "../models/FillFilter";
@@ -47,8 +48,17 @@ const OTHER_CLUE_TYPES = [
 /** A failed clue prompt is retried this many times (so up to 1 + MAX_CLUE_RETRIES attempts). */
 export const MAX_CLUE_RETRIES = 2;
 const CLUE_RETRY_DELAY_MS = 1500;
-/** Model id chal-api routes to the Cursor SDK instead of Gemini. */
-export const GROK_MODEL = "grok-4.6";
+/** Model id chal-api routes to Muse Ember at high reasoning effort. */
+export const MUSE_MODEL = "muse-ember";
+
+/** Show Suggestions draws this many entries from each familiarity bucket, in this order. */
+const SUGGESTION_QUOTAS = [
+    { familiarityBucket: "General Knowledge", count: 4 },
+    { familiarityBucket: "Inferred", count: 3 },
+    { familiarityBucket: "Active", count: 3 },
+];
+const SUGGESTION_MIN_LENGTH = 5;
+const SUGGESTION_MAX_LENGTH = 7;
 
 export const MAGIC_PUZZLE_AUTHOR = "Crosshatch";
 
@@ -427,8 +437,11 @@ export async function generateNormalClues(
                 const promptLabel = `prompt ${i + 1} of ${batches.length}`;
                 onStatus(`Generating (${promptLabel})...`);
                 const displayByAnswer = displayTextsFromStatuses(batch, statusByAnswer);
-                const prompt = cluePrompt.replace("[[DATA]]",
-                    batch.map(answer => displayByAnswer.get(answer) || answer).join("\n"));
+                const prompt = cluePrompt.replace("[[DATA]]", formatCluePromptData(
+                    batch,
+                    displayByAnswer,
+                    existingClueTextsByAnswer(batch, statusByAnswer),
+                ));
                 let parsed: Map<string, TypedClue[]>;
                 try {
                     parsed = await requestTypedClues(prompt, batch, displayByAnswer, {
@@ -853,11 +866,11 @@ export function startingBlackSquares(size: number, seedLength?: number): [number
         case 6:
             return [[0, 0], [last, last]];
         case 7:
-            // Northwest block and its 180° reflection. Three across answers
-            // (rows 2–4) and one down answer (column 3) stay seven letters long.
+            // (0,0), (0,1), (0,2), (1,0), (1,1), (2,0) and their 180° reflections.
             return [
-                [0, 0], [0, 1], [0, 2], [1, 0], [1, 1],
-                [last, last], [last, last - 1], [last, last - 2], [last - 1, last], [last - 1, last - 1],
+                [0, 0], [0, 1], [0, 2], [1, 0], [1, 1], [2, 0],
+                [last, last], [last, last - 1], [last, last - 2],
+                [last - 1, last], [last - 1, last - 1], [last - 2, last],
             ];
         default:
             return undefined;
@@ -1147,11 +1160,14 @@ export function parseTypedClueResponse(
     return clues;
 }
 
-export function pickGeneratedClue(clues: TypedClue[]): string | undefined {
-    if (clues.length === 0) return undefined;
-    const straight = clues.filter(clue => clue.clueType === STRAIGHT_CLUE_TYPE);
-    const association = clues.filter(clue => clue.clueType === ASSOCIATION_CLUE_TYPE);
-    const others = clues.filter(clue =>
+export function pickGeneratedClue(clues: TypedClue[], excludeTypes?: ReadonlySet<string>): string | undefined {
+    const pool = excludeTypes && excludeTypes.size > 0
+        ? clues.filter(clue => !excludeTypes.has(clue.clueType))
+        : clues;
+    if (pool.length === 0) return undefined;
+    const straight = pool.filter(clue => clue.clueType === STRAIGHT_CLUE_TYPE);
+    const association = pool.filter(clue => clue.clueType === ASSOCIATION_CLUE_TYPE);
+    const others = pool.filter(clue =>
         clue.clueType
         && clue.clueType !== STRAIGHT_CLUE_TYPE
         && clue.clueType !== ASSOCIATION_CLUE_TYPE
@@ -1163,7 +1179,7 @@ export function pickGeneratedClue(clues: TypedClue[]): string | undefined {
             ? pickFromClues(association) ?? pickRandomOtherType(others) ?? pickFromClues(straight)
             : pickRandomOtherType(others) ?? pickFromClues(association) ?? pickFromClues(straight);
     if (picked) return picked;
-    return clues[Math.floor(Math.random() * clues.length)].clue;
+    return pool[Math.floor(Math.random() * pool.length)].clue;
 }
 
 function pickFromClues(pool: TypedClue[]): string | undefined {
@@ -1209,7 +1225,109 @@ export async function loadPrompt(url: string, signal?: AbortSignal): Promise<str
     return text;
 }
 
-/** Calls chal-api's /makeAICall. Gemini by default; pass a model such as GROK_MODEL to use it instead. */
+/**
+ * [[DATA]] block for clue_prompt.txt: each item, then its existing clues, with a blank line between items.
+ */
+export function formatCluePromptData(
+    answers: string[],
+    displayByAnswer: Map<string, string>,
+    existingByAnswer: Map<string, string[]> = new Map(),
+): string {
+    return answers.map(answer => {
+        const lines = [displayByAnswer.get(answer) || answer];
+        const seen = new Set<string>();
+        for (const clue of existingByAnswer.get(answer) || []) {
+            const text = clue.replace(/\s+/g, " ").trim();
+            if (!text || seen.has(text)) continue;
+            seen.add(text);
+            lines.push(text);
+        }
+        return lines.join("\n");
+    }).join("\n\n");
+}
+
+/** Existing clue texts for a prompt, from generated clues plus any extra (community) clues. */
+export function existingClueTextsByAnswer(
+    answers: string[],
+    statuses: Map<string, EntryClueStatus>,
+    extra: { [entry: string]: { clue: string }[] } = {},
+): Map<string, string[]> {
+    const map = new Map<string, string[]>();
+    answers.forEach(answer => {
+        map.set(answer, [
+            ...(statuses.get(answer)?.clues || []).map(clue => clue.clue),
+            ...(extra[answer] || []).map(clue => clue.clue),
+        ]);
+    });
+    return map;
+}
+
+/** Random 5-7 letter suggestions: 4 General Knowledge, then 3 Inferred, then 3 Active. */
+export async function fetchSeedSuggestions(
+    excludeEntries: string[] = [],
+    signal?: AbortSignal,
+): Promise<SeedEntry[]> {
+    const { entries } = await postJson<{ entries: SeedEntry[] }>("/magicPuzzle/seedEntries", {
+        minLength: SUGGESTION_MIN_LENGTH,
+        maxLength: SUGGESTION_MAX_LENGTH,
+        quotas: SUGGESTION_QUOTAS,
+        excludeEntries,
+    }, signal);
+    return entries || [];
+}
+
+/** A generated_clue with is_seedword = true for this entry, if one is already stored. */
+export async function fetchExistingSeedClue(entry: string, signal?: AbortSignal): Promise<string | undefined> {
+    const result = await postJson<{ entries: EntryClueStatus[] }>(
+        "/magicPuzzle/entryClues",
+        { entries: [entry] },
+        signal,
+    );
+    for (const status of result.entries || []) {
+        const clue = (status.clues || []).find(item => item.isSeedword && item.clue.trim());
+        if (clue) return clue.clue.trim();
+    }
+    return undefined;
+}
+
+/** The seed_clue_prompt.txt response is the clue itself. Drop an echoed "answer : clue" prefix. */
+export function parseSeedClueResponse(response: string, displayText: string): string {
+    let text = response.trim().replace(/^```[a-z]*\n?/i, "").replace(/\n?```$/, "").trim();
+    const lines = text.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+    if (lines.length === 0) return "";
+    text = lines.join(" ");
+    const sep = text.indexOf(" : ");
+    if (sep > 0) {
+        const left = text.slice(0, sep).trim();
+        const right = text.slice(sep + 3).trim();
+        if (right && normalizeEntryKey(left) === normalizeEntryKey(displayText)) text = right;
+    }
+    return text.replace(/^(clue|crossword clue)\s*:\s*/i, "").trim();
+}
+
+/** Asks the AI (seed_clue_prompt.txt) for one lore clue for this seed. Uses Muse. */
+export async function generateSeedClue(displayText: string, signal?: AbortSignal): Promise<string> {
+    const template = await loadPrompt(seedCluePromptUrl, signal);
+    const prompt = template.replace("[[DATA]]", displayText.trim());
+    let lastError: unknown;
+    for (let attempt = 0; attempt <= MAX_CLUE_RETRIES; attempt++) {
+        if (attempt > 0) await sleep(CLUE_RETRY_DELAY_MS, signal);
+        if (signal?.aborted) throw new DOMException("Aborted", "AbortError");
+        try {
+            const response = await makeAICall(prompt, signal, MUSE_MODEL);
+            const clue = parseSeedClueResponse(response, displayText);
+            if (!clue) throw new Error("The AI returned an empty seed clue.");
+            return clue;
+        } catch (err) {
+            if (signal?.aborted) throw err;
+            lastError = err;
+            console.warn(`Seed clue prompt failed (attempt ${attempt + 1} of ${MAX_CLUE_RETRIES + 1})`, err);
+        }
+    }
+    throw lastError instanceof Error ? lastError : new Error("Couldn't generate a seed clue.");
+}
+
+/** Calls chal-api's /makeAICall. Gemini by default; pass a model such as MUSE_MODEL to use it instead. */
 export async function makeAICall(prompt: string, signal?: AbortSignal, model?: string): Promise<string> {
     const body = await postJson<{ response?: string }>("/makeAICall", model ? { prompt, model } : { prompt }, signal);
     if (!body.response) throw new Error("The AI returned an empty response.");

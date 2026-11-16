@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import Logo from './Logo';
 import { normalizeSeed } from './magicFill';
+import { fetchSeedSuggestions, SeedEntry } from '../lib/magicPuzzle';
 
 export const MIN_SEED_LENGTH = 3;
 export const MAX_SEED_LENGTH = 7;
@@ -44,26 +45,137 @@ interface SetupStepProps {
   onSeedChange: (seed: string) => void;
   onSizeChange: (size: number) => void;
   onGenerate: () => void;
-  /** Asks the AI to pick a seed answer and fills the Seed Answer box with it. */
-  onChoose: () => void;
   busy?: boolean;
-  choosing?: boolean;
   error?: string;
 }
 
+function SuggestionsModal({
+  suggestions,
+  loading,
+  error,
+  onPick,
+  onLoadMore,
+  onClose,
+}: {
+  suggestions: SeedEntry[];
+  loading: boolean;
+  error: string;
+  onPick: (entry: SeedEntry) => void;
+  onLoadMore: () => void;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return (
+    <div className="mc-modal-backdrop" onClick={onClose}>
+      <div
+        className="mc-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="mc-suggest-title"
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="mc-modal-heading">
+          <h2 className="mc-modal-title" id="mc-suggest-title">Suggestions</h2>
+          <button type="button" className="mc-modal-close" aria-label="Close" onClick={onClose}>x</button>
+        </div>
+        {loading && suggestions.length === 0 && (
+          <p className="mc-notice" role="status">
+            <span className="mc-spinner" aria-hidden="true" />
+            Loading suggestions...
+          </p>
+        )}
+        {suggestions.length > 0 && (
+          <ul className="mc-suggest-list">
+            {suggestions.map(entry => (
+              <li key={entry.entry}>
+                <button
+                  type="button"
+                  className="mc-suggest-option"
+                  disabled={loading}
+                  onClick={() => onPick(entry)}
+                >
+                  {entry.displayText || entry.entry}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+        {error && <p className="mc-notice mc-seed-error" role="alert">{error}</p>}
+        <button
+          type="button"
+          className="mc-secondary mc-suggest-more"
+          disabled={loading}
+          onClick={onLoadMore}
+        >
+          {loading && <span className="mc-spinner" role="status" aria-label="Loading suggestions" />}
+          {loading ? 'Loading...' : 'Load More'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 export default function SetupStep({
-  seed, pickedSize, onSeedChange, onSizeChange, onGenerate, onChoose, busy = false, choosing = false, error = '',
+  seed, pickedSize, onSeedChange, onSizeChange, onGenerate, busy = false, error = '',
 }: SetupStepProps) {
   const count = countLetters(seed);
   const countValid = isSeedLengthValid(count);
   const size = resolveGridSize(pickedSize, count);
   const canGenerate = countValid && size !== undefined;
+  const [suggestionsOpen, setSuggestionsOpen] = useState(false);
+  const [suggestions, setSuggestions] = useState<SeedEntry[]>([]);
+  const [suggesting, setSuggesting] = useState(false);
+  const [suggestError, setSuggestError] = useState('');
+  const seenRef = useRef(new Set<string>());
+  const suggestRequest = useRef(0);
+
+  async function loadSuggestions(excludeSeen: boolean) {
+    const request = ++suggestRequest.current;
+    setSuggesting(true);
+    setSuggestError('');
+    if (!excludeSeen) seenRef.current = new Set();
+    try {
+      const entries = await fetchSeedSuggestions(excludeSeen ? Array.from(seenRef.current) : []);
+      if (suggestRequest.current !== request) return;
+      if (entries.length === 0) {
+        setSuggestError(excludeSeen ? 'No more suggestions right now.' : 'No suggestions found.');
+        if (!excludeSeen) setSuggestions([]);
+        return;
+      }
+      entries.forEach(entry => seenRef.current.add(entry.entry));
+      setSuggestions(entries);
+    } catch (err) {
+      if (suggestRequest.current !== request) return;
+      setSuggestError(err instanceof Error && err.message ? err.message : String(err));
+    } finally {
+      if (suggestRequest.current === request) setSuggesting(false);
+    }
+  }
+
+  function openSuggestions() {
+    setSuggestionsOpen(true);
+    setSuggestions([]);
+    void loadSuggestions(false);
+  }
+
+  function pickSuggestion(entry: SeedEntry) {
+    onSeedChange(entry.displayText || entry.entry);
+    setSuggestionsOpen(false);
+  }
 
   return (
     <form
       className="mc-setup"
       onSubmit={e => {
         e.preventDefault();
+        if (suggestionsOpen) return;
         if (canGenerate) onGenerate();
       }}
     >
@@ -83,15 +195,14 @@ export default function SetupStep({
           autoCapitalize="characters"
           spellCheck={false}
           aria-describedby="mc-seed-hint mc-seed-count"
-          disabled={busy || choosing}
+          disabled={busy}
           onChange={e => onSeedChange(e.target.value)}
         />
         <div id="mc-seed-count" className={`mc-count ${countValid ? 'mc-ok' : 'mc-bad'}`}>
           Letters: {count}
         </div>
-        <button type="button" className="mc-choose" disabled={busy || choosing} onClick={onChoose}>
-          {choosing && <span className="mc-spinner" role="status" aria-label="Choosing a seed answer" />}
-          {choosing ? 'Choosing...' : 'Choose For Me'}
+        <button type="button" className="mc-choose" disabled={busy} onClick={openSuggestions}>
+          Show Suggestions
         </button>
       </div>
 
@@ -118,10 +229,20 @@ export default function SetupStep({
         </div>
       </fieldset>
 
-      <button type="submit" className="mc-primary" disabled={!canGenerate || busy || choosing}>
+      <button type="submit" className="mc-primary" disabled={!canGenerate || busy}>
         Generate Grid
       </button>
       {error && <p className="mc-notice mc-seed-error" role="alert">{error}</p>}
+      {suggestionsOpen && (
+        <SuggestionsModal
+          suggestions={suggestions}
+          loading={suggesting}
+          error={suggestError}
+          onPick={pickSuggestion}
+          onLoadMore={() => { void loadSuggestions(true); }}
+          onClose={() => setSuggestionsOpen(false)}
+        />
+      )}
     </form>
   );
 }

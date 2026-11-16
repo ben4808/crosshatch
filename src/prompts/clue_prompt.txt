@@ -1,12 +1,23 @@
-You are given a list of words and phrases, one per line.
+You are given a list of words and phrases. Each item comes with its list of existing clues.
 
 For each item, write a crossword clue for 3-5 clue types described below. 
-One of these will always be the Straight clue type, but for the rest, pick the clue types that fit the answer most naturally.
+One of these will always be the Straight clue type, but for the rest, pick the clue types that fit the answer most naturally. Try especially
+  to generate an Association clue where possible.
+Generate clues that are not duplicates or near duplicates of the existing clues given for the item.
+
+INPUT FORMAT
+There will be a blank line between each item group.
+
+<item>
+<existing clue 1>
+<existing clue 2>
+...
 
 GUIDELINES
 - Do NOT use any words that appear in the answer or any root words of the words that appear in the answer.
 - Shorter is generally better, aggresively cut fluff words that don't add spice.
-- For answers that are acronyms or abbreviations, the clue should either also contain an acronym or abbreviation or include a qualifier like "in brief" or "(abbr.)".
+- For answers that are acronyms or abbreviations, the clue should either also contain an acronym or abbreviation or include a qualifier 
+    like "in brief" or "(abbr.)".
 - Answers that are spoken formulas should have clues in quotes. (e.g. '"how do you do"' -> '"Pleased to meet you!"'.)
 - If a clue is vague and has many different interpretations, prefer adding a qualifier to add context (e.g. "Operate, as a car" for DRIVE).
 - If the answer is niche or obscure, prefer very straightforward clues with extra hints that give the solver the best chance possible.
@@ -15,7 +26,8 @@ GUIDELINES
 - Archaic answers should include at the end with a qualifier something like "in olden days", "once", "to Shakespeare", etc.
 - Clues should have their first word capitalized, unless the clue starts with a blank. 
 - Clues should not have a trailing period unless they are complete sentences. Exclamation marks and question marks are OK.
-- For all clue types, if the answer is common, prefer to use colloquial or idiomatic phrases where possible, as they add spice to an otherwise boring clue.
+- For all clue types, if the answer is common, prefer to use colloquial or idiomatic phrases where possible, as they add spice to an 
+    otherwise boring clue.
 
 CLUE TYPES
 Straight: A straight definition, or a synonym/paraphrase of the dominant sense of the answer.
@@ -26,11 +38,13 @@ Association: Make free association(s) of the answer to other concrete, well-know
   - Noun examples: "breakfast" -> "Denny's Gram Slam, e.g.", "magic wand" -> "Hogwarts implement".
   - Verb examples: "binge watch" -> "Do a Friends marathon, say", "swimming" -> "Ironman discipline"
   - Adjective examples: "gray" -> "Like a cloudy day", "well-known" -> "Like the Eiffel Tower".
-Antonym: Antonym of the answer (e.g. "concentrated" -> "Opposite of far-flung", "sickly" -> "Not healthy").
+Antonym: Describe the answer as the opposite of something (e.g. "concentrated" -> "Opposite of far-flung", "sickly" -> "Not healthy").
 Categorize: (e.g. "innie -> "Type of navel", "Mexican" -> "Common food cart cuisine")
 Example: (e.g. "fish" -> "Grouper, for one", "exiled" -> "Napoleon or Trotsky")
 Context: Find a well-known phrase, quotation, or saying that contains the answer
  - Either give it as a fill in the blank clue ("truck" -> "fire ___", "power" -> "Knowledge is ___", "a lark" -> "Happy as ___")
+   Don't output the clue with quotation marks.
+   Make sure the inflection of the answer agrees with the phrase. E.g. "Luck of the ___" fits "draw" and not "draws".
  - Or give it in words ("fire" -> "start to 'truck' or 'man'"). 
    This also works well for answers that are prefixes, or suffixes. ("pseudo-" -> "Prefix for intellectual or science")
 Fun Fact: Give a piece of lore about the answer that is surprising, interesting, or is strange but true.
@@ -46,6 +60,6 @@ Copy the clue type names exactly.
 ...
 
 
-WORDS/PHRASES
+INPUT DATA
 
 [[DATA]]

@@ -27,7 +27,7 @@ The clues panel should generally take after the Clues View in the main app, with
 
 As soon as the clue panel is opened, query any existing AI generated clues from the generated_clue table that have is_seedword = false. 
 Also query their clue type information. For any entries that have less than 7 existing clues, submit an AI prompt to clue_prompt.txt 
- to generate more. Submit up to 10 entries per prompt, one prompt at a time, using grok-4.6 (via chal-api's makeAICall). Retry each prompt up to 2 times; apply each batch's clues as soon as it returns. This will be done in the background, and while 
+ to generate more. Submit up to 10 entries per prompt, one prompt at a time, using muse-ember (via chal-api's makeAICall). Retry each prompt up to 2 times; apply each batch's clues as soon as it returns. This will be done in the background, and while 
  the response is pending, show a spinner icon next to all the entries for which AI results are loading.
 
 As soon as the clue panel is opened, also query any existing community clues from the community_clue table. 

@@ -27,6 +27,14 @@ export function puzzleShareUrl(id: string): string {
   return url.toString();
 }
 
+function isMobileBrowser(): boolean {
+  const nav = navigator as Navigator & { userAgentData?: { mobile?: boolean } };
+  if (nav.userAgentData?.mobile) return true;
+  const ua = nav.userAgent || '';
+  if (/Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile/i.test(ua)) return true;
+  return nav.platform === 'MacIntel' && nav.maxTouchPoints > 1;
+}
+
 function CopyIcon() {
   return (
     <svg className="mc-copy-icon" viewBox="0 0 24 24" aria-hidden="true">
@@ -47,6 +55,18 @@ export default function ShareStep({ puzzle }: ShareStepProps) {
     } catch {
       setCopied(false);
     }
+  }
+
+  async function shareLink() {
+    if (isMobileBrowser() && typeof navigator.share === 'function') {
+      try {
+        await navigator.share({ title: 'Magic Crossword', url: link });
+        return;
+      } catch (err) {
+        if (err instanceof DOMException && err.name === 'AbortError') return;
+      }
+    }
+    await copyLink();
   }
 
   function downloadPuz() {
@@ -84,8 +104,8 @@ export default function ShareStep({ puzzle }: ShareStepProps) {
         <button type="button" className="mc-secondary mc-download" onClick={downloadPuz}>
           Download .puz file
         </button>
-        <button type="button" className="mc-primary" onClick={() => { void copyLink(); }}>
-          Copy Link
+        <button type="button" className="mc-primary" onClick={() => { void shareLink(); }}>
+          Share
         </button>
       </div>
 

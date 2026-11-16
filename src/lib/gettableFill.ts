@@ -23,10 +23,15 @@ export interface GettableFillCallbacks {
     onComplete: () => void;
 }
 
-export type GettableFillMode = "fill" | "genKnowledge" | "allEntries";
+export type GettableFillMode = "fill" | "genKnowledge" | "noGimmes" | "allEntries";
 
 export interface GettableFillOptions {
-    /** Fill: Very, then add Likely. Gen. Knowledge: Very+Likely, then add Maybe. All Entries: entire dictionary. */
+    /**
+     * Fill: Very, then add Likely one by one.
+     * Gen. Knowledge: Very+Likely, then add Maybe one by one.
+     * No Gimmes: Likely only (no Very), then add Maybe one by one.
+     * All Entries: entire dictionary.
+     */
     mode?: GettableFillMode;
 }
 
@@ -68,7 +73,10 @@ function getOpenWords(grid: GridState, section: Section): GridWord[] {
  *
  * Fill mode: Very Gettable only, then allow one Likely Gettable, then two, and so on.
  * Gen. Knowledge: Very + Likely Gettable, then progressively add Maybe Gettable answers.
+ * No Gimmes: Likely Gettable only (no Very Gettable). Once that search is exhausted,
+ * add Maybe Gettable answers one at a time.
  * All Entries: every dictionary word, with no gettability filter.
+ * Each mode stops once MAX_STORED_FILLS fills are stored.
  * Entries already complete when the fill starts don't count toward the quota.
  */
 export function startGettableFill(
@@ -79,6 +87,7 @@ export function startGettableFill(
     stopFill();
 
     const mode: GettableFillMode = options?.mode === "genKnowledge" ? "genKnowledge"
+        : options?.mode === "noGimmes" ? "noGimmes"
         : options?.mode === "allEntries" ? "allEntries" : "fill";
     const grid = Globals.activeGrid!;
     const section = Globals.sections!.get(Globals.activeSectionId!)!;
@@ -95,8 +104,10 @@ export function startGettableFill(
     const isAllEntries = mode === "allEntries";
 
     const baseWords = isAllEntries ? Array.from(Globals.knownWords || [])
-        : mode === "genKnowledge" ? veryWords.concat(likelyWords) : veryWords;
-    const quotaWords = isAllEntries ? [] : mode === "genKnowledge" ? maybeWords : likelyWords;
+        : mode === "genKnowledge" ? veryWords.concat(likelyWords)
+        : mode === "noGimmes" ? likelyWords
+        : veryWords;
+    const quotaWords = isAllEntries ? [] : mode === "fill" ? likelyWords : maybeWords;
     const maxQuotaCap = quotaWords.length === 0 ? 0 : openWords.length;
 
     let maxQuota = 0;

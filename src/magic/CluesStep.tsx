@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
     AiCluesByEntry,
     autoSelectedClues,
+    AutoSelectOptions,
     communityCluesToSubmit,
     CommunityClue,
     CommunityCluesByEntry,
@@ -19,8 +20,10 @@ import { SharedPuzzle } from './ShareStep';
 interface CluesStepProps {
   fill: MagicFill;
   seed: string;
-  /** Clue the AI wrote for the seed in the Setup step; pre-fills the seed's entry. */
+  /** Lore clue for the seed, from the database or the background prompt started on Generate Grid. */
   seedClue?: string;
+  /** True until that background prompt returns, when no seed clue was already stored. */
+  seedCluePending?: boolean;
   hidden: boolean;
   onFinished: (puzzle: SharedPuzzle) => void;
 }
@@ -210,7 +213,9 @@ function ClueRow({
   );
 }
 
-export default function CluesStep({ fill, seed, seedClue, hidden, onFinished }: CluesStepProps) {
+export default function CluesStep({
+  fill, seed, seedClue, seedCluePending = false, hidden, onFinished,
+}: CluesStepProps) {
   const slots = useMemo(() => slotsFromCells(fill.cells), [fill]);
   const [selected, setSelected] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
@@ -238,6 +243,42 @@ export default function CluesStep({ fill, seed, seedClue, hidden, onFinished }: 
   const aiRef = useRef(aiClues);
   aiRef.current = aiClues;
   const deletedAiRef = useRef(new Set<string>());
+  const seedClueRef = useRef(seedClue);
+  seedClueRef.current = seedClue;
+  const seedCluePendingRef = useRef(seedCluePending);
+  seedCluePendingRef.current = seedCluePending;
+  const userEditedRef = useRef(new Set<string>());
+
+  const autoSelectOptions = useCallback((): AutoSelectOptions => {
+    const lockedKeys = userEditedRef.current;
+    const ignoredKeys = new Set<string>();
+    if (seedClueRef.current || seedCluePendingRef.current) {
+      slots.forEach(slot => {
+        if (slot.entry === seed && !lockedKeys.has(slot.key)) ignoredKeys.add(slot.key);
+      });
+    }
+    return { lockedKeys, ignoredKeys };
+  }, [seed, slots]);
+
+  const keepSeedClue = useCallback((
+    prev: Record<string, string>,
+    next: Record<string, string>,
+  ): Record<string, string> => {
+    slots.forEach(slot => {
+      if (slot.entry !== seed) return;
+      if (userEditedRef.current.has(slot.key)) {
+        next[slot.key] = prev[slot.key] || '';
+        return;
+      }
+      if (seedClueRef.current) {
+        next[slot.key] = seedClueRef.current;
+        return;
+      }
+      // Hold the seed blank while its clue is still on the way, so a normal clue doesn't flash in.
+      if (seedCluePendingRef.current) next[slot.key] = '';
+    });
+    return next;
+  }, [seed, slots]);
 
   useEffect(() => {
     if (hidden) setModalKey(undefined);
@@ -253,7 +294,7 @@ export default function CluesStep({ fill, seed, seedClue, hidden, onFinished }: 
         if (signal.aborted) return;
         setAiClues(loaded.ai);
         setCommunityClues(loaded.community);
-        setSelected(autoSelectedClues(slots, loaded.ai, selectedRef.current));
+        setSelected(prev => keepSeedClue(prev, autoSelectedClues(slots, loaded.ai, prev, autoSelectOptions())));
 
         const unique = Array.from(new Set(slots.map(slot => slot.entry)));
         const toGenerate = entriesNeedingAiClues(loaded.ai, unique);
@@ -266,6 +307,7 @@ export default function CluesStep({ fill, seed, seedClue, hidden, onFinished }: 
         const existing = { ...loaded.ai };
         const outcome = await generateMissingAiClues(toGenerate, loaded.statuses, existing, {
           signal,
+          community: loaded.community,
           onStatus: setGenStatus,
           onBatchComplete: (answers, clues) => {
             if (signal.aborted) return;
@@ -284,7 +326,10 @@ export default function CluesStep({ fill, seed, seedClue, hidden, onFinished }: 
               });
               return next;
             });
-            setSelected(prev => autoSelectedClues(slots, { ...aiRef.current, ...withoutDeleted }, prev));
+            setSelected(prev => keepSeedClue(
+              prev,
+              autoSelectedClues(slots, { ...aiRef.current, ...withoutDeleted }, prev, autoSelectOptions()),
+            ));
             setLoadingEntries(prev => {
               const next = { ...prev };
               answers.forEach(answer => { delete next[answer]; });
@@ -306,7 +351,22 @@ export default function CluesStep({ fill, seed, seedClue, hidden, onFinished }: 
     })();
 
     return () => controller.abort();
-  }, [slots]);
+  }, [slots, autoSelectOptions, keepSeedClue]);
+
+  useEffect(() => {
+    if (!seedClue) return;
+    setSelected(prev => {
+      let changed = false;
+      const next = { ...prev };
+      slots.forEach(slot => {
+        if (slot.entry !== seed || userEditedRef.current.has(slot.key)) return;
+        if (next[slot.key] === seedClue) return;
+        next[slot.key] = seedClue;
+        changed = true;
+      });
+      return changed ? next : prev;
+    });
+  }, [seedClue, seed, slots]);
 
   const modalSlot = slots.find(slot => slot.key === modalKey);
 
@@ -319,12 +379,14 @@ export default function CluesStep({ fill, seed, seedClue, hidden, onFinished }: 
 
   const applyDraft = useCallback(() => {
     if (!modalKey) return;
+    userEditedRef.current.add(modalKey);
     setSelected(prev => ({ ...prev, [modalKey]: draft.trim() }));
     setModalKey(undefined);
   }, [draft, modalKey]);
 
   const pickSuggestion = useCallback((clue: string) => {
     if (!modalKey) return;
+    userEditedRef.current.add(modalKey);
     setSelected(prev => ({ ...prev, [modalKey]: clue }));
     setModalKey(undefined);
   }, [modalKey]);
@@ -385,7 +447,7 @@ export default function CluesStep({ fill, seed, seedClue, hidden, onFinished }: 
                 key={slot.key}
                 slot={slot}
                 clue={selected[slot.key] || ''}
-                loading={!!loadingEntries[slot.entry]}
+                loading={slot.entry === seed ? seedCluePending : !!loadingEntries[slot.entry]}
                 onClick={() => openModal(slot)}
               />
             ))}
@@ -399,7 +461,7 @@ export default function CluesStep({ fill, seed, seedClue, hidden, onFinished }: 
                 key={slot.key}
                 slot={slot}
                 clue={selected[slot.key] || ''}
-                loading={!!loadingEntries[slot.entry]}
+                loading={slot.entry === seed ? seedCluePending : !!loadingEntries[slot.entry]}
                 onClick={() => openModal(slot)}
               />
             ))}
