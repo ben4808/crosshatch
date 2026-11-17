@@ -84,7 +84,6 @@ const LIKELY_GETTABLE_FAMILIARITY = new Set([
   "Ubiquitous",
   "Active",
   "Literal",
-  "Common Name",
   "Regionalism",
   "General Knowledge",
   "Inferred",

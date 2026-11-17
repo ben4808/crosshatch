@@ -9,6 +9,7 @@ export const ENTRY_TYPE_OPTIONS = [
     "Word",
     "Phrase",
     "Contraction",
+    "Personal Name",
     "Proper Name",
     "Acronym/Abbreviation",
     "Prefix/Suffix",
@@ -29,7 +30,6 @@ export const UNITY_OPTIONS = [
 export const FAMILIARITY_OPTIONS = [
     "Literal",
     "Ubiquitous",
-    "Common Name",
     "Regionalism",
     "Active",
     "General Knowledge",
